@@ -1,0 +1,144 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "archetype": "Shinobi Minimalist",
+    "vibe": "Tactical, Mystical, Sharp, High-Contrast",
+    "principles": [
+      "Fusion: Modern SaaS precision meets Ancient Scroll aesthetics",
+      "Emotion: Every interaction feels like channeling chakra (energy)",
+      "Content: Data is beautiful, but hierarchy is king",
+      "Negative Space: Silence is as important as sound"
+    ]
+  },
+  "tokens": {
+    "colors": {
+      "base": {
+        "background": "#020617",
+        "foreground": "#F8FAFC",
+        "card": "#0F172A",
+        "card_foreground": "#F1F5F9"
+      },
+      "brand": {
+        "primary": "#F97316",
+        "primary_foreground": "#FFFFFF",
+        "secondary": "#3B82F6",
+        "secondary_foreground": "#FFFFFF",
+        "accent": "#10B981",
+        "destructive": "#EF4444"
+      },
+      "ui": {
+        "border": "#1E293B",
+        "input": "#1E293B",
+        "ring": "#F97316"
+      }
+    },
+    "typography": {
+      "headings": {
+        "family": "Syne, sans-serif",
+        "weights": ["700", "800"],
+        "usage": "Hero titles, Section headers, Character Names"
+      },
+      "body": {
+        "family": "Manrope, sans-serif",
+        "weights": ["400", "500", "600"],
+        "usage": "Form labels, descriptions, stats"
+      },
+      "mono": {
+        "family": "JetBrains Mono, monospace",
+        "usage": "Stat numbers, Dice rolls, Modifiers"
+      }
+    },
+    "spacing": {
+      "container_padding": "p-6 md:p-12",
+      "section_gap": "gap-8 md:gap-16",
+      "component_gap": "gap-4"
+    },
+    "radius": {
+      "default": "rounded-none",
+      "button": "rounded-sm",
+      "input": "rounded-none"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": {
+      "enabled": true,
+      "classes": "bg-slate-950/70 backdrop-blur-xl border border-white/10"
+    },
+    "gradients": {
+      "chakra_glow": "bg-gradient-to-r from-blue-500/20 to-purple-500/20 blur-3xl",
+      "fire_glow": "bg-gradient-to-r from-orange-500/20 to-red-500/20 blur-3xl"
+    },
+    "borders": {
+      "tracing_beam": "Animated gradient border for active wizard steps",
+      "tech_grid": "1px solid border-white/5 with intersection dots"
+    }
+  },
+  "layout_strategies": {
+    "wizard": {
+      "type": "Split Screen",
+      "structure": "Left: Fixed Navigation (Steps) | Right: Scrollable Form Content",
+      "mobile": "Top: Progress Bar | Bottom: Content"
+    },
+    "dashboard": {
+      "type": "Bento Grid",
+      "structure": "Grid of character cards, recent activity, and quick actions"
+    },
+    "character_sheet": {
+      "type": "High Density Grid",
+      "structure": "Dense data display, clear separation of stats, skills, and inventory"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-orange-500 hover:bg-orange-600 text-white font-bold uppercase tracking-wider rounded-sm shadow-[0_0_15px_rgba(249,115,22,0.3)] transition-all hover:shadow-[0_0_25px_rgba(249,115,22,0.5)]",
+      "secondary": "bg-transparent border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded-sm"
+    },
+    "inputs": {
+      "default": "bg-slate-900/50 border-slate-800 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 rounded-none transition-colors"
+    },
+    "cards": {
+      "default": "bg-slate-900/40 border border-white/5 hover:border-white/10 transition-all backdrop-blur-sm"
+    },
+    "dice_roller": {
+      "type": "3D Canvas",
+      "library": "react-three-fiber",
+      "description": "Floating 3D dice that roll on command. Must overlay the UI when active."
+    }
+  },
+  "assets": {
+    "backgrounds": [
+      {
+        "url": "https://images.unsplash.com/photo-1578598444322-6533486d4cdf?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "description": "Abstract dark blue texture for main app background",
+        "category": "background"
+      },
+      {
+        "url": "https://images.pexels.com/photos/6627545/pexels-photo-6627545.jpeg",
+        "description": "Ink wash style illustration for character sheet background or empty states",
+        "category": "illustration"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "style": "Stroke width 1.5px, sharp edges where possible"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. SETUP: Install 'framer-motion', 'clsx', 'tailwind-merge', 'lucide-react', '@radix-ui/react-slot'.",
+    "2. THEME: Configure tailwind.config.js with the colors provided in 'tokens'. Ensure 'darkMode' is set to 'class'.",
+    "3. FONTS: Import 'Syne', 'Manrope', and 'JetBrains Mono' from Google Fonts in index.css.",
+    "4. LAYOUT: Build the Wizard Layout first. It's the core of the app. Use a persistent layout wrapper.",
+    "5. COMPONENTS: Create a 'ui' folder. Build 'Button', 'Input', 'Card' primitives first using the styles defined.",
+    "6. WIZARD LOGIC: The wizard must preserve state. Use a global store (Zustand or Context) for the character data.",
+    "7. DICE: Implement a simple 3D dice roller using R3F. If too complex, fallback to a high-quality CSS animation.",
+    "8. PDF: Use 'react-pdf' or 'jspdf' for exporting the character sheet.",
+    "9. CRITICAL: Do not use rounded corners excessively. Keep it sharp (rounded-sm or rounded-none) to match the 'Shinobi' aesthetic.",
+    "10. TESTING: Add data-testid to all inputs and buttons (e.g., 'wizard-step-next-btn', 'stat-input-strength')."
+  ],
+  "universal_guidelines": [
+    "Avoid 'AI Slop': No generic gradients, no 'Inter' everywhere.",
+    "Micro-interactions: Buttons should scale down slightly on click. Inputs should glow on focus.",
+    "Empty States: Never leave a blank screen. Use the ink illustration and a helpful message.",
+    "Accessibility: Ensure text contrast is at least 4.5:1. Use distinct focus states."
+  ]
+}
