@@ -23,17 +23,22 @@ adversário do Mestre — tudo isso o app trata como bookkeeping e consulta,
 não como automação de regras (o próprio jogo já é resolvido narrativamente
 pela mesa, com o mestre liberando cada mudança de ficha).
 
-## Pontos em aberto no manual-fonte (ver `docs/rules/00-observacoes.md`)
+## Pontos resolvidos com o usuário
 
-- 7 clãs citados só na tabela-resumo de bônus de atributo (Hebi, Kaguya,
-  Yuki, Ryu, Kuru, Hoshigaki, Tsuchigumo) não têm ficha completa em lugar
-  nenhum do documento — não foram incluídos em `clans.ts`. Confirmar com o
-  usuário se existe material adicional para eles.
+- Os 7 clãs citados só na tabela-resumo de bônus de atributo (Hebi,
+  Kaguya, Yuki, Ryu, Kuru, Hoshigaki, Tsuchigumo) foram incluídos em
+  `clans.ts` com ficha simplificada (bônus de atributo + descrição
+  genérica, sem traços progressivos nem jutsus exclusivos, já que o
+  manual-fonte não traz esse material para eles) — confirmado pelo
+  usuário.
+- Fórmula de dano em crítico ("dados de dano × Bônus de Proficiência") é
+  proposital, não erro de redação — confirmado pelo usuário. Mantida como
+  está no texto-fonte; o app não automatiza cálculo de dano.
+
+## Pontos ainda em aberto no manual-fonte (ver `docs/rules/00-observacoes.md`)
+
 - A perícia "Discernimento" citada como proficiência de clã (Hyūga,
   Kurama) não existe na lista oficial de 18 perícias — foi mapeada para
   "Intuição" em `clans.ts` como aproximação.
-- Fórmula de dano em crítico atípica ("dados de dano × Bônus de
-  Proficiência") — não está automatizada no app (dano é sempre lançado e
-  registrado manualmente), mas vale confirmar se é essa mesma a intenção.
 - "Ataque Supremo Extra" (Especialista em Taijutsu, 11º nível) aparece na
   tabela de progressão mas nunca é descrito no texto-fonte.
