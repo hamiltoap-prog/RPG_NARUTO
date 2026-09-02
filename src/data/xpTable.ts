@@ -1,4 +1,4 @@
-// PLACEHOLDER — ver src/data/README.md
+// Fonte: manual de regras, Capítulo 1/14 — ver docs/rules/06-progressao.md
 
 export const XP_TABLE: Record<number, number> = {
   1: 0,
@@ -24,12 +24,13 @@ export const XP_TABLE: Record<number, number> = {
 }
 
 export function getProficiencyBonus(level: number): number {
-  if (level <= 4) return 3
-  if (level <= 8) return 4
-  if (level <= 11) return 5
-  if (level <= 16) return 6
-  if (level <= 20) return 7
-  return 8
+  if (level <= 3) return 3
+  if (level <= 6) return 4
+  if (level <= 9) return 5
+  if (level <= 12) return 6
+  if (level <= 15) return 7
+  if (level <= 18) return 8
+  return 9
 }
 
 export function getLevelFromXp(xp: number): number {

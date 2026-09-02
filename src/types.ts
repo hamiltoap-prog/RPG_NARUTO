@@ -21,26 +21,86 @@ export type Modifiers = Record<AttributeKey, number>
 export interface Clan {
   id: string
   name: string
+  quote?: string
   description: string
+  /** Bônus numérico aplicado automaticamente ao total de atributos. Para
+   * clãs com bônus alternativo/escolha (ex: Kurama, Sem Clã), representa a
+   * opção padrão — a nuance completa está em bonusText. */
   bonuses: Attributes
-  specialAbilities: string[]
-  proficiencies: string[]
+  bonusText: string
+  speed: string
+  skillProficiencies: string[]
+  /** Traços e recursos progressivos do clã (1º/3º/7º/11º/15º/18º nível),
+   * como texto de referência fiel ao manual — não é automatizado pelo app. */
+  featuresText: string
+  exclusiveJutsuCount: number
+}
+
+export interface ClassLevelEntry {
+  level: number
+  resistancePoints: number
+  proficiencyBonus: number
+  features: string
+  jutsusKnown?: number
+  maxRank?: string
 }
 
 export interface CharClass {
   id: string
   name: string
   description: string
+  suggestedClans: string
+  primaryAbility: string
   hitDie: string
   chakraDie: string
-  primaryAbility: AttributeKey
-  armorProficiencies: string[]
-  weaponProficiencies: string[]
-  skillProficiencies: string[]
   savingThrows: AttributeKey[]
+  armorProficiencies: string[]
+  weaponProficiencies: string
+  toolProficiencies: string
+  skillProficiencies: string
   startingEquipment: string[]
   startingWealth: string
-  specialFeatures: string[]
+  progression: ClassLevelEntry[]
+  /** Arquétipos/caminhos/subclasses e suas características, como texto de
+   * referência fiel ao manual — não é automatizado pelo app. */
+  subclassesText: string
+}
+
+export interface WeaponCatalogEntry {
+  name: string
+  cost: string
+  damage: string
+  damageType: string
+  properties: string
+  category: string
+}
+
+export interface ArmorCatalogEntry {
+  name: string
+  cost: string
+  armorBonus: number
+  dexBonus: string
+  effect?: string
+  category: 'Leve' | 'Média' | 'Pesada'
+}
+
+export interface GearItem {
+  name: string
+  cost: string
+  effect?: string
+  category: string
+}
+
+export interface Skill {
+  name: string
+  attribute: AttributeKey
+  description: string
+}
+
+export interface Condition {
+  name: string
+  effect: string
+  resistancePointsModifier: string
 }
 
 export interface InventoryItem {
@@ -73,6 +133,26 @@ export interface Jutsu {
   details: string
 }
 
+/** Entrada do catálogo de referência (631 jutsus extraídos do manual) usado
+ * para busca/seleção na hora de adicionar um jutsu à ficha — ver
+ * src/data/jutsus.ts. Distinto de Jutsu (a versão simplificada gravada na
+ * ficha do personagem). */
+export interface JutsuCatalogEntry {
+  name: string
+  classification: string
+  rank: string
+  castingTime: string
+  range: string
+  duration: string
+  components: string
+  cost: string
+  keywords: string
+  description: string
+  /** Categoria de origem: elemento, tipo geral (Genjutsu/Taijutsu/Bukijutsu) ou clã exclusivo. */
+  category: string
+  clanId?: string
+}
+
 /** Campos da ficha que podem ser alterados por um jogador — sempre sujeitos
  * à fila de aprovação do mestre, a menos que o mestre marque como auto-aprovado.
  * "notes" nunca entra aqui: é sempre livre. */
@@ -85,6 +165,7 @@ export const REQUESTABLE_FIELDS = [
   'hp',
   'chakra',
   'armorClass',
+  'resistancePoints',
   'condition',
   'equipment',
   'weapons',
@@ -105,6 +186,7 @@ export const REQUESTABLE_FIELD_LABELS: Record<RequestableField, string> = {
   hp: 'Pontos de Vida',
   chakra: 'Chakra',
   armorClass: 'Classe de Armadura',
+  resistancePoints: 'Pontos de Resistência',
   condition: 'Condição',
   equipment: 'Inventário',
   weapons: 'Armas',
@@ -143,6 +225,9 @@ export interface Character {
   chakra: { current: number; max: number }
   armorClass: number
   proficiencyBonus: number
+  /** Pontos de Resistência: a "CD" do personagem para os outros baterem em
+   * testes/resistências contra ele, conforme a progressão da classe. */
+  resistancePoints: number
 
   description: CharacterDescription
   equipment: InventoryItem[]

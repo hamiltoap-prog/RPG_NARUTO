@@ -2,11 +2,22 @@ import { useMemo, useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Textarea } from '../components/ui'
 import { CLANS } from '../data/clans'
 import { CLASSES } from '../data/classes'
+import { JUTSU_CATALOG } from '../data/jutsus'
 import { calculateDerivedStats, totalAttributes } from '../lib/characterMath'
 import { createCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
 import type { Attributes, Character, CharacterDescription, GameTable, InventoryItem, Jutsu } from '../types'
 import { newId } from '../lib/id'
+
+function formatJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
+  return [
+    `${entry.classification} · ${entry.rank}`,
+    `Tempo: ${entry.castingTime} · Alcance: ${entry.range} · Duração: ${entry.duration}`,
+    entry.description,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
 const STEPS = ['Clã', 'Classe', 'Atributos', 'Descrição', 'Equipamento', 'Jutsus', 'Imagem & Resumo'] as const
@@ -95,7 +106,10 @@ export function CharacterCreate({
 
   function addJutsu() {
     if (!newJutsuName.trim()) return
-    setJutsus((prev) => [...prev, { id: newId(), name: newJutsuName.trim(), details: newJutsuDetails.trim() }])
+    const catalogMatch = JUTSU_CATALOG.find((j) => j.name.toLowerCase() === newJutsuName.trim().toLowerCase())
+    const details = newJutsuDetails.trim() || (catalogMatch ? formatJutsuDetails(catalogMatch) : '')
+    const chakraCost = catalogMatch?.cost
+    setJutsus((prev) => [...prev, { id: newId(), name: newJutsuName.trim(), details, chakraCost }])
     setNewJutsuName('')
     setNewJutsuDetails('')
   }
@@ -134,12 +148,13 @@ export function CharacterCreate({
         chakra: { current: derived.chakra, max: derived.chakra },
         armorClass: derived.armorClass,
         proficiencyBonus: derived.proficiencyBonus,
+        resistancePoints: derived.resistancePoints,
         description,
         equipment,
         weapons: [],
         armor: [],
         jutsus,
-        proficiencies: [...new Set([...clan.proficiencies, ...charClass.skillProficiencies])],
+        proficiencies: [...clan.skillProficiencies],
         condition: 'Normal',
         imageUrl: imageUrl.trim(),
         notes: '',
@@ -188,14 +203,17 @@ export function CharacterCreate({
                 }`}
               >
                 <p className="font-semibold text-orange-100">{c.name}</p>
+                {c.quote && <p className="mt-0.5 text-xs italic text-orange-400/50">"{c.quote}"</p>}
                 <p className="mt-0.5 text-xs text-orange-300/60">{c.description}</p>
-                {c.specialAbilities.length > 0 && (
+                <p className="mt-1 text-xs text-emerald-400/80">{c.bonusText}</p>
+                {c.skillProficiencies.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
-                    {c.specialAbilities.map((a) => (
-                      <Badge key={a}>{a}</Badge>
+                    {c.skillProficiencies.map((s) => (
+                      <Badge key={s}>{s}</Badge>
                     ))}
                   </div>
                 )}
+                {clanId === c.id && <p className="mt-2 text-xs text-orange-300/70">{c.featuresText}</p>}
               </button>
             ))}
           </div>
@@ -217,8 +235,12 @@ export function CharacterCreate({
                 <p className="font-semibold text-orange-100">{c.name}</p>
                 <p className="mt-0.5 text-xs text-orange-300/60">{c.description}</p>
                 <p className="mt-1 text-xs text-orange-400/60">
-                  Vida {c.hitDie} · Chakra {c.chakraDie} · Atributo primário {ATTRIBUTE_LABELS[c.primaryAbility]}
+                  Vida {c.hitDie} · Chakra {c.chakraDie} · Atributo primário {c.primaryAbility}
                 </p>
+                <p className="mt-1 text-xs text-orange-400/50">Perícias: {c.skillProficiencies}</p>
+                {classId === c.id && (
+                  <p className="mt-2 whitespace-pre-line text-xs text-orange-300/70">{c.subclassesText}</p>
+                )}
               </button>
             ))}
           </div>
@@ -370,22 +392,41 @@ export function CharacterCreate({
         <Card className="flex flex-col gap-3 p-4">
           <SectionTitle>Jutsus</SectionTitle>
           <p className="text-xs text-orange-300/60">
-            Descreva os jutsus iniciais do personagem (combine com o mestre quais estão liberados no nível 1).
+            Digite o nome de um jutsu do catálogo (Rank-D, disponível no 1º nível, ou exclusivo do clã {clan?.name}) para
+            preencher os detalhes automaticamente, ou descreva um jutsu personalizado. Combine com o mestre quais estão
+            liberados no nível 1.
           </p>
+          <datalist id="jutsu-catalog-list">
+            {JUTSU_CATALOG.filter((j) => j.rank === 'Rank-D' || j.clanId === clanId).map((j) => (
+              <option key={j.name} value={j.name} />
+            ))}
+          </datalist>
           {jutsus.map((j) => (
             <div key={j.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-3 text-sm">
               <div className="flex items-center justify-between">
-                <p className="font-semibold text-orange-100">{j.name}</p>
+                <p className="font-semibold text-orange-100">
+                  {j.name} {j.chakraCost && <span className="text-xs font-normal text-orange-400/60">({j.chakraCost})</span>}
+                </p>
                 <button className="text-xs text-red-400 hover:text-red-200" onClick={() => removeJutsu(j.id)}>
                   remover
                 </button>
               </div>
-              {j.details && <p className="mt-1 text-xs text-orange-300/60">{j.details}</p>}
+              {j.details && <p className="mt-1 whitespace-pre-line text-xs text-orange-300/60">{j.details}</p>}
             </div>
           ))}
           <div className="flex flex-col gap-2 rounded-lg border border-orange-900/30 bg-black/10 p-3">
-            <Input placeholder="Nome do jutsu" value={newJutsuName} onChange={(e) => setNewJutsuName(e.target.value)} />
-            <Textarea rows={2} placeholder="Efeito / custo de chakra" value={newJutsuDetails} onChange={(e) => setNewJutsuDetails(e.target.value)} />
+            <Input
+              placeholder="Nome do jutsu (busque no catálogo ou digite um novo)"
+              list="jutsu-catalog-list"
+              value={newJutsuName}
+              onChange={(e) => setNewJutsuName(e.target.value)}
+            />
+            <Textarea
+              rows={2}
+              placeholder="Efeito / custo de chakra (deixe em branco para usar o texto do catálogo, se houver)"
+              value={newJutsuDetails}
+              onChange={(e) => setNewJutsuDetails(e.target.value)}
+            />
             <Button onClick={addJutsu} className="self-start">
               Adicionar Jutsu
             </Button>
@@ -417,7 +458,8 @@ export function CharacterCreate({
               <>
                 <p>
                   <span className="text-orange-400/60">PV:</span> {derived.hp} · <span className="text-orange-400/60">Chakra:</span> {derived.chakra} ·{' '}
-                  <span className="text-orange-400/60">CA:</span> {derived.armorClass}
+                  <span className="text-orange-400/60">CA:</span> {derived.armorClass} · <span className="text-orange-400/60">PR:</span>{' '}
+                  {derived.resistancePoints}
                 </p>
               </>
             )}

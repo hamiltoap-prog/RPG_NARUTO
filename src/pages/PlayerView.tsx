@@ -5,6 +5,8 @@ import { PartyPanel } from '../components/PartyPanel'
 import { CLANS } from '../data/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
+import { ARMORS, WEAPONS } from '../data/equipment'
+import { JUTSU_CATALOG } from '../data/jutsus'
 import { calculateDerivedStats } from '../lib/characterMath'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
 import { listenCharacter, listenCharacters, listenRequestsForCharacter } from '../lib/store'
@@ -246,6 +248,12 @@ function VitalsCard({
           <p className="text-xl text-orange-100">{character.armorClass}</p>
         </div>
         <div>
+          <p className="text-xs uppercase text-orange-400/60" title="CD que os outros precisam bater para vencer seus testes/resistências">
+            Pontos de Resistência
+          </p>
+          <p className="text-xl text-orange-100">{character.resistancePoints}</p>
+        </div>
+        <div>
           <p className="text-xs uppercase text-orange-400/60">Condição</p>
           <Select
             value={character.condition}
@@ -253,8 +261,8 @@ function VitalsCard({
             onChange={(e) => onSubmit({ condition: e.target.value }, `Condição alterada para ${e.target.value}`)}
           >
             {CONDITIONS.map((c) => (
-              <option key={c} value={c}>
-                {c}
+              <option key={c.name} value={c.name} title={c.effect}>
+                {c.name}
               </option>
             ))}
           </Select>
@@ -451,7 +459,22 @@ function InventoryCard({
           ))}
           {editing && (
             <div className="mt-1 flex gap-1">
-              <Input placeholder="Nome" value={newWeapon.name} onChange={(e) => setNewWeapon((v) => ({ ...v, name: e.target.value }))} className="w-24 text-xs" />
+              <datalist id="weapon-catalog-list">
+                {WEAPONS.map((w) => (
+                  <option key={w.name} value={w.name} />
+                ))}
+              </datalist>
+              <Input
+                placeholder="Nome"
+                list="weapon-catalog-list"
+                value={newWeapon.name}
+                onChange={(e) => {
+                  const value = e.target.value
+                  const match = WEAPONS.find((w) => w.name.toLowerCase() === value.toLowerCase())
+                  setNewWeapon({ name: value, damage: match ? match.damage : newWeapon.damage })
+                }}
+                className="w-24 text-xs"
+              />
               <Input placeholder="Dano (2d6)" value={newWeapon.damage} onChange={(e) => setNewWeapon((v) => ({ ...v, damage: e.target.value }))} className="w-20 text-xs" />
               <Button
                 onClick={() => {
@@ -490,7 +513,22 @@ function InventoryCard({
           ))}
           {editing && (
             <div className="mt-1 flex gap-1">
-              <Input placeholder="Nome" value={newArmor.name} onChange={(e) => setNewArmor((v) => ({ ...v, name: e.target.value }))} className="w-24 text-xs" />
+              <datalist id="armor-catalog-list">
+                {ARMORS.map((a) => (
+                  <option key={a.name} value={a.name} />
+                ))}
+              </datalist>
+              <Input
+                placeholder="Nome"
+                list="armor-catalog-list"
+                value={newArmor.name}
+                onChange={(e) => {
+                  const value = e.target.value
+                  const match = ARMORS.find((a) => a.name.toLowerCase() === value.toLowerCase())
+                  setNewArmor({ name: value, defenseBonus: match ? String(match.armorBonus) : newArmor.defenseBonus })
+                }}
+                className="w-24 text-xs"
+              />
               <Input
                 placeholder="Bônus"
                 type="number"
@@ -562,6 +600,18 @@ function InventoryCard({
 
 // ---------- Jutsus ----------
 
+const RANK_ORDER = ['Rank-E', 'Rank-D', 'Rank-C', 'Rank-B', 'Rank-A', 'Rank-S']
+
+function formatCatalogJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
+  return [
+    `${entry.classification} · ${entry.rank}`,
+    `Tempo: ${entry.castingTime} · Alcance: ${entry.range} · Duração: ${entry.duration}`,
+    entry.description,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 function JutsusCard({
   character,
   onSubmit,
@@ -576,6 +626,13 @@ function JutsusCard({
   const [name, setName] = useState('')
   const [details, setDetails] = useState('')
   const blocked = pendingFields.has('jutsus')
+
+  const charClass = CLASSES.find((c) => c.id === character.classId)
+  const progressionEntry = charClass?.progression.find((p) => p.level === character.level)
+  const maxRankIndex = progressionEntry?.maxRank ? RANK_ORDER.indexOf(progressionEntry.maxRank) : RANK_ORDER.length - 1
+  const availableJutsus = JUTSU_CATALOG.filter(
+    (j) => j.clanId === character.clanId || RANK_ORDER.indexOf(j.rank) <= maxRankIndex,
+  )
 
   function startEdit() {
     setJutsus(character.jutsus)
@@ -607,29 +664,50 @@ function JutsusCard({
         )}
       </div>
       <PendingNote fields={['jutsus']} pending={pendingFields} />
+      {editing && (
+        <datalist id="jutsu-catalog-list-play">
+          {availableJutsus.map((j) => (
+            <option key={j.name} value={j.name} />
+          ))}
+        </datalist>
+      )}
       <div className="mt-2 flex flex-col gap-2">
         {(editing ? jutsus : character.jutsus).map((j) => (
           <div key={j.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-2.5 text-sm">
             <div className="flex items-center justify-between">
-              <p className="font-semibold text-orange-100">{j.name}</p>
+              <p className="font-semibold text-orange-100">
+                {j.name} {j.chakraCost && <span className="text-xs font-normal text-orange-400/60">({j.chakraCost})</span>}
+              </p>
               {editing && (
                 <button className="text-xs text-red-400 hover:text-red-200" onClick={() => setJutsus((prev) => prev.filter((x) => x.id !== j.id))}>
                   remover
                 </button>
               )}
             </div>
-            {j.details && <p className="mt-0.5 text-xs text-orange-300/60">{j.details}</p>}
+            {j.details && <p className="mt-0.5 whitespace-pre-line text-xs text-orange-300/60">{j.details}</p>}
           </div>
         ))}
         {editing && (
           <div className="flex flex-col gap-1.5 rounded-lg border border-orange-900/30 bg-black/10 p-2.5">
-            <Input placeholder="Nome do jutsu" value={name} onChange={(e) => setName(e.target.value)} />
-            <Textarea rows={2} placeholder="Efeito / custo de chakra" value={details} onChange={(e) => setDetails(e.target.value)} />
+            <Input
+              placeholder="Nome do jutsu (busque no catálogo ou digite um novo)"
+              list="jutsu-catalog-list-play"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Textarea
+              rows={2}
+              placeholder="Efeito / custo de chakra (deixe em branco para usar o texto do catálogo, se houver)"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+            />
             <Button
               className="self-start"
               onClick={() => {
                 if (!name.trim()) return
-                setJutsus((prev) => [...prev, { id: newId(), name: name.trim(), details: details.trim() }])
+                const catalogMatch = JUTSU_CATALOG.find((j) => j.name.toLowerCase() === name.trim().toLowerCase())
+                const finalDetails = details.trim() || (catalogMatch ? formatCatalogJutsuDetails(catalogMatch) : '')
+                setJutsus((prev) => [...prev, { id: newId(), name: name.trim(), details: finalDetails, chakraCost: catalogMatch?.cost }])
                 setName('')
                 setDetails('')
               }}
@@ -674,6 +752,7 @@ function XpCard({
         level: newLevel,
         proficiencyBonus: derived.proficiencyBonus,
         armorClass: derived.armorClass,
+        resistancePoints: derived.resistancePoints,
         hp: { current: Math.min(character.hp.current, derived.hp), max: derived.hp },
         chakra: { current: Math.min(character.chakra.current, derived.chakra), max: derived.chakra },
       },

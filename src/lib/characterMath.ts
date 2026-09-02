@@ -23,9 +23,15 @@ export function totalAttributes(base: Attributes, clan: Clan | undefined): Attri
   return out
 }
 
-function dieValue(notation: string): number {
+function dieSides(notation: string): number {
   const parts = notation.split('d')
   return Number(parts[1] ?? 6)
+}
+
+/** Valor médio de um dado (arredondado para cima), usado para o ganho de
+ * PV/PC em níveis acima do 1º sem depender de rolagem aleatória. */
+function averageDie(sides: number): number {
+  return Math.floor(sides / 2) + 1
 }
 
 export interface DerivedStats {
@@ -33,27 +39,45 @@ export interface DerivedStats {
   chakra: number
   armorClass: number
   proficiencyBonus: number
+  resistancePoints: number
   modifiers: Modifiers
 }
 
-/** Réplica das fórmulas do protótipo anterior: PV = (dado de vida + mod. Constituição) * nível,
- * Chakra = (dado de chakra + mod. Constituição) * nível, CA = 10 + mod. Destreza + metade do bônus de proficiência. */
+/** PV/PC no 1º nível = dado máximo + Mod. Constituição; cada nível
+ * seguinte soma a média do dado + Mod. Constituição (sem rolagem, para não
+ * depender de aleatoriedade — o Mestre pode ajustar manualmente na ficha se
+ * preferir rolar de verdade). CA = 10 + bônus de armadura + Mod. Destreza +
+ * metade do Bônus de Proficiência (arredondado para baixo). PR (Pontos de
+ * Resistência) vem direto da tabela de progressão da classe. */
 export function calculateDerivedStats(
   attributes: Attributes,
   charClass: CharClass,
   level: number,
+  armorBonus = 0,
 ): DerivedStats {
   const modifiers = calculateModifiers(attributes)
-  const hitDieValue = dieValue(charClass.hitDie)
-  const chakraDieValue = dieValue(charClass.chakraDie)
+  const clampedLevel = Math.min(20, Math.max(1, level))
 
-  const hp = Math.max(1, (hitDieValue + modifiers.constitution) * level)
-  const chakra = Math.max(1, (chakraDieValue + modifiers.constitution) * level)
+  const hitDie = dieSides(charClass.hitDie)
+  const chakraDie = dieSides(charClass.chakraDie)
 
-  const proficiencyBonus = getProficiencyBonus(level)
-  const armorClass = 10 + modifiers.dexterity + Math.floor(proficiencyBonus / 2)
+  const hp = Math.max(
+    1,
+    hitDie + modifiers.constitution + (clampedLevel - 1) * (averageDie(hitDie) + modifiers.constitution),
+  )
+  const chakra = Math.max(
+    1,
+    chakraDie + modifiers.constitution + (clampedLevel - 1) * (averageDie(chakraDie) + modifiers.constitution),
+  )
 
-  return { hp, chakra, armorClass, proficiencyBonus, modifiers }
+  const proficiencyBonus = getProficiencyBonus(clampedLevel)
+  const progressionEntry =
+    charClass.progression.find((p) => p.level === clampedLevel) ?? charClass.progression[charClass.progression.length - 1]
+  const resistancePoints = progressionEntry?.resistancePoints ?? 15
+
+  const armorClass = 10 + armorBonus + modifiers.dexterity + Math.floor(proficiencyBonus / 2)
+
+  return { hp, chakra, armorClass, proficiencyBonus, resistancePoints, modifiers }
 }
 
 export function attributeKeysOrdered(): AttributeKey[] {
