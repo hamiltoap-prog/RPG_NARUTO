@@ -1,17 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from '../components/ui'
+import { ActionRoller } from '../components/ActionRoller'
 import { LogFeed } from '../components/LogFeed'
+import { MissionBoard } from '../components/MissionBoard'
 import { PartyPanel } from '../components/PartyPanel'
 import { CLANS } from '../data/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
-import { ARMORS, WEAPONS } from '../data/equipment'
+import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { calculateDerivedStats } from '../lib/characterMath'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
-import { listenCharacter, listenCharacters, listenRequestsForCharacter } from '../lib/store'
+import { listenCharacter, listenCharacters, listenMissions, listenNPCs, listenRequestsForCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, REQUESTABLE_FIELD_LABELS } from '../types'
-import type { Armor, Attributes, Character, CharacterDescription, GameTable, InventoryItem, Jutsu, RequestableField, Weapon } from '../types'
+import type {
+  Armor,
+  ArmorCatalogEntry,
+  Attributes,
+  Character,
+  CharacterDescription,
+  GameTable,
+  GearItem,
+  InventoryItem,
+  Jutsu,
+  Mission,
+  NPC,
+  RequestableField,
+  Weapon,
+  WeaponCatalogEntry,
+} from '../types'
 import { newId } from '../lib/id'
 import { getLevelFromXp, getXpForNextLevel } from '../data/xpTable'
 
@@ -26,6 +43,8 @@ export function PlayerView({
 }) {
   const [character, setCharacter] = useState<Character | null | undefined>(undefined)
   const [allCharacters, setAllCharacters] = useState<Character[]>([])
+  const [npcs, setNpcs] = useState<NPC[]>([])
+  const [missions, setMissions] = useState<Mission[]>([])
   const [pendingFields, setPendingFields] = useState<Set<RequestableField>>(new Set())
   const [noteDraft, setNoteDraft] = useState('')
 
@@ -38,6 +57,8 @@ export function PlayerView({
   }, [table.id, characterId])
 
   useEffect(() => listenCharacters(table.id, setAllCharacters), [table.id])
+  useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
+  useEffect(() => listenMissions(table.id, setMissions), [table.id])
 
   useEffect(() => {
     if (asGM) return
@@ -73,9 +94,11 @@ export function PlayerView({
       <div className="flex flex-col gap-4">
         <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} onSubmit={submit} pendingFields={pendingFields} />
         <VitalsCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <ActionRoller table={table} character={character} actorName={actorName} />
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
-        <JutsusCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <ShopCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <JutsusCard character={character} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
         <XpCard character={character} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <DescriptionCard character={character} onSubmit={submit} pendingFields={pendingFields} />
         <Card className="p-4">
@@ -93,6 +116,8 @@ export function PlayerView({
 
       <div className="flex flex-col gap-4 lg:sticky lg:top-4">
         <PartyPanel characters={allCharacters} currentCharacterId={asGM ? undefined : character.id} />
+        {npcs.some((n) => n.visible) && <AdversariesPanel npcs={npcs.filter((n) => n.visible)} />}
+        {missions.length > 0 && <MissionBoard tableId={table.id} missions={missions} asGM={false} />}
         <LogFeed tableId={table.id} />
       </div>
     </div>
@@ -212,6 +237,20 @@ function VitalsCard({
     )
   }
 
+  async function shortRest() {
+    const newChakra = Math.min(character.chakra.max, character.chakra.current + Math.floor(character.chakra.max / 2))
+    await onSubmit({ chakra: { current: newChakra, max: character.chakra.max } }, 'Descanso curto: recuperou metade do Chakra máximo')
+  }
+
+  async function longRest() {
+    await onSubmit(
+      { hp: { current: character.hp.max, max: character.hp.max }, chakra: { current: character.chakra.max, max: character.chakra.max } },
+      'Descanso longo: recuperou todo o PV e Chakra',
+    )
+  }
+
+  const restBlocked = hpBlocked || chakraBlocked
+
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-center gap-6">
@@ -267,6 +306,17 @@ function VitalsCard({
             ))}
           </Select>
           <PendingNote fields={['condition']} pending={pendingFields} />
+        </div>
+        <div>
+          <p className="text-xs uppercase text-orange-400/60">Descanso</p>
+          <div className="mt-1 flex gap-1">
+            <Button variant="secondary" disabled={restBlocked} onClick={shortRest}>
+              Curto
+            </Button>
+            <Button variant="secondary" disabled={restBlocked} onClick={longRest}>
+              Longo
+            </Button>
+          </div>
         </div>
       </div>
     </Card>
@@ -616,27 +666,51 @@ function JutsusCard({
   character,
   onSubmit,
   pendingFields,
+  asGM,
 }: {
   character: Character
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
+  asGM: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [jutsus, setJutsus] = useState<Jutsu[]>(character.jutsus)
-  const [name, setName] = useState('')
-  const [details, setDetails] = useState('')
+  const [jutsuToAdd, setJutsuToAdd] = useState('')
+  const [customName, setCustomName] = useState('')
+  const [customDetails, setCustomDetails] = useState('')
   const blocked = pendingFields.has('jutsus')
 
   const charClass = CLASSES.find((c) => c.id === character.classId)
   const progressionEntry = charClass?.progression.find((p) => p.level === character.level)
   const maxRankIndex = progressionEntry?.maxRank ? RANK_ORDER.indexOf(progressionEntry.maxRank) : RANK_ORDER.length - 1
-  const availableJutsus = JUTSU_CATALOG.filter(
+  // Jogador só pode escolher jutsus elegíveis pro rank atual do personagem
+  // (ou exclusivos do clã); o mestre pode liberar qualquer jutsu do catálogo
+  // completo, ou até um totalmente personalizado.
+  const eligibleJutsus = JUTSU_CATALOG.filter(
     (j) => j.clanId === character.clanId || RANK_ORDER.indexOf(j.rank) <= maxRankIndex,
   )
+  const selectableJutsus = asGM ? JUTSU_CATALOG : eligibleJutsus
 
   function startEdit() {
     setJutsus(character.jutsus)
     setEditing(true)
+  }
+
+  function addFromCatalog() {
+    const catalogMatch = selectableJutsus.find((j) => j.name === jutsuToAdd)
+    if (!catalogMatch || jutsus.some((j) => j.name === catalogMatch.name)) return
+    setJutsus((prev) => [
+      ...prev,
+      { id: newId(), name: catalogMatch.name, details: formatCatalogJutsuDetails(catalogMatch), chakraCost: catalogMatch.cost },
+    ])
+    setJutsuToAdd('')
+  }
+
+  function addCustom() {
+    if (!customName.trim()) return
+    setJutsus((prev) => [...prev, { id: newId(), name: customName.trim(), details: customDetails.trim() }])
+    setCustomName('')
+    setCustomDetails('')
   }
 
   async function save() {
@@ -664,13 +738,6 @@ function JutsusCard({
         )}
       </div>
       <PendingNote fields={['jutsus']} pending={pendingFields} />
-      {editing && (
-        <datalist id="jutsu-catalog-list-play">
-          {availableJutsus.map((j) => (
-            <option key={j.name} value={j.name} />
-          ))}
-        </datalist>
-      )}
       <div className="mt-2 flex flex-col gap-2">
         {(editing ? jutsus : character.jutsus).map((j) => (
           <div key={j.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-2.5 text-sm">
@@ -688,32 +755,38 @@ function JutsusCard({
           </div>
         ))}
         {editing && (
-          <div className="flex flex-col gap-1.5 rounded-lg border border-orange-900/30 bg-black/10 p-2.5">
-            <Input
-              placeholder="Nome do jutsu (busque no catálogo ou digite um novo)"
-              list="jutsu-catalog-list-play"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Textarea
-              rows={2}
-              placeholder="Efeito / custo de chakra (deixe em branco para usar o texto do catálogo, se houver)"
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-            />
-            <Button
-              className="self-start"
-              onClick={() => {
-                if (!name.trim()) return
-                const catalogMatch = JUTSU_CATALOG.find((j) => j.name.toLowerCase() === name.trim().toLowerCase())
-                const finalDetails = details.trim() || (catalogMatch ? formatCatalogJutsuDetails(catalogMatch) : '')
-                setJutsus((prev) => [...prev, { id: newId(), name: name.trim(), details: finalDetails, chakraCost: catalogMatch?.cost }])
-                setName('')
-                setDetails('')
-              }}
-            >
-              Adicionar
-            </Button>
+          <div className="flex flex-col gap-2 rounded-lg border border-orange-900/30 bg-black/10 p-2.5">
+            <p className="text-xs text-orange-300/60">
+              {asGM
+                ? 'Como mestre, você pode liberar qualquer jutsu do catálogo completo.'
+                : 'Você só pode escolher entre os jutsus elegíveis pro rank e clã do seu personagem.'}
+            </p>
+            <div className="flex gap-1.5">
+              <Select value={jutsuToAdd} onChange={(e) => setJutsuToAdd(e.target.value)}>
+                <option value="">Selecione um jutsu{asGM ? ' (catálogo completo)' : ' elegível'}...</option>
+                {selectableJutsus
+                  .filter((j) => !jutsus.some((added) => added.name === j.name))
+                  .map((j) => (
+                    <option key={j.name} value={j.name}>
+                      {j.name} ({j.category}
+                      {j.cost ? ` · ${j.cost}` : ''})
+                    </option>
+                  ))}
+              </Select>
+              <Button onClick={addFromCatalog} disabled={!jutsuToAdd} className="shrink-0">
+                Adicionar
+              </Button>
+            </div>
+            {asGM && (
+              <>
+                <p className="text-xs text-orange-300/60">Ou crie um jutsu personalizado (homebrew):</p>
+                <Input placeholder="Nome do jutsu" value={customName} onChange={(e) => setCustomName(e.target.value)} />
+                <Textarea rows={2} placeholder="Efeito / custo de chakra" value={customDetails} onChange={(e) => setCustomDetails(e.target.value)} />
+                <Button className="self-start" onClick={addCustom}>
+                  Adicionar Personalizado
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -849,6 +922,133 @@ function DescriptionCard({
             )}
           </div>
         ))}
+      </div>
+    </Card>
+  )
+}
+
+// ---------- Adversários visíveis ----------
+
+function AdversariesPanel({ npcs }: { npcs: NPC[] }) {
+  return (
+    <Card className="flex flex-col gap-2 p-4">
+      <SectionTitle>Adversários</SectionTitle>
+      {npcs.map((npc) => {
+        const hpPct = npc.hp.max > 0 ? Math.max(0, (npc.hp.current / npc.hp.max) * 100) : 0
+        return (
+          <div key={npc.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-2 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-orange-100">{npc.name}</p>
+              <span className="text-xs text-orange-400/60">CA {npc.armorClass}</span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/40">
+              <div className={`h-full ${hpPct > 50 ? 'bg-emerald-600' : hpPct > 20 ? 'bg-amber-500' : 'bg-red-600'}`} style={{ width: `${hpPct}%` }} />
+            </div>
+          </div>
+        )
+      })}
+    </Card>
+  )
+}
+
+// ---------- Loja ----------
+
+function parseRyoCost(cost: string): number {
+  const cleaned = cost.replace(/\./g, '').match(/\d+/)
+  return cleaned ? Number(cleaned[0]) : 0
+}
+
+function ShopCard({
+  character,
+  onSubmit,
+  pendingFields,
+}: {
+  character: Character
+  onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
+  pendingFields: Set<RequestableField>
+}) {
+  const [tab, setTab] = useState<'weapons' | 'armor' | 'gear'>('weapons')
+  const blocked = pendingFields.has('ryo') || pendingFields.has('weapons') || pendingFields.has('armor') || pendingFields.has('equipment')
+
+  async function buyWeapon(item: WeaponCatalogEntry) {
+    const cost = parseRyoCost(item.cost)
+    if (character.ryo < cost) return
+    const weapons: Weapon[] = [...character.weapons, { id: newId(), name: item.name, damage: item.damage, equipped: true }]
+    await onSubmit({ weapons, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
+  }
+
+  async function buyArmor(item: ArmorCatalogEntry) {
+    const cost = parseRyoCost(item.cost)
+    if (character.ryo < cost) return
+    const armor: Armor[] = [...character.armor, { id: newId(), name: item.name, defenseBonus: item.armorBonus, equipped: true }]
+    await onSubmit({ armor, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
+  }
+
+  async function buyGear(item: GearItem) {
+    const cost = parseRyoCost(item.cost)
+    if (character.ryo < cost) return
+    const equipment: InventoryItem[] = [...character.equipment, { id: newId(), name: item.name, quantity: 1 }]
+    await onSubmit({ equipment, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
+  }
+
+  return (
+    <Card className="flex flex-col gap-3 p-4">
+      <div className="flex items-center justify-between">
+        <SectionTitle>Loja</SectionTitle>
+        <p className="text-sm text-orange-200">
+          Saldo: <span className="font-semibold text-orange-100">{character.ryo} Ryo</span>
+        </p>
+      </div>
+      <PendingNote fields={['ryo', 'weapons', 'armor', 'equipment']} pending={pendingFields} />
+      <div className="flex gap-1.5">
+        {(
+          [
+            ['weapons', 'Armas'],
+            ['armor', 'Armaduras'],
+            ['gear', 'Itens'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`rounded-full px-3 py-1 text-xs ${tab === key ? 'bg-orange-700 text-white' : 'bg-[#241a0f] text-orange-300/70'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+        {tab === 'weapons' &&
+          WEAPONS.map((w) => (
+            <div key={w.name} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/20 bg-black/20 px-2.5 py-1.5 text-sm">
+              <span className="text-orange-100">
+                {w.name} <span className="text-xs text-orange-400/60">({w.damage} {w.damageType})</span>
+              </span>
+              <Button disabled={blocked || character.ryo < parseRyoCost(w.cost)} onClick={() => buyWeapon(w)}>
+                {w.cost}
+              </Button>
+            </div>
+          ))}
+        {tab === 'armor' &&
+          ARMORS.map((a) => (
+            <div key={a.name} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/20 bg-black/20 px-2.5 py-1.5 text-sm">
+              <span className="text-orange-100">
+                {a.name} <span className="text-xs text-orange-400/60">(+{a.armorBonus} CA)</span>
+              </span>
+              <Button disabled={blocked || character.ryo < parseRyoCost(a.cost)} onClick={() => buyArmor(a)}>
+                {a.cost}
+              </Button>
+            </div>
+          ))}
+        {tab === 'gear' &&
+          GEAR.map((g) => (
+            <div key={g.name} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/20 bg-black/20 px-2.5 py-1.5 text-sm">
+              <span className="text-orange-100">{g.name}</span>
+              <Button disabled={blocked || character.ryo < parseRyoCost(g.cost)} onClick={() => buyGear(g)}>
+                {g.cost}
+              </Button>
+            </div>
+          ))}
       </div>
     </Card>
   )

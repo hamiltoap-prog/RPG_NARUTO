@@ -14,7 +14,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Character, GameTable, LogEntry, SheetChangeRequest } from '../types'
+import type { Character, CombatParticipant, GameTable, LogEntry, Mission, NPC, SheetChangeRequest } from '../types'
 import { newId, newTableCode } from './id'
 
 function requireDb() {
@@ -38,6 +38,16 @@ function stripUndefined<T>(value: T): T {
   return value
 }
 
+/** Handler padrão pra listeners: erros de Firestore (ex: índice composto
+ * faltando, permissão negada) não devem falhar em silêncio — sem isso, um
+ * onSnapshot que dá erro simplesmente nunca mais chama o callback, e a UI
+ * fica "vazia" sem nenhum aviso. */
+function defaultOnError(context: string) {
+  return (err: Error) => {
+    console.error(`[Mesa Ninja] Erro ao escutar ${context}:`, err)
+  }
+}
+
 // ---------- Mesas ----------
 
 export async function createTable(gmName: string, gmUid: string, name: string): Promise<GameTable> {
@@ -55,6 +65,9 @@ export async function createTable(gmName: string, gmUid: string, name: string): 
       gmName,
       createdAt: Date.now(),
       autoApproveFields: [],
+      combatActive: false,
+      combatOrder: [],
+      combatTurnIndex: 0,
     }
     await setDoc(ref, stripUndefined(table))
     return table
@@ -71,14 +84,29 @@ export async function getTableByCode(code: string): Promise<GameTable | null> {
 
 export function listenTable(tableId: string, cb: (t: GameTable | null) => void) {
   const database = requireDb()
-  return onSnapshot(doc(database, 'tables', tableId), (snap) => {
-    cb(snap.exists() ? (snap.data() as GameTable) : null)
-  })
+  return onSnapshot(
+    doc(database, 'tables', tableId),
+    (snap) => cb(snap.exists() ? (snap.data() as GameTable) : null),
+    defaultOnError('mesa'),
+  )
 }
 
 export async function updateTable(tableId: string, patch: Partial<GameTable>) {
   const database = requireDb()
   await updateDoc(doc(database, 'tables', tableId), stripUndefined(patch))
+}
+
+export async function startCombat(tableId: string, order: CombatParticipant[]) {
+  await updateTable(tableId, { combatActive: true, combatOrder: order, combatTurnIndex: 0 })
+}
+
+export async function endCombat(tableId: string) {
+  await updateTable(tableId, { combatActive: false, combatOrder: [], combatTurnIndex: 0 })
+}
+
+export async function advanceCombatTurn(tableId: string, currentIndex: number, participantCount: number) {
+  const nextIndex = participantCount > 0 ? (currentIndex + 1) % participantCount : 0
+  await updateTable(tableId, { combatTurnIndex: nextIndex })
 }
 
 // ---------- Personagens ----------
@@ -106,21 +134,42 @@ export async function deleteCharacter(tableId: string, characterId: string) {
 }
 
 export function listenCharacters(tableId: string, cb: (chars: Character[]) => void) {
-  return onSnapshot(query(charactersCol(tableId), orderBy('createdAt', 'asc')), (snap) => {
-    cb(snap.docs.map((d) => d.data() as Character))
-  })
+  return onSnapshot(
+    query(charactersCol(tableId), orderBy('createdAt', 'asc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as Character)),
+    defaultOnError('personagens'),
+  )
 }
 
 export function listenCharacter(tableId: string, characterId: string, cb: (c: Character | null) => void) {
-  return onSnapshot(doc(charactersCol(tableId), characterId), (snap) => {
-    cb(snap.exists() ? (snap.data() as Character) : null)
-  })
+  return onSnapshot(
+    doc(charactersCol(tableId), characterId),
+    (snap) => cb(snap.exists() ? (snap.data() as Character) : null),
+    defaultOnError('personagem'),
+  )
 }
 
 export async function findMyCharacter(tableId: string, ownerUid: string): Promise<Character | null> {
   const q = query(charactersCol(tableId), where('ownerUid', '==', ownerUid), limit(1))
   const snap = await getDocs(q)
   return snap.empty ? null : (snap.docs[0].data() as Character)
+}
+
+/** Busca um personagem pelo nome exato na mesa — usado pra reconhecer um
+ * jogador que está retornando (outro dispositivo/navegador) e evitar criar
+ * um personagem duplicado quando o nome já existe. */
+export async function findCharacterByName(tableId: string, name: string): Promise<Character | null> {
+  const q = query(charactersCol(tableId), where('name', '==', name.trim()), limit(1))
+  const snap = await getDocs(q)
+  return snap.empty ? null : (snap.docs[0].data() as Character)
+}
+
+/** "Reivindica" um personagem existente pro uid atual — usado quando o
+ * jogador digita o nome de um personagem já criado (ex: entrando de outro
+ * dispositivo). As Firestore Rules só permitem essa transição estrita
+ * (só o campo ownerUid muda, pro próprio uid de quem chama). */
+export async function claimCharacter(tableId: string, characterId: string, uid: string) {
+  await updateDoc(doc(charactersCol(tableId), characterId), { ownerUid: uid, updatedAt: Date.now() })
 }
 
 // ---------- Fila de aprovação (mudanças de ficha) ----------
@@ -147,12 +196,20 @@ export async function createChangeRequest(
 
 export function listenPendingRequests(tableId: string, cb: (reqs: SheetChangeRequest[]) => void) {
   const q = query(requestsCol(tableId), where('status', '==', 'pending'), orderBy('createdAt', 'asc'))
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as SheetChangeRequest)))
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => d.data() as SheetChangeRequest)),
+    defaultOnError('pedidos pendentes (confira se os índices do Firestore foram publicados)'),
+  )
 }
 
 export function listenRequestsForCharacter(tableId: string, characterId: string, cb: (reqs: SheetChangeRequest[]) => void) {
   const q = query(requestsCol(tableId), where('characterId', '==', characterId), orderBy('createdAt', 'desc'), limit(20))
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as SheetChangeRequest)))
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => d.data() as SheetChangeRequest)),
+    defaultOnError('pedidos do personagem (confira se os índices do Firestore foram publicados)'),
+  )
 }
 
 export async function approveRequests(tableId: string, requests: SheetChangeRequest[], reviewedBy: string) {
@@ -179,6 +236,64 @@ export async function rejectRequests(tableId: string, requestIds: string[], revi
   await batch.commit()
 }
 
+// ---------- NPCs / Adversários ----------
+
+export function npcsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'npcs')
+}
+
+export async function createNPC(tableId: string, npc: Omit<NPC, 'id'>): Promise<NPC> {
+  const id = newId()
+  const full: NPC = { ...npc, id }
+  await setDoc(doc(npcsCol(tableId), id), stripUndefined(full))
+  return full
+}
+
+export async function updateNPC(tableId: string, npcId: string, patch: Partial<NPC>) {
+  await updateDoc(doc(npcsCol(tableId), npcId), stripUndefined(patch))
+}
+
+export async function deleteNPC(tableId: string, npcId: string) {
+  await deleteDoc(doc(npcsCol(tableId), npcId))
+}
+
+export function listenNPCs(tableId: string, cb: (npcs: NPC[]) => void) {
+  return onSnapshot(
+    query(npcsCol(tableId), orderBy('createdAt', 'asc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as NPC)),
+    defaultOnError('NPCs'),
+  )
+}
+
+// ---------- Missões ----------
+
+export function missionsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'missions')
+}
+
+export async function createMission(tableId: string, mission: Omit<Mission, 'id'>): Promise<Mission> {
+  const id = newId()
+  const full: Mission = { ...mission, id }
+  await setDoc(doc(missionsCol(tableId), id), stripUndefined(full))
+  return full
+}
+
+export async function updateMission(tableId: string, missionId: string, patch: Partial<Mission>) {
+  await updateDoc(doc(missionsCol(tableId), missionId), stripUndefined(patch))
+}
+
+export async function deleteMission(tableId: string, missionId: string) {
+  await deleteDoc(doc(missionsCol(tableId), missionId))
+}
+
+export function listenMissions(tableId: string, cb: (missions: Mission[]) => void) {
+  return onSnapshot(
+    query(missionsCol(tableId), orderBy('createdAt', 'asc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as Mission)),
+    defaultOnError('missões'),
+  )
+}
+
 // ---------- Log de mesa ----------
 
 export function logCol(tableId: string) {
@@ -193,5 +308,5 @@ export async function addLogEntry(tableId: string, entry: Omit<LogEntry, 'id' | 
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {
   const q = query(logCol(tableId), orderBy('ts', 'desc'), limit(max))
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as LogEntry)))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as LogEntry)), defaultOnError('registro da mesa'))
 }

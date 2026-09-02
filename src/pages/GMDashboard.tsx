@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react'
+import { CombatTracker } from '../components/CombatTracker'
 import { LogFeed } from '../components/LogFeed'
+import { MissionBoard } from '../components/MissionBoard'
+import { NpcManager } from '../components/NpcManager'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
 import { Avatar, Badge, Button, Card, Input, SectionTitle } from '../components/ui'
-import { deleteCharacter, listenCharacters, listenPendingRequests, updateTable } from '../lib/store'
+import { deleteCharacter, listenCharacters, listenMissions, listenNPCs, listenPendingRequests, updateTable } from '../lib/store'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
-import type { Character, GameTable, RequestableField } from '../types'
+import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'missoes' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
+  const [npcs, setNpcs] = useState<NPC[]>([])
+  const [missions, setMissions] = useState<Mission[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [tab, setTab] = useState<Tab>('personagens')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -18,6 +23,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => listenCharacters(table.id, setCharacters), [table.id])
+  useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
+  useEffect(() => listenMissions(table.id, setMissions), [table.id])
   useEffect(() => listenPendingRequests(table.id, (reqs) => setPendingCount(reqs.length)), [table.id])
 
   const selected = characters.find((c) => c.id === selectedId) ?? characters[0] ?? null
@@ -51,6 +58,9 @@ export function GMDashboard({ table }: { table: GameTable }) {
         {(
           [
             ['personagens', `Personagens (${characters.length})`],
+            ['combate', 'Combate'],
+            ['npcs', `NPCs (${npcs.length})`],
+            ['missoes', `Missões (${missions.length})`],
             ['pedidos', `Pedidos Pendentes (${pendingCount})`],
             ['config', 'Configurações'],
           ] as [Tab, string][]
@@ -116,6 +126,12 @@ export function GMDashboard({ table }: { table: GameTable }) {
           )}
         </div>
       )}
+
+      {tab === 'combate' && <CombatTracker table={table} characters={characters} npcs={npcs} />}
+
+      {tab === 'npcs' && <NpcManager tableId={table.id} npcs={npcs} />}
+
+      {tab === 'missoes' && <MissionBoard tableId={table.id} missions={missions} asGM />}
 
       {tab === 'pedidos' && <PendingRequestsPanel tableId={table.id} gmName={table.gmName} />}
 

@@ -48,7 +48,14 @@ service cloud.firestore {
             resource.data.ownerUid == request.auth.uid &&
             request.resource.data.ownerUid == resource.data.ownerUid &&
             request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['notes', 'updatedAt'].concat(autoApproveKeys(tableId))));
+              .hasOnly(['notes', 'updatedAt'].concat(autoApproveKeys(tableId)))) ||
+          // "Reivindicar" um personagem existente pelo nome (ex: jogador
+          // entrando de outro dispositivo/navegador): só permite trocar o
+          // ownerUid pro uid de quem chama, mais nada — nenhum outro campo
+          // pode mudar na mesma escrita.
+          (signedIn() &&
+            request.resource.data.ownerUid == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid', 'updatedAt']));
         allow delete: if isGM(tableId) || resource.data.ownerUid == request.auth.uid;
       }
 
@@ -68,6 +75,16 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create: if signedIn();
         allow update, delete: if isGM(tableId);
+      }
+
+      match /npcs/{npcId} {
+        allow read: if signedIn();
+        allow write: if isGM(tableId);
+      }
+
+      match /missions/{missionId} {
+        allow read: if signedIn();
+        allow write: if isGM(tableId);
       }
     }
   }

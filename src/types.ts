@@ -174,6 +174,7 @@ export const REQUESTABLE_FIELDS = [
   'proficiencies',
   'imageUrl',
   'description',
+  'ryo',
 ] as const
 export type RequestableField = (typeof REQUESTABLE_FIELDS)[number]
 
@@ -195,6 +196,7 @@ export const REQUESTABLE_FIELD_LABELS: Record<RequestableField, string> = {
   proficiencies: 'Proficiências',
   imageUrl: 'Imagem do personagem',
   description: 'Descrição/História',
+  ryo: 'Ryo (dinheiro)',
 }
 
 export interface CharacterDescription {
@@ -239,12 +241,38 @@ export interface Character {
 
   imageUrl: string
 
+  ryo: number
+
   /** Livre para o jogador editar a qualquer momento, sem aprovação. */
   notes: string
 
   createdAt: number
   updatedAt: number
   isAlive: boolean
+}
+
+/** NPC/adversário controlado pelo mestre — ficha simplificada (o manual
+ * detalha um sistema completo de construção de adversários no Cap. 15,
+ * mas o app deixa isso como texto livre pro mestre preencher conforme
+ * julgar, seguindo a filosofia do próprio manual de "foco no raciocínio,
+ * não nos dados"). */
+export interface NPC {
+  id: string
+  tableId: string
+  name: string
+  armorClass: number
+  hp: { current: number; max: number }
+  resistancePoints: number
+  attacksText: string
+  notes: string
+  visible: boolean
+  createdAt: number
+}
+
+export interface CombatParticipant {
+  ref: string // "character:<id>" ou "npc:<id>"
+  name: string
+  initiative: number
 }
 
 export interface GameTable {
@@ -257,6 +285,19 @@ export interface GameTable {
   /** Campos que, quando um jogador tenta alterar, são aplicados direto sem
    * passar pela fila de aprovação do mestre. */
   autoApproveFields: RequestableField[]
+  combatActive: boolean
+  combatOrder: CombatParticipant[]
+  combatTurnIndex: number
+}
+
+export interface Mission {
+  id: string
+  tableId: string
+  title: string
+  description: string
+  reward: string
+  status: 'open' | 'completed'
+  createdAt: number
 }
 
 export type RequestStatus = 'pending' | 'approved' | 'rejected'
@@ -278,7 +319,7 @@ export interface SheetChangeRequest {
   reviewNote?: string
 }
 
-export type LogKind = 'action' | 'note' | 'system' | 'request'
+export type LogKind = 'action' | 'note' | 'system' | 'request' | 'combat' | 'roll'
 
 export interface LogEntry {
   id: string

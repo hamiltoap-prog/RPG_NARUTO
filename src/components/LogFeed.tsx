@@ -8,6 +8,8 @@ const kindColor: Record<LogEntry['kind'], string> = {
   note: 'text-orange-300/70',
   system: 'text-emerald-300/80',
   request: 'text-amber-300/80',
+  combat: 'text-red-300/80',
+  roll: 'text-sky-300/80',
 }
 
 export function LogFeed({ tableId, compact = false }: { tableId: string; compact?: boolean }) {

@@ -4,7 +4,7 @@ import { Button, Card, Input } from '../components/ui'
 import { useAuthUid } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
 import { getStoredName, rememberTable, setStoredName } from '../lib/localMemory'
-import { findMyCharacter, listenTable } from '../lib/store'
+import { claimCharacter, findCharacterByName, findMyCharacter, listenTable } from '../lib/store'
 import type { Character, GameTable } from '../types'
 import { CharacterCreate } from './CharacterCreate'
 import { GMDashboard } from './GMDashboard'
@@ -30,10 +30,32 @@ export function TableRoute() {
   const isGM = Boolean(uid && table && table.gmUid === uid)
 
   useEffect(() => {
-    if (!uid || !table || isGM) return
+    if (!uid || !table || isGM || !name) return
+    let cancelled = false
     setMyCharacter(undefined)
-    findMyCharacter(tableId, uid).then(setMyCharacter)
-  }, [uid, table, tableId, isGM])
+    async function resolve() {
+      const mine = await findMyCharacter(tableId, uid!)
+      if (mine) {
+        if (!cancelled) setMyCharacter(mine)
+        return
+      }
+      // Não achou personagem pelo uid deste navegador — talvez o jogador
+      // esteja voltando de outro dispositivo. Se já existe um personagem
+      // com esse nome na mesa, assume que é a mesma pessoa e "reivindica"
+      // a ficha em vez de criar uma nova.
+      const existing = await findCharacterByName(tableId, name!)
+      if (existing) {
+        await claimCharacter(tableId, existing.id, uid!)
+        if (!cancelled) setMyCharacter({ ...existing, ownerUid: uid! })
+        return
+      }
+      if (!cancelled) setMyCharacter(null)
+    }
+    resolve()
+    return () => {
+      cancelled = true
+    }
+  }, [uid, table, tableId, isGM, name])
 
   useEffect(() => {
     if (table && name) {

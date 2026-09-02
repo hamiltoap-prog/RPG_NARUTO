@@ -83,3 +83,24 @@ export function calculateDerivedStats(
 export function attributeKeysOrdered(): AttributeKey[] {
   return [...ATTRIBUTE_KEYS]
 }
+
+/** Iniciativa: 1d20 + Mod. Destreza, com as duas exceções de classe do
+ * manual — Mestre Estrategista usa Inteligência, Ninja Caçador soma
+ * também o Bônus de Proficiência. */
+export function rollInitiative(character: { modifiers: Modifiers; proficiencyBonus: number; classId: string }): number {
+  const roll = 1 + Math.floor(Math.random() * 20)
+  const mod = character.classId === 'strategist' ? character.modifiers.intelligence : character.modifiers.dexterity
+  const extra = character.classId === 'hunter_ninja' ? character.proficiencyBonus : 0
+  return roll + mod + extra
+}
+
+/** Converte uma fórmula de riqueza inicial tipo "4d4 x 100 Ryo" no valor
+ * médio determinístico (sem depender de rolagem aleatória), seguindo a
+ * mesma filosofia usada em PV/PC. */
+export function averageStartingWealth(formula: string): number {
+  const match = formula.match(/(\d+)d(\d+)\s*x\s*(\d+)/i)
+  if (!match) return 0
+  const [, count, sides, multiplier] = match
+  const avgRoll = Number(count) * averageDie(Number(sides))
+  return avgRoll * Number(multiplier)
+}

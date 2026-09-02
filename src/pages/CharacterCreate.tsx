@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Avatar, Badge, Button, Card, Input, SectionTitle, Textarea } from '../components/ui'
+import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from '../components/ui'
 import { CLANS } from '../data/clans'
 import { CLASSES } from '../data/classes'
 import { JUTSU_CATALOG } from '../data/jutsus'
-import { calculateDerivedStats, totalAttributes } from '../lib/characterMath'
+import { averageStartingWealth, calculateDerivedStats, totalAttributes } from '../lib/characterMath'
 import { createCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
 import type { Attributes, Character, CharacterDescription, GameTable, InventoryItem, Jutsu } from '../types'
@@ -51,8 +51,7 @@ export function CharacterCreate({
   const [equipment, setEquipment] = useState<InventoryItem[]>([])
   const [newItemName, setNewItemName] = useState('')
   const [jutsus, setJutsus] = useState<Jutsu[]>([])
-  const [newJutsuName, setNewJutsuName] = useState('')
-  const [newJutsuDetails, setNewJutsuDetails] = useState('')
+  const [jutsuToAdd, setJutsuToAdd] = useState('')
   const [imageUrl, setImageUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -104,14 +103,13 @@ export function CharacterCreate({
     setEquipment((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i)))
   }
 
+  const eligibleJutsus = JUTSU_CATALOG.filter((j) => j.rank === 'Rank-D' || j.clanId === clanId)
+
   function addJutsu() {
-    if (!newJutsuName.trim()) return
-    const catalogMatch = JUTSU_CATALOG.find((j) => j.name.toLowerCase() === newJutsuName.trim().toLowerCase())
-    const details = newJutsuDetails.trim() || (catalogMatch ? formatJutsuDetails(catalogMatch) : '')
-    const chakraCost = catalogMatch?.cost
-    setJutsus((prev) => [...prev, { id: newId(), name: newJutsuName.trim(), details, chakraCost }])
-    setNewJutsuName('')
-    setNewJutsuDetails('')
+    const catalogMatch = eligibleJutsus.find((j) => j.name === jutsuToAdd)
+    if (!catalogMatch || jutsus.some((j) => j.name === catalogMatch.name)) return
+    setJutsus((prev) => [...prev, { id: newId(), name: catalogMatch.name, details: formatJutsuDetails(catalogMatch), chakraCost: catalogMatch.cost }])
+    setJutsuToAdd('')
   }
 
   function removeJutsu(id: string) {
@@ -157,6 +155,7 @@ export function CharacterCreate({
         proficiencies: [...clan.skillProficiencies],
         condition: 'Normal',
         imageUrl: imageUrl.trim(),
+        ryo: averageStartingWealth(charClass.startingWealth),
         notes: '',
         createdAt: now,
         updatedAt: now,
@@ -392,15 +391,9 @@ export function CharacterCreate({
         <Card className="flex flex-col gap-3 p-4">
           <SectionTitle>Jutsus</SectionTitle>
           <p className="text-xs text-orange-300/60">
-            Digite o nome de um jutsu do catálogo (Rank-D, disponível no 1º nível, ou exclusivo do clã {clan?.name}) para
-            preencher os detalhes automaticamente, ou descreva um jutsu personalizado. Combine com o mestre quais estão
-            liberados no nível 1.
+            Escolha entre os jutsus que seu personagem pode aprender no 1º nível: Rank-D de qualquer categoria, ou
+            exclusivos do clã {clan?.name}. Só o mestre pode liberar jutsus fora dessa lista.
           </p>
-          <datalist id="jutsu-catalog-list">
-            {JUTSU_CATALOG.filter((j) => j.rank === 'Rank-D' || j.clanId === clanId).map((j) => (
-              <option key={j.name} value={j.name} />
-            ))}
-          </datalist>
           {jutsus.map((j) => (
             <div key={j.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-3 text-sm">
               <div className="flex items-center justify-between">
@@ -414,21 +407,20 @@ export function CharacterCreate({
               {j.details && <p className="mt-1 whitespace-pre-line text-xs text-orange-300/60">{j.details}</p>}
             </div>
           ))}
-          <div className="flex flex-col gap-2 rounded-lg border border-orange-900/30 bg-black/10 p-3">
-            <Input
-              placeholder="Nome do jutsu (busque no catálogo ou digite um novo)"
-              list="jutsu-catalog-list"
-              value={newJutsuName}
-              onChange={(e) => setNewJutsuName(e.target.value)}
-            />
-            <Textarea
-              rows={2}
-              placeholder="Efeito / custo de chakra (deixe em branco para usar o texto do catálogo, se houver)"
-              value={newJutsuDetails}
-              onChange={(e) => setNewJutsuDetails(e.target.value)}
-            />
-            <Button onClick={addJutsu} className="self-start">
-              Adicionar Jutsu
+          <div className="flex gap-2 rounded-lg border border-orange-900/30 bg-black/10 p-3">
+            <Select value={jutsuToAdd} onChange={(e) => setJutsuToAdd(e.target.value)}>
+              <option value="">Selecione um jutsu elegível...</option>
+              {eligibleJutsus
+                .filter((j) => !jutsus.some((added) => added.name === j.name))
+                .map((j) => (
+                  <option key={j.name} value={j.name}>
+                    {j.name} ({j.category}
+                    {j.cost ? ` · ${j.cost}` : ''})
+                  </option>
+                ))}
+            </Select>
+            <Button onClick={addJutsu} disabled={!jutsuToAdd} className="shrink-0">
+              Adicionar
             </Button>
           </div>
         </Card>
