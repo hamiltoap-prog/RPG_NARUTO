@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// Modelo de acesso da Mesa Ninja:
+// - Qualquer pessoa autenticada (mesmo anonimamente) que conheça o código da
+//   mesa pode LER a mesa inteira — fichas, log e fila de pedidos do próprio
+//   personagem — para acompanhar o jogo em tempo real.
+// - O Mestre (gmUid) pode escrever em qualquer campo de qualquer ficha,
+//   sempre, sem passar por aprovação.
+// - Um jogador só pode escrever direto na PRÓPRIA ficha nos campos "notes"
+//   e nos campos que o Mestre marcou em autoApproveFields. Qualquer outro
+//   campo só muda através de um documento em /requests, que só o Mestre
+//   pode aprovar (isso concede permissão pra ele escrever na ficha).
+// - Ninguém cria personagem em nome de outra pessoa, nem "rouba" a mesa
+//   trocando o gmUid por conta própria.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isGM(tableId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/tables/$(tableId)).data.gmUid == request.auth.uid;
+    }
+
+    function autoApproveKeys(tableId) {
+      return get(/databases/$(database)/documents/tables/$(tableId)).data.autoApproveFields;
+    }
+
+    match /tables/{tableId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() &&
+        request.resource.data.gmUid == request.auth.uid &&
+        request.resource.data.id == tableId &&
+        request.resource.data.code == tableId;
+      allow update: if isGM(tableId) && request.resource.data.gmUid == resource.data.gmUid;
+      allow delete: if false;
+
+      match /characters/{characterId} {
+        allow read: if signedIn();
+        allow create: if signedIn() &&
+          request.resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.tableId == tableId;
+        allow update: if isGM(tableId) ||
+          (signedIn() &&
+            resource.data.ownerUid == request.auth.uid &&
+            request.resource.data.ownerUid == resource.data.ownerUid &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['notes', 'updatedAt'].concat(autoApproveKeys(tableId))));
+        allow delete: if isGM(tableId) || resource.data.ownerUid == request.auth.uid;
+      }
+
+      match /requests/{requestId} {
+        allow read: if isGM(tableId) || (signedIn() && resource.data.ownerUid == request.auth.uid);
+        allow create: if signedIn() &&
+          request.resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.tableId == tableId &&
+          request.resource.data.status == 'pending';
+        // Só o Mestre transiciona o status (aprovar/rejeitar); a aplicação
+        // do patch na ficha em si é coberta pela regra de /characters acima.
+        allow update: if isGM(tableId);
+        allow delete: if isGM(tableId);
+      }
+
+      match /log/{logId} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow update, delete: if isGM(tableId);
+      }
+    }
+  }
+}
