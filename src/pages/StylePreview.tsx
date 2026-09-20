@@ -3,6 +3,7 @@
 // Não está roteada — para usar, adicione temporariamente em App.tsx:
 //   <Route path="/preview" element={<StylePreview />} />
 // Como nada importa este arquivo, ele não entra no pacote final.
+import { DieFace } from '../components/DieFace'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Textarea } from '../components/ui'
 
 export function StylePreview() {
@@ -132,6 +133,24 @@ export function StylePreview() {
         <Card className="p-4">
           <SectionTitle className="mb-2">Anotações (livre, sem aprovação)</SectionTitle>
           <Textarea rows={3} placeholder="Segredos, objetivos, contatos..." />
+        </Card>
+
+        <Card className="flex flex-col gap-3 p-4">
+          <SectionTitle>Dados</SectionTitle>
+          <div className="flex flex-wrap items-center gap-3">
+            <DieFace sides={4} value={3} />
+            <DieFace sides={6} value={5} />
+            <DieFace sides={8} value={7} />
+            <DieFace sides={10} value={9} />
+            <DieFace sides={12} value={11} />
+            <DieFace sides={20} value={17} />
+            <DieFace sides={100} value={84} />
+          </div>
+          <p className="text-xs text-orange-400/60">Rolando (animado):</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <DieFace sides={20} value={13} rolling />
+            <DieFace sides={6} value={2} rolling />
+          </div>
         </Card>
       </div>
 

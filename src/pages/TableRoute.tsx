@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Button, Card, Input } from '../components/ui'
+import { DiceOverlay } from '../components/DiceOverlay'
 import { useAuthUid } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
 import { getStoredName, rememberTable, setStoredName } from '../lib/localMemory'
@@ -80,8 +81,17 @@ export function TableRoute() {
     return <p className="p-8 text-center text-red-300">Mesa "{tableId}" não encontrada. Confira o código com o mestre.</p>
   }
 
+  // A animação de dados acompanha a mesa inteira: quem estiver nela vê a
+  // rolagem de qualquer um, seja o mestre ou um jogador.
+  const diceOverlay = <DiceOverlay tableId={table.id} />
+
   if (isGM) {
-    return <GMDashboard table={table} />
+    return (
+      <>
+        {diceOverlay}
+        <GMDashboard table={table} />
+      </>
+    )
   }
 
   if (!name) {
@@ -102,7 +112,12 @@ export function TableRoute() {
   if (myCharacter === null) {
     return <CharacterCreate table={table} uid={uid} characterName={name} onCreated={setMyCharacter} />
   }
-  return <PlayerView table={table} characterId={myCharacter.id} />
+  return (
+    <>
+      {diceOverlay}
+      <PlayerView table={table} characterId={myCharacter.id} />
+    </>
+  )
 }
 
 function NamePrompt({ tableName, onSubmit }: { tableName: string; onSubmit: (name: string) => void }) {

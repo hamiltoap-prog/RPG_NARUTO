@@ -242,6 +242,25 @@ body::before {
   animation: roll-in 0.25s ease-out;
 }
 
+/* O tombo do dado enquanto "rola": gira e sacode sem sair do lugar. */
+@keyframes dice-tumble {
+  0% {
+    transform: rotate(0deg) translateY(0) scale(1);
+  }
+  25% {
+    transform: rotate(90deg) translateY(-5px) scale(1.06);
+  }
+  50% {
+    transform: rotate(180deg) translateY(0) scale(1);
+  }
+  75% {
+    transform: rotate(270deg) translateY(-3px) scale(1.04);
+  }
+  100% {
+    transform: rotate(360deg) translateY(0) scale(1);
+  }
+}
+
 @keyframes ember-pulse {
   0%,
   100% {
