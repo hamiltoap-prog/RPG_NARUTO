@@ -94,7 +94,13 @@ export function PlayerView({
       <div className="flex flex-col gap-4">
         <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} onSubmit={submit} pendingFields={pendingFields} />
         <VitalsCard character={character} onSubmit={submit} pendingFields={pendingFields} />
-        <ActionRoller table={table} character={character} actorName={actorName} />
+        <ActionRoller
+          table={table}
+          character={character}
+          actorName={actorName}
+          actorIsGM={asGM}
+          requesterUid={actorUid}
+        />
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
         <ShopCard character={character} onSubmit={submit} pendingFields={pendingFields} />

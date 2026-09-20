@@ -288,6 +288,50 @@ export interface GameTable {
   combatActive: boolean
   combatOrder: CombatParticipant[]
   combatTurnIndex: number
+  /** Quando ligado, toda rolagem de jogador (teste, ataque, dano) precisa da
+   * liberação do mestre antes do dado rolar. */
+  requireRollApproval: boolean
+}
+
+// ---------- Pedidos de rolagem ----------
+
+export type RollRequestKind = 'check' | 'attack' | 'damage'
+
+export const ROLL_REQUEST_KIND_LABELS: Record<RollRequestKind, string> = {
+  check: 'Teste',
+  attack: 'Ataque',
+  damage: 'Dano',
+}
+
+export type RollRequestStatus = 'pending' | 'approved' | 'denied'
+
+/** Tudo que o mestre precisa para executar a rolagem quando liberar — o dado
+ * só é sorteado no momento da aprovação, nunca antes. */
+export interface RollRequest {
+  id: string
+  tableId: string
+  characterId: string
+  characterName: string
+  requesterUid: string
+  kind: RollRequestKind
+  /** Frase pronta mostrada ao mestre, ex: "Teste de Percepção (Sabedoria, proficiente)". */
+  description: string
+  status: RollRequestStatus
+  createdAt: number
+
+  // Parâmetros da rolagem
+  attribute?: AttributeKey
+  modifier?: number
+  proficient?: boolean
+  proficiencyBonus?: number
+  notation?: string
+  critical?: boolean
+
+  // Resultado, preenchido quando o mestre libera
+  resolvedAt?: number
+  resolvedBy?: string
+  resultSummary?: string
+  deniedReason?: string
 }
 
 export interface Mission {
@@ -330,4 +374,10 @@ export interface LogEntry {
   characterId?: string
   kind: LogKind
   summary: string
+  /** Valor de cada dado rolado — alimenta a animação vista por toda a mesa. */
+  dice?: number[]
+  /** Quantos lados tinha cada dado da animação. */
+  diceSides?: number
+  /** Rótulo curto mostrado na animação, ex: "Ataque (Ninjutsu)". */
+  diceLabel?: string
 }

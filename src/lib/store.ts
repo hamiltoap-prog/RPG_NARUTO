@@ -14,7 +14,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Character, CombatParticipant, GameTable, LogEntry, Mission, NPC, SheetChangeRequest } from '../types'
+import type { Character, CombatParticipant, GameTable, LogEntry, Mission, NPC, RollRequest, SheetChangeRequest } from '../types'
 import { newId, newTableCode } from './id'
 
 function requireDb() {
@@ -68,6 +68,7 @@ export async function createTable(gmName: string, gmUid: string, name: string): 
       combatActive: false,
       combatOrder: [],
       combatTurnIndex: 0,
+      requireRollApproval: true,
     }
     await setDoc(ref, stripUndefined(table))
     return table
@@ -75,18 +76,33 @@ export async function createTable(gmName: string, gmUid: string, name: string): 
   throw new Error('Não foi possível gerar um código de mesa único. Tente novamente.')
 }
 
+/** Mesas criadas antes de um campo existir não têm esse campo no documento.
+ * Em vez de espalhar `?? padrão` por toda a interface, o valor é completado
+ * aqui, no único ponto por onde a mesa entra no app. */
+function normalizeTable(data: Partial<GameTable>): GameTable {
+  return {
+    ...(data as GameTable),
+    autoApproveFields: data.autoApproveFields ?? [],
+    combatActive: data.combatActive ?? false,
+    combatOrder: data.combatOrder ?? [],
+    combatTurnIndex: data.combatTurnIndex ?? 0,
+    // Padrão do sistema: o mestre libera cada rolagem.
+    requireRollApproval: data.requireRollApproval ?? true,
+  }
+}
+
 export async function getTableByCode(code: string): Promise<GameTable | null> {
   const database = requireDb()
   const ref = doc(database, 'tables', code.trim().toUpperCase())
   const snap = await getDoc(ref)
-  return snap.exists() ? (snap.data() as GameTable) : null
+  return snap.exists() ? normalizeTable(snap.data() as Partial<GameTable>) : null
 }
 
 export function listenTable(tableId: string, cb: (t: GameTable | null) => void) {
   const database = requireDb()
   return onSnapshot(
     doc(database, 'tables', tableId),
-    (snap) => cb(snap.exists() ? (snap.data() as GameTable) : null),
+    (snap) => cb(snap.exists() ? normalizeTable(snap.data() as Partial<GameTable>) : null),
     defaultOnError('mesa'),
   )
 }
@@ -234,6 +250,44 @@ export async function rejectRequests(tableId: string, requestIds: string[], revi
     batch.update(reqRef, stripUndefined({ status: 'rejected', reviewedAt: now, reviewedBy, reviewNote }))
   }
   await batch.commit()
+}
+
+// ---------- Fila de rolagens ----------
+
+export function rollRequestsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'rollRequests')
+}
+
+export async function createRollRequest(
+  tableId: string,
+  request: Omit<RollRequest, 'id' | 'tableId' | 'status' | 'createdAt'>,
+): Promise<RollRequest> {
+  const id = newId()
+  const full: RollRequest = { ...request, id, tableId, status: 'pending', createdAt: Date.now() }
+  await setDoc(doc(rollRequestsCol(tableId), id), stripUndefined(full))
+  return full
+}
+
+export function listenPendingRollRequests(tableId: string, cb: (reqs: RollRequest[]) => void) {
+  const q = query(rollRequestsCol(tableId), where('status', '==', 'pending'), orderBy('createdAt', 'asc'))
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => d.data() as RollRequest)),
+    defaultOnError('pedidos de rolagem (confira se os índices do Firestore foram publicados)'),
+  )
+}
+
+export function listenMyRollRequests(tableId: string, characterId: string, cb: (reqs: RollRequest[]) => void) {
+  const q = query(rollRequestsCol(tableId), where('characterId', '==', characterId), orderBy('createdAt', 'desc'), limit(10))
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => d.data() as RollRequest)),
+    defaultOnError('minhas rolagens pendentes'),
+  )
+}
+
+export async function resolveRollRequest(tableId: string, requestId: string, patch: Partial<RollRequest>) {
+  await updateDoc(doc(rollRequestsCol(tableId), requestId), stripUndefined({ ...patch, resolvedAt: Date.now() }))
 }
 
 // ---------- NPCs / Adversários ----------

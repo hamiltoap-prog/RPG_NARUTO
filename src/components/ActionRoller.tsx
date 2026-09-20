@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from './ui'
-import { applyCriticalMultiplier, rollD20, rollDice } from '../lib/dice'
-import { addLogEntry } from '../lib/store'
+import { describeIntent, requestRoll } from '../lib/rollFlow'
+import { listenMyRollRequests } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
-import type { AttributeKey, Character, GameTable } from '../types'
+import type { AttributeKey, Character, GameTable, RollRequest } from '../types'
 
 const ATTACK_PRESETS: { label: string; attribute: AttributeKey }[] = [
   { label: 'Ninjutsu', attribute: 'intelligence' },
@@ -15,7 +15,19 @@ const ATTACK_PRESETS: { label: string; attribute: AttributeKey }[] = [
   { label: 'Arma à Distância', attribute: 'dexterity' },
 ]
 
-export function ActionRoller({ table, character, actorName }: { table: GameTable; character: Character; actorName: string }) {
+export function ActionRoller({
+  table,
+  character,
+  actorName,
+  actorIsGM,
+  requesterUid,
+}: {
+  table: GameTable
+  character: Character
+  actorName: string
+  actorIsGM: boolean
+  requesterUid: string
+}) {
   const [mode, setMode] = useState<'check' | 'attack' | 'damage'>('check')
 
   const [attr, setAttr] = useState<AttributeKey>('strength')
@@ -28,50 +40,35 @@ export function ActionRoller({ table, character, actorName }: { table: GameTable
   const [damageNotation, setDamageNotation] = useState('1d6')
   const [critical, setCritical] = useState(false)
 
-  const [lastResult, setLastResult] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [myRequests, setMyRequests] = useState<RollRequest[]>([])
 
-  async function postLog(summary: string) {
-    await addLogEntry(table.id, { actorName, actorType: 'player', characterId: character.id, kind: 'roll', summary })
-    setLastResult(summary)
-  }
+  useEffect(() => {
+    if (actorIsGM) return
+    return listenMyRollRequests(table.id, character.id, setMyRequests)
+  }, [table.id, character.id, actorIsGM])
 
-  async function rollCheck() {
-    const result = rollD20(character.modifiers[attr], proficient, character.proficiencyBonus)
-    const label = skillLabel.trim() || `Teste de ${ATTRIBUTE_LABELS[attr]}`
-    const critNote = result.isCritical ? ' — 20 natural!' : result.isFumble ? ' — 1 natural (falha)' : ''
-    await postLog(
-      `${label}: d20(${result.roll}) + ${result.modifier}${proficient ? ` + ${result.proficiencyBonus} (prof.)` : ''} = ${result.total}${critNote}`,
-    )
-  }
+  const pending = myRequests.filter((r) => r.status === 'pending')
+  const lastResolved = myRequests.find((r) => r.status !== 'pending')
 
-  async function rollAttack() {
-    const preset = ATTACK_PRESETS[attackPreset]
-    const result = rollD20(character.modifiers[preset.attribute], attackProficient, character.proficiencyBonus)
-    const critNote = result.isCritical ? ' — acerto crítico!' : result.isFumble ? ' — falha crítica!' : ''
-    await postLog(
-      `Ataque (${preset.label}): d20(${result.roll}) + ${result.modifier}${
-        attackProficient ? ` + ${result.proficiencyBonus} (prof.)` : ''
-      } = ${result.total}${critNote}`,
-    )
-  }
-
-  async function rollDamageRoll() {
+  async function send(intent: Parameters<typeof requestRoll>[0]['intent']) {
     try {
-      let result = rollDice(damageNotation)
-      let critNote = ''
-      if (critical) {
-        result = applyCriticalMultiplier(result, character.proficiencyBonus)
-        critNote = ` × ${character.proficiencyBonus} (crítico)`
-      }
-      await postLog(`Dano (${damageNotation}): [${result.rolls.join(', ')}]${critNote} + ${result.modifier} = ${result.total}`)
+      const result = await requestRoll({ table, character, actorName, actorIsGM, requesterUid, intent })
+      setFeedback(result.pending ? 'Pedido enviado — aguardando o mestre liberar.' : (result.summary ?? ''))
     } catch (err) {
-      setLastResult(err instanceof Error ? err.message : 'Notação inválida.')
+      setFeedback(err instanceof Error ? err.message : 'Não foi possível rolar.')
     }
   }
 
+  const needsApproval = !actorIsGM && table.requireRollApproval
+
   return (
     <Card className="flex flex-col gap-3 p-4">
-      <SectionTitle>Ações</SectionTitle>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SectionTitle>Ações</SectionTitle>
+        {needsApproval && <Badge tone="warn">o mestre libera cada rolagem</Badge>}
+      </div>
+
       <div className="flex gap-1.5">
         {(
           [
@@ -103,8 +100,24 @@ export function ActionRoller({ table, character, actorName }: { table: GameTable
             <input type="checkbox" checked={proficient} onChange={(e) => setProficient(e.target.checked)} />
             Proficiente
           </label>
-          <Button variant="primary" onClick={rollCheck}>
-            Rolar
+          <Button
+            variant="primary"
+            onClick={() =>
+              send({
+                kind: 'check',
+                description: describeIntent(
+                  skillLabel.trim() || `Teste de ${ATTRIBUTE_LABELS[attr]}`,
+                  skillLabel.trim() ? ATTRIBUTE_LABELS[attr] : undefined,
+                  proficient,
+                ),
+                attribute: attr,
+                modifier: character.modifiers[attr],
+                proficient,
+                proficiencyBonus: character.proficiencyBonus,
+              })
+            }
+          >
+            {needsApproval ? 'Pedir Rolagem' : 'Rolar'}
           </Button>
         </div>
       )}
@@ -125,8 +138,21 @@ export function ActionRoller({ table, character, actorName }: { table: GameTable
             <input type="checkbox" checked={attackProficient} onChange={(e) => setAttackProficient(e.target.checked)} />
             Proficiente
           </label>
-          <Button variant="primary" onClick={rollAttack}>
-            Rolar
+          <Button
+            variant="primary"
+            onClick={() => {
+              const preset = ATTACK_PRESETS[attackPreset]
+              return send({
+                kind: 'attack',
+                description: `Ataque (${preset.label})`,
+                attribute: preset.attribute,
+                modifier: character.modifiers[preset.attribute],
+                proficient: attackProficient,
+                proficiencyBonus: character.proficiencyBonus,
+              })
+            }}
+          >
+            {needsApproval ? 'Pedir Rolagem' : 'Rolar'}
           </Button>
         </div>
       )}
@@ -138,16 +164,45 @@ export function ActionRoller({ table, character, actorName }: { table: GameTable
             <input type="checkbox" checked={critical} onChange={(e) => setCritical(e.target.checked)} />
             Crítico (×Prof.)
           </label>
-          <Button variant="primary" onClick={rollDamageRoll}>
-            Rolar
+          <Button
+            variant="primary"
+            onClick={() =>
+              send({
+                kind: 'damage',
+                description: `Dano (${damageNotation})`,
+                notation: damageNotation,
+                critical,
+                proficiencyBonus: character.proficiencyBonus,
+              })
+            }
+          >
+            {needsApproval ? 'Pedir Rolagem' : 'Rolar'}
           </Button>
         </div>
       )}
 
-      {lastResult && (
-        <div className="rounded-lg border border-orange-900/30 bg-black/20 p-2 text-sm text-orange-100">
-          <Badge tone="good">resultado</Badge> <span className="ml-1">{lastResult}</span>
+      {feedback && (
+        <div className="well rounded-lg p-2 text-sm text-orange-100">
+          <Badge tone="good">resultado</Badge> <span className="ml-1">{feedback}</span>
         </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="well flex flex-col gap-1 rounded-lg p-2 text-xs">
+          <p className="font-semibold text-amber-200">Esperando o mestre liberar:</p>
+          {pending.map((r) => (
+            <p key={r.id} className="text-orange-200">
+              • {r.description}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {lastResolved?.status === 'denied' && (
+        <p className="text-xs text-red-300">
+          O mestre negou: {lastResolved.description}
+          {lastResolved.deniedReason ? ` — ${lastResolved.deniedReason}` : ''}
+        </p>
       )}
     </Card>
   )

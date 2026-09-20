@@ -77,6 +77,18 @@ service cloud.firestore {
         allow update, delete: if isGM(tableId);
       }
 
+      // Fila de rolagens: o jogador pede, só o mestre libera. O resultado é
+      // sorteado no cliente do mestre na hora da liberação — por isso o
+      // jogador não pode escrever no documento depois de criá-lo.
+      match /rollRequests/{requestId} {
+        allow read: if signedIn();
+        allow create: if signedIn() &&
+          request.resource.data.requesterUid == request.auth.uid &&
+          request.resource.data.tableId == tableId &&
+          request.resource.data.status == 'pending';
+        allow update, delete: if isGM(tableId);
+      }
+
       match /npcs/{npcId} {
         allow read: if signedIn();
         allow write: if isGM(tableId);

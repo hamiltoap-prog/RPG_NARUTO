@@ -4,8 +4,17 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { NpcManager } from '../components/NpcManager'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
+import { RollRequestsPanel } from '../components/RollRequestsPanel'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
-import { deleteCharacter, listenCharacters, listenMissions, listenNPCs, listenPendingRequests, updateTable } from '../lib/store'
+import {
+  deleteCharacter,
+  listenCharacters,
+  listenMissions,
+  listenNPCs,
+  listenPendingRequests,
+  listenPendingRollRequests,
+  updateTable,
+} from '../lib/store'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
@@ -17,6 +26,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
   const [npcs, setNpcs] = useState<NPC[]>([])
   const [missions, setMissions] = useState<Mission[]>([])
   const [pendingCount, setPendingCount] = useState(0)
+  const [pendingRolls, setPendingRolls] = useState(0)
   const [tab, setTab] = useState<Tab>('personagens')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState(table.name)
@@ -26,6 +36,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
   useEffect(() => listenMissions(table.id, setMissions), [table.id])
   useEffect(() => listenPendingRequests(table.id, (reqs) => setPendingCount(reqs.length)), [table.id])
+  useEffect(() => listenPendingRollRequests(table.id, (reqs) => setPendingRolls(reqs.length)), [table.id])
 
   const selected = characters.find((c) => c.id === selectedId) ?? characters[0] ?? null
 
@@ -61,7 +72,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['combate', 'Combate'],
             ['npcs', `NPCs (${npcs.length})`],
             ['missoes', `Missões (${missions.length})`],
-            ['pedidos', `Pedidos Pendentes (${pendingCount})`],
+            ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls})`],
             ['config', 'Configurações'],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -129,7 +140,12 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'missoes' && <MissionBoard tableId={table.id} missions={missions} asGM />}
 
-      {tab === 'pedidos' && <PendingRequestsPanel tableId={table.id} gmName={table.gmName} />}
+      {tab === 'pedidos' && (
+        <div className="flex flex-col gap-3">
+          <RollRequestsPanel table={table} />
+          <PendingRequestsPanel tableId={table.id} gmName={table.gmName} />
+        </div>
+      )}
 
       {tab === 'config' && (
         <div className="flex flex-col gap-3">
@@ -142,6 +158,24 @@ export function GMDashboard({ table }: { table: GameTable }) {
             <p className="text-sm text-orange-300/60">
               Compartilhe o código <b className="tracking-widest text-orange-200">{table.code}</b> com seu grupo para que entrem na mesa.
             </p>
+          </Card>
+
+          <Card className="flex flex-col gap-2 p-4">
+            <SectionTitle>Liberação de rolagens</SectionTitle>
+            <label className="flex items-start gap-2 text-sm text-orange-100">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={table.requireRollApproval}
+                onChange={(e) => updateTable(table.id, { requireRollApproval: e.target.checked })}
+              />
+              <span>
+                Toda rolagem de jogador (teste, ataque, dano) espera a sua liberação.
+                <span className="block text-xs text-orange-300/60">
+                  Desligado, os jogadores rolam na hora. Suas próprias rolagens nunca esperam.
+                </span>
+              </span>
+            </label>
           </Card>
 
           <Card className="flex flex-col gap-2 p-4">
