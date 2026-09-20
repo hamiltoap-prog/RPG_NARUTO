@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Textarea } from '../components/ui'
 import { ActionRoller } from '../components/ActionRoller'
 import { LogFeed } from '../components/LogFeed'
@@ -92,7 +93,7 @@ export function PlayerView({
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 pb-16 lg:grid lg:grid-cols-[1fr_340px] lg:items-start">
       <div className="flex flex-col gap-4">
-        <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} onSubmit={submit} pendingFields={pendingFields} />
+        <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} tableCode={table.code} onSubmit={submit} pendingFields={pendingFields} />
         <VitalsCard character={character} onSubmit={submit} pendingFields={pendingFields} />
         <ActionRoller
           table={table}
@@ -146,12 +147,14 @@ function HeaderCard({
   character,
   clanName,
   className,
+  tableCode,
   onSubmit,
   pendingFields,
 }: {
   character: Character
   clanName?: string
   className?: string
+  tableCode: string
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
 }) {
@@ -202,6 +205,9 @@ function HeaderCard({
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
+          <Link to={`/t/${tableCode}/mapa`}>
+            <Button variant="secondary">🗺️ Tela de jogo</Button>
+          </Link>
           {!character.isAlive && <Badge tone="bad">Caído</Badge>}
           <PendingNote fields={['imageUrl']} pending={pendingFields} />
         </div>

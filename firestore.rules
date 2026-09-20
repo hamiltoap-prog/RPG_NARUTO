@@ -25,8 +25,12 @@ service cloud.firestore {
           isSuperAdmin());
     }
 
+    function tableData(tableId) {
+      return get(/databases/$(database)/documents/tables/$(tableId)).data;
+    }
+
     function autoApproveKeys(tableId) {
-      return get(/databases/$(database)/documents/tables/$(tableId)).data.autoApproveFields;
+      return tableData(tableId).autoApproveFields;
     }
 
     // O super administrador é identificado por um documento em /superAdmins,
@@ -108,6 +112,29 @@ service cloud.firestore {
           request.resource.data.tableId == tableId &&
           request.resource.data.status == 'pending';
         allow update, delete: if isGM(tableId);
+      }
+
+      // Tela de jogo: o mestre monta a cena; os jogadores só escrevem quando a
+      // mesa libera o arraste das próprias peças — e mesmo aí, apenas o campo
+      // "tokens" pode mudar (nada de mexer em névoa, mapa ou iluminação).
+      match /scene/{sceneId} {
+        allow read: if signedIn();
+        allow write: if isGM(tableId);
+        allow update: if signedIn() &&
+          tableData(tableId).playersMoveTokens == true &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tokens', 'updatedAt']);
+      }
+
+      // Marcações rápidas no mapa ("olhem aqui"): qualquer um da mesa cria,
+      // todos veem, e somem sozinhas na tela. A faxina é feita pelo mestre.
+      match /pings/{pingId} {
+        allow read, create: if signedIn();
+        allow update, delete: if isGM(tableId);
+      }
+
+      // Biblioteca de mapas e peças prontas: coisa de bastidor do mestre.
+      match /sceneLibrary/{itemId} {
+        allow read, write: if isGM(tableId);
       }
 
       match /npcs/{npcId} {

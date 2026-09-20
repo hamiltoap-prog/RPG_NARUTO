@@ -14,7 +14,19 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Character, CombatParticipant, GameTable, LogEntry, Mission, NPC, RollRequest, SheetChangeRequest } from '../types'
+import type {
+  Character,
+  CombatParticipant,
+  GameTable,
+  LogEntry,
+  Mission,
+  NPC,
+  RollRequest,
+  Scene,
+  SceneLibraryItem,
+  ScenePing,
+  SheetChangeRequest,
+} from '../types'
 import { newId, newTableCode } from './id'
 
 function requireDb() {
@@ -124,7 +136,7 @@ export function listenAllTables(cb: (tables: GameTable[]) => void, onError?: (e:
   )
 }
 
-const TABLE_SUBCOLLECTIONS = ['characters', 'requests', 'rollRequests', 'npcs', 'missions', 'log']
+const TABLE_SUBCOLLECTIONS = ['characters', 'requests', 'rollRequests', 'npcs', 'missions', 'log', 'scene', 'sceneLibrary', 'pings']
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
 export async function deleteTableCompletely(tableId: string): Promise<void> {
@@ -376,6 +388,78 @@ export function listenNPCs(tableId: string, cb: (npcs: NPC[]) => void) {
     query(npcsCol(tableId), orderBy('createdAt', 'asc')),
     (snap) => cb(snap.docs.map((d) => d.data() as NPC)),
     defaultOnError('NPCs'),
+  )
+}
+
+// ---------- Tela de jogo (cena) ----------
+
+export function sceneDoc(tableId: string) {
+  return doc(requireDb(), 'tables', tableId, 'scene', 'current')
+}
+
+export async function saveScene(tableId: string, scene: Scene) {
+  await setDoc(sceneDoc(tableId), stripUndefined({ ...scene, updatedAt: Date.now() }))
+}
+
+/** Movimento de peça feito por jogador: escreve só `tokens`, que é o único
+ * campo que as regras liberam para quem não é mestre. */
+export async function saveSceneTokens(tableId: string, tokens: Scene['tokens']) {
+  await updateDoc(sceneDoc(tableId), stripUndefined({ tokens, updatedAt: Date.now() }))
+}
+
+export function listenScene(tableId: string, cb: (scene: Scene | null) => void) {
+  return onSnapshot(
+    sceneDoc(tableId),
+    (snap) => cb(snap.exists() ? (snap.data() as Scene) : null),
+    defaultOnError('cena'),
+  )
+}
+
+export function pingsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'pings')
+}
+
+export async function addScenePing(tableId: string, ping: { x: number; y: number; label: string }) {
+  const id = newId()
+  const full: ScenePing = { ...ping, id, at: Date.now() }
+  await setDoc(doc(pingsCol(tableId), id), stripUndefined(full))
+}
+
+export function listenScenePings(tableId: string, cb: (pings: ScenePing[]) => void) {
+  return onSnapshot(
+    query(pingsCol(tableId), orderBy('at', 'desc'), limit(20)),
+    (snap) => cb(snap.docs.map((d) => d.data() as ScenePing)),
+    defaultOnError('marcações do mapa'),
+  )
+}
+
+/** Faxina das marcações velhas, feita pelo cliente do mestre. */
+export async function cleanupOldPings(tableId: string, olderThanMs: number) {
+  const cutoff = Date.now() - olderThanMs
+  const snap = await getDocs(pingsCol(tableId))
+  await Promise.all(snap.docs.filter((d) => ((d.data() as ScenePing).at ?? 0) < cutoff).map((d) => deleteDoc(d.ref)))
+}
+
+export function sceneLibraryCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'sceneLibrary')
+}
+
+export async function addSceneLibraryItem(tableId: string, item: Omit<SceneLibraryItem, 'id'>): Promise<SceneLibraryItem> {
+  const id = newId()
+  const full: SceneLibraryItem = { ...item, id }
+  await setDoc(doc(sceneLibraryCol(tableId), id), stripUndefined(full))
+  return full
+}
+
+export async function deleteSceneLibraryItem(tableId: string, itemId: string) {
+  await deleteDoc(doc(sceneLibraryCol(tableId), itemId))
+}
+
+export function listenSceneLibrary(tableId: string, cb: (items: SceneLibraryItem[]) => void) {
+  return onSnapshot(
+    query(sceneLibraryCol(tableId), orderBy('createdAt', 'asc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as SceneLibraryItem)),
+    defaultOnError('biblioteca de cenas'),
   )
 }
 

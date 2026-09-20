@@ -243,6 +243,10 @@ export interface Character {
 
   ryo: number
 
+  /** Fonte de luz ativa até este horário (epoch ms): ilumina a área ao redor
+   * da peça deste personagem na tela de jogo enquanto durar. */
+  lightUntil?: number
+
   /** Livre para o jogador editar a qualquer momento, sem aprovação. */
   notes: string
 
@@ -293,6 +297,9 @@ export interface GameTable {
   /** Quando ligado, toda rolagem de jogador (teste, ataque, dano) precisa da
    * liberação do mestre antes do dado rolar. */
   requireRollApproval: boolean
+  /** Quando ligado, cada jogador arrasta a peça do próprio personagem na tela
+   * de jogo. As peças de NPCs, inimigos e chefes continuam só com o mestre. */
+  playersMoveTokens?: boolean
 }
 
 // ---------- Pedidos de rolagem ----------
@@ -334,6 +341,120 @@ export interface RollRequest {
   resolvedBy?: string
   resultSummary?: string
   deniedReason?: string
+}
+
+// ---------- Tela de jogo (mapa tático) ----------
+
+export type SceneTokenKind = 'pc' | 'npc' | 'monster' | 'boss'
+
+export const SCENE_TOKEN_LABELS: Record<SceneTokenKind, string> = {
+  pc: 'Personagem',
+  npc: 'NPC',
+  monster: 'Inimigo',
+  boss: 'Chefe',
+}
+
+/**
+ * Tamanho da criatura no mapa. `squares` é a medida de verdade — quantos
+ * quadrados da grade a criatura ocupa —, e é o que mantém a proporção entre
+ * as peças quando o mestre muda a escala do mapa.
+ */
+export const CREATURE_SIZES = [
+  { key: 'normal', label: 'Normal', size: 0.07, squares: 1 },
+  { key: 'grande', label: 'Grande', size: 0.11, squares: 2 },
+  { key: 'enorme', label: 'Enorme', size: 0.17, squares: 3 },
+  { key: 'colossal', label: 'Colossal', size: 0.26, squares: 4 },
+] as const
+
+export interface SceneToken {
+  id: string
+  label: string
+  imageUrl?: string
+  kind: SceneTokenKind
+  /** Posição relativa ao palco (0..1), para bater em qualquer tela. */
+  x: number
+  y: number
+  /** Diâmetro como fração da largura do palco — herança das peças antigas. */
+  size: number
+  /** Tamanho em quadrados da grade (1 = criatura média). Quando presente, manda. */
+  squares?: number
+  /** Ligada a uma ficha: mostra PV ao vivo e segue o dono. */
+  refType?: 'character' | 'npc'
+  refId?: string
+  /** Falso = "preparada" na bandeja do mestre, ainda fora do mapa. */
+  onBoard?: boolean
+}
+
+export type TimeOfDay = 'day' | 'night'
+
+/**
+ * Enquadramento do mapa, definido pelo mestre e igual para todo mundo. O
+ * "palco" é o retângulo onde o mapa vive, com proporção fixa (`aspect`): é o
+ * que faz as coordenadas 0..1 das peças caírem no mesmo ponto em qualquer
+ * tela. Zoom, rotação e deslocamento movem a imagem dentro do palco.
+ */
+export interface SceneMap {
+  rotation?: number
+  zoom?: number
+  offsetX?: number
+  offsetY?: number
+  aspect?: number
+  fit?: 'contain' | 'cover'
+}
+
+/**
+ * Névoa de guerra. A malha tem `cols` por `rows` e `cells` guarda um
+ * caractere por célula ('1' = revelada). Guardar tudo como texto mantém o
+ * documento pequeno; a borda suave é feita no desenho, não nos dados.
+ */
+export interface SceneFog {
+  enabled: boolean
+  cols: number
+  rows: number
+  cells: string
+}
+
+/** Marcação rápida no mapa ("olhem aqui"), some sozinha em alguns segundos. */
+export interface ScenePing {
+  id: string
+  x: number
+  y: number
+  label: string
+  at: number
+}
+
+export const FOG_COLS = 56
+export const PING_LIFETIME_MS = 4000
+export const DEFAULT_STAGE_ASPECT = 16 / 10
+export const DEFAULT_GRID_COLUMNS = 20
+
+export interface Scene {
+  backgroundUrl: string
+  tokens: SceneToken[]
+  /** Falso: os jogadores veem uma tela de espera enquanto o mestre prepara. */
+  revealed: boolean
+  updatedAt: number
+  /** Dia ou noite — muda o tom ambiente do palco. */
+  timeOfDay?: TimeOfDay
+  /** O mestre decide se o local está iluminado; independe do dia/noite (um
+   * porão é escuro ao meio-dia, um salão com tochas é claro à meia-noite). */
+  locationLit?: boolean
+  map?: SceneMap
+  /** Escala: quantos quadrados de largura o mapa tem. */
+  gridColumns?: number
+  showGrid?: boolean
+  fog?: SceneFog
+}
+
+/** Item guardado na biblioteca da mesa: um mapa ou uma peça pronta. */
+export interface SceneLibraryItem {
+  id: string
+  kind: 'map' | 'token'
+  label: string
+  imageUrl?: string
+  tokenKind?: SceneTokenKind
+  folder?: string
+  createdAt: number
 }
 
 export interface Mission {

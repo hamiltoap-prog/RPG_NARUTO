@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CombatTracker } from '../components/CombatTracker'
 import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
@@ -70,9 +71,14 @@ export function GMDashboard({ table }: { table: GameTable }) {
           <h1 className="font-serif text-2xl text-orange-100">{table.name}</h1>
           <p className="text-sm text-orange-300/60">Mestre: {table.gmName}</p>
         </div>
-        <button onClick={copyCode} className="rounded-lg border border-orange-700/50 bg-orange-950/40 px-3 py-1.5 text-sm text-orange-100">
-          Código da mesa: <b className="tracking-widest">{table.code}</b> {copied ? '✓ copiado' : '⧉'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to={`/t/${table.code}/mapa`}>
+            <Button variant="secondary">🗺️ Tela de jogo</Button>
+          </Link>
+          <button onClick={copyCode} className="rounded-lg border border-orange-700/50 bg-orange-950/40 px-3 py-1.5 text-sm text-orange-100">
+            Código da mesa: <b className="tracking-widest">{table.code}</b> {copied ? '✓ copiado' : '⧉'}
+          </button>
+        </div>
       </Card>
 
       <div className="flex flex-wrap gap-1.5">
