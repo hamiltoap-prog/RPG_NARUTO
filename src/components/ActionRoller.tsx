@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, Card, Input, SectionTitle, Select } from './ui'
+import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from './ui'
 import { applyCriticalMultiplier, rollD20, rollDice } from '../lib/dice'
 import { addLogEntry } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
@@ -80,13 +80,9 @@ export function ActionRoller({ table, character, actorName }: { table: GameTable
             ['damage', 'Dano'],
           ] as const
         ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setMode(key)}
-            className={`rounded-full px-3 py-1 text-xs ${mode === key ? 'bg-orange-700 text-white' : 'bg-[#241a0f] text-orange-300/70'}`}
-          >
+          <TabChip key={key} active={mode === key} className="px-3 py-1 text-xs" onClick={() => setMode(key)}>
             {label}
-          </button>
+          </TabChip>
         ))}
       </div>
 

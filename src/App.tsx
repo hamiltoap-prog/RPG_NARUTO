@@ -5,7 +5,7 @@ import { TableRoute } from './pages/TableRoute'
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#241608_0%,_#120c08_60%)]">
+      <div className="min-h-screen">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/t/:code" element={<TableRoute />} />

@@ -1,7 +1,68 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+ * Identidade visual: placas de madeira queimada com fios de bronze e brasa —
+ * a linguagem de "tabuleiro iluminado por fogueira", no espírito do Hearthstone,
+ * mantendo laranja e preto como cores da casa.
+ *
+ * Dois atalhos viram o tema inteiro de uma vez, sem reescrever classe por
+ * classe em cada componente:
+ *   1) @theme redefine os tokens do Tailwind (fontes e raios);
+ *   2) a rampa "orange" (usada em todo o app) é reapontada para os tons novos.
+ * ------------------------------------------------------------------------- */
+@theme {
+  --font-serif: 'Bitter', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-sans: 'Barlow', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+
+  /* Cantos generosos: as peças são placas talhadas, não fichas de papel. */
+  --radius-sm: 0.3rem;
+  --radius-md: 0.45rem;
+  --radius-lg: 0.65rem;
+  --radius-xl: 0.9rem;
+  --radius-2xl: 1.15rem;
+}
+
 :root {
   color-scheme: dark;
+
+  /* Brasa e bronze — os metais da casa */
+  --ember: #e4590c;
+  --ember-bright: #ff8a3d;
+  --ember-deep: #8f3505;
+  --gold: #d9a441;
+  --gold-bright: #f7dda6;
+  --gold-deep: #7c5a1d;
+  --gold-dark: #43300f;
+
+  /* Superfícies próprias do app (fora da paleta do Tailwind). */
+  --surface-page: #0f0a06;
+  --surface-page-glow: #33190a;
+  --surface-card: #1d1309;
+  --surface-card-top: #2a1b0e;
+  --surface-card-hover: #251708;
+  --surface-well: #0c0805;
+  --surface-raised: #2b1b0d;
+  --surface-tab: #1f1509;
+  --surface-tab-hover: #2c1d0d;
+  --surface-board: #090604;
+  --die-face: #2a1a0c;
+  --body-text: #f6e7d2;
+  --scrollbar-track: #0c0805;
+  --scrollbar-thumb: #4a3117;
+
+  /* Rampa "orange" reapontada: texto em pergaminho, estruturas em madeira
+   * queimada, e o 500/600 vira ouro (foco, abas e destaques). */
+  --color-orange-50: #fdf7ee;
+  --color-orange-100: #f6e7d2;
+  --color-orange-200: #e9cfa8;
+  --color-orange-300: #cdab78;
+  --color-orange-400: #a8844f;
+  --color-orange-500: #d9a441;
+  --color-orange-600: #b8801f;
+  --color-orange-700: #c2560c;
+  --color-orange-800: #45290f;
+  --color-orange-900: #33200d;
+  --color-orange-950: #1d1309;
 }
 
 html,
@@ -12,9 +73,29 @@ body,
 
 body {
   margin: 0;
-  background: #120c08;
-  color: #f0e6d8;
-  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  background: var(--surface-page);
+  color: var(--body-text);
+  font-family: var(--font-sans);
+}
+
+/* Brasa no alto da tela + veios de madeira, feitos só com gradiente: sem
+ * imagem para carregar, e o fundo acompanha qualquer tamanho de tela. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 120% 70% at 50% -10%, var(--surface-page-glow) 0%, transparent 65%),
+    repeating-linear-gradient(
+      92deg,
+      rgba(255, 255, 255, 0.012) 0px,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    var(--surface-page);
 }
 
 ::-webkit-scrollbar {
@@ -22,12 +103,130 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #191209;
+  background: var(--scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #4d3a1f;
+  background: var(--scrollbar-thumb);
   border-radius: 6px;
 }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-deep);
+}
+
+/* ---------------------------------------------------------------------------
+ * Peças da interface
+ * ------------------------------------------------------------------------- */
+
+/* A placa: madeira clara em cima, escura embaixo, com fio de bronze na borda e
+ * um brilho fino no topo — como uma tábua pegando a luz da fogueira. */
+.plaque {
+  background: linear-gradient(180deg, var(--surface-card-top) 0%, var(--surface-card) 55%, var(--surface-well) 100%);
+  border: 1px solid var(--gold-deep);
+  box-shadow:
+    /* fio de ouro por dentro da borda: a moldura dupla das cartas */
+    inset 0 0 0 1px rgba(217, 164, 65, 0.1),
+    inset 0 1px 0 rgba(247, 221, 166, 0.12),
+    inset 0 0 26px rgba(0, 0, 0, 0.5),
+    0 8px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* Poço: onde a informação fica "afundada" (listas, campos, registros). */
+.well {
+  background: linear-gradient(180deg, var(--surface-board) 0%, var(--surface-well) 100%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* Aba/ficha: pastilha de madeira que acende em brasa quando escolhida. */
+.tab-chip {
+  background: linear-gradient(180deg, var(--surface-tab-hover) 0%, var(--surface-tab) 100%);
+  border: 1px solid var(--gold-dark);
+  color: var(--color-orange-300);
+  transition: all 0.16s ease;
+}
+.tab-chip:hover {
+  border-color: var(--gold-deep);
+  color: var(--color-orange-100);
+}
+.tab-chip[data-active='true'] {
+  background: linear-gradient(180deg, var(--ember-bright) 0%, var(--ember) 45%, var(--ember-deep) 100%);
+  border-color: var(--gold);
+  color: #fff6e9;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 14px rgba(228, 89, 12, 0.35);
+}
+
+/* Botão talhado: aresta clara em cima, sombra embaixo, e afunda ao apertar. */
+.btn-carved {
+  position: relative;
+  border: 1px solid var(--gold-dark);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.08s ease,
+    filter 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.btn-carved:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.btn-carved:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Título de seção com um fio de ouro que se apaga à direita. */
+.rule-gold::after {
+  content: '';
+  display: block;
+  height: 1px;
+  margin-top: 0.4rem;
+  background: linear-gradient(90deg, var(--gold-deep), transparent);
+}
+
+/* Título de herói: letras em ouro escovado com brasa por trás. */
+.hero-title {
+  background: linear-gradient(180deg, var(--gold-bright) 0%, var(--gold) 55%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(228, 89, 12, 0.35));
+}
+
+/* Ornamento: fio de ouro que nasce e morre no nada, com um losango no meio. */
+.ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: var(--gold-deep);
+}
+.ornament::before,
+.ornament::after {
+  content: '';
+  height: 1px;
+  width: 4.5rem;
+  background: linear-gradient(90deg, transparent, var(--gold-deep));
+}
+.ornament::after {
+  background: linear-gradient(90deg, var(--gold-deep), transparent);
+}
+
+/* Moldura de retrato: anel de bronze com brilho interno. */
+.portrait-ring {
+  border: 2px solid var(--gold-deep);
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, 0.6),
+    0 0 10px rgba(217, 164, 65, 0.15);
+}
+
+/* ---------------------------------------------------------------------------
+ * Animações
+ * ------------------------------------------------------------------------- */
 
 @keyframes roll-in {
   from {
@@ -41,4 +240,17 @@ body {
 }
 .animate-roll-in {
   animation: roll-in 0.25s ease-out;
+}
+
+@keyframes ember-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(228, 89, 12, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(228, 89, 12, 0.5);
+  }
+}
+.animate-ember {
+  animation: ember-pulse 2.4s ease-in-out infinite;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from '../components/ui'
+import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Textarea } from '../components/ui'
 import { ActionRoller } from '../components/ActionRoller'
 import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
@@ -1008,13 +1008,9 @@ function ShopCard({
             ['gear', 'Itens'],
           ] as const
         ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`rounded-full px-3 py-1 text-xs ${tab === key ? 'bg-orange-700 text-white' : 'bg-[#241a0f] text-orange-300/70'}`}
-          >
+          <TabChip key={key} active={tab === key} className="px-3 py-1 text-xs" onClick={() => setTab(key)}>
             {label}
-          </button>
+          </TabChip>
         ))}
       </div>
       <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">

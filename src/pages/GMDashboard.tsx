@@ -4,7 +4,7 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { NpcManager } from '../components/NpcManager'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
-import { Avatar, Badge, Button, Card, Input, SectionTitle } from '../components/ui'
+import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
 import { deleteCharacter, listenCharacters, listenMissions, listenNPCs, listenPendingRequests, updateTable } from '../lib/store'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
@@ -65,13 +65,9 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['config', 'Configurações'],
           ] as [Tab, string][]
         ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`rounded-full px-3 py-1.5 text-sm ${tab === key ? 'bg-orange-700 text-white' : 'bg-[#241a0f] text-orange-300/70 hover:bg-[#312312]'}`}
-          >
+          <TabChip key={key} active={tab === key} onClick={() => setTab(key)}>
             {label}
-          </button>
+          </TabChip>
         ))}
       </div>
 

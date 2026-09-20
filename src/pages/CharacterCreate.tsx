@@ -179,8 +179,12 @@ export function CharacterCreate({
           {STEPS.map((label, i) => (
             <span
               key={label}
-              className={`rounded-full px-2.5 py-1 text-xs ${
-                i === step ? 'bg-orange-700 text-white' : i < step ? 'bg-emerald-900/50 text-emerald-200' : 'bg-[#241a0f] text-orange-300/50'
+              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                i === step
+                  ? 'border-[color:var(--gold)] bg-[linear-gradient(180deg,var(--ember-bright)_0%,var(--ember)_45%,var(--ember-deep)_100%)] text-[#fff6e9] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]'
+                  : i < step
+                    ? 'border-emerald-800/70 bg-emerald-950/60 text-emerald-200'
+                    : 'border-[color:var(--gold-dark)] bg-[color:var(--surface-tab)] text-orange-300/50'
               }`}
             >
               {i + 1}. {label}

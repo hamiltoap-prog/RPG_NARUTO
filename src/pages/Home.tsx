@@ -59,9 +59,10 @@ export function Home() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
-      <div className="mt-6 text-center">
-        <h1 className="font-serif text-4xl text-orange-100">Mesa Ninja</h1>
-        <p className="mt-1 text-sm text-orange-300/60">
+      <div className="mt-8 text-center">
+        <h1 className="hero-title font-serif text-5xl font-extrabold tracking-wide">Mesa Ninja</h1>
+        <div className="ornament mt-2 text-xs">◆</div>
+        <p className="mt-2 text-sm text-orange-300/70">
           Companheiro digital para a sua mesa de RPG de Naruto — jogue com seu grupo ao vivo.
         </p>
       </div>
