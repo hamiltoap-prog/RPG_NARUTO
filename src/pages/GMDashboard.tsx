@@ -13,6 +13,7 @@ import {
   listenNPCs,
   listenPendingRequests,
   listenPendingRollRequests,
+  rememberGMTable,
   updateTable,
 } from '../lib/store'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
@@ -31,6 +32,15 @@ export function GMDashboard({ table }: { table: GameTable }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState(table.name)
   const [copied, setCopied] = useState(false)
+
+  // Mesas criadas antes da conta existir (ou em outro navegador) não estão no
+  // índice do mestre. Abrir a mesa como mestre repõe a entrada — assim a lista
+  // "Suas mesas" se completa sozinha, sem migração manual.
+  useEffect(() => {
+    rememberGMTable(table.gmUid, table).catch(() => {
+      /* índice é conveniência: falhar aqui não pode atrapalhar a mesa */
+    })
+  }, [table])
 
   useEffect(() => listenCharacters(table.id, setCharacters), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])

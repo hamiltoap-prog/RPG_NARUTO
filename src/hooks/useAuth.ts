@@ -1,25 +1,32 @@
 import { useEffect, useState } from 'react'
-import { authReady, firebaseConfigured, initAuth } from '../firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import type { User } from 'firebase/auth'
+import { auth, firebaseConfigured, initAuth } from '../firebase'
 
 let started = false
 
-export function useAuthUid() {
-  const [uid, setUid] = useState<string | null>(null)
+/** A sessão atual, acompanhando as trocas: o mesmo navegador pode começar
+ * anônimo (jogador) e virar conta de mestre depois, sem recarregar a página. */
+export function useAuthUser(): User | null {
+  const [user, setUser] = useState<User | null>(auth?.currentUser ?? null)
 
   useEffect(() => {
-    if (!firebaseConfigured) return
+    if (!firebaseConfigured || !auth) return
     if (!started) {
       started = true
       initAuth()
     }
-    let cancelled = false
-    authReady.then((user) => {
-      if (!cancelled) setUid(user.uid)
-    })
-    return () => {
-      cancelled = true
-    }
+    return onAuthStateChanged(auth, setUser)
   }, [])
 
-  return uid
+  return user
+}
+
+export function useAuthUid(): string | null {
+  return useAuthUser()?.uid ?? null
+}
+
+/** Entrou com e-mail e senha (não é uma sessão anônima). */
+export function isRegisteredGM(user: User | null): boolean {
+  return Boolean(user && !user.isAnonymous)
 }

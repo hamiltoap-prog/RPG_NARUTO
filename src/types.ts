@@ -281,6 +281,8 @@ export interface GameTable {
   name: string
   gmUid: string
   gmName: string
+  /** Preenchido quando o mestre criou a mesa com conta (e-mail/senha). */
+  gmEmail?: string
   createdAt: number
   /** Campos que, quando um jogador tenta alterar, são aplicados direto sem
    * passar pela fila de aprovação do mestre. */

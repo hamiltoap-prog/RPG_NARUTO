@@ -50,7 +50,7 @@ function defaultOnError(context: string) {
 
 // ---------- Mesas ----------
 
-export async function createTable(gmName: string, gmUid: string, name: string): Promise<GameTable> {
+export async function createTable(gmName: string, gmUid: string, name: string, gmEmail?: string): Promise<GameTable> {
   const database = requireDb()
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = newTableCode()
@@ -63,6 +63,7 @@ export async function createTable(gmName: string, gmUid: string, name: string): 
       name: name || `Mesa de ${gmName}`,
       gmUid,
       gmName,
+      gmEmail,
       createdAt: Date.now(),
       autoApproveFields: [],
       combatActive: false,
@@ -71,9 +72,68 @@ export async function createTable(gmName: string, gmUid: string, name: string): 
       requireRollApproval: true,
     }
     await setDoc(ref, stripUndefined(table))
+    await rememberGMTable(gmUid, table)
     return table
   }
   throw new Error('Não foi possível gerar um código de mesa único. Tente novamente.')
+}
+
+// ---------- Índice de mesas por mestre ----------
+//
+// A listagem de /tables é negada a todo mundo (senão qualquer um descobriria
+// os códigos das mesas alheias). Para o mestre reencontrar as próprias mesas
+// ao entrar de outro dispositivo, cada mesa criada deixa uma entrada num
+// índice particular, que só o dono lê.
+
+export interface GMTableEntry {
+  tableId: string
+  name: string
+  createdAt: number
+}
+
+export function gmTablesCol(uid: string) {
+  return collection(requireDb(), 'gmTables', uid, 'tables')
+}
+
+export async function rememberGMTable(uid: string, table: GameTable) {
+  const entry: GMTableEntry = { tableId: table.id, name: table.name, createdAt: table.createdAt }
+  await setDoc(doc(gmTablesCol(uid), table.id), stripUndefined(entry))
+}
+
+export function listenGMTables(uid: string, cb: (tables: GMTableEntry[]) => void) {
+  return onSnapshot(
+    query(gmTablesCol(uid), orderBy('createdAt', 'desc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as GMTableEntry)),
+    defaultOnError('minhas mesas'),
+  )
+}
+
+// ---------- Administração ----------
+
+export async function isSuperAdmin(uid: string): Promise<boolean> {
+  const snap = await getDoc(doc(requireDb(), 'superAdmins', uid))
+  return snap.exists()
+}
+
+/** Lista de todas as mesas — negada pelas regras a quem não é super admin. */
+export function listenAllTables(cb: (tables: GameTable[]) => void, onError?: (e: Error) => void) {
+  return onSnapshot(
+    query(collection(requireDb(), 'tables'), orderBy('createdAt', 'desc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as GameTable)),
+    (err) => onError?.(err),
+  )
+}
+
+const TABLE_SUBCOLLECTIONS = ['characters', 'requests', 'rollRequests', 'npcs', 'missions', 'log']
+
+/** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
+export async function deleteTableCompletely(tableId: string): Promise<void> {
+  const database = requireDb()
+  for (const sub of TABLE_SUBCOLLECTIONS) {
+    const snap = await getDocs(collection(database, 'tables', tableId, sub))
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
+  }
+  await deleteDoc(doc(database, 'tables', tableId))
 }
 
 /** Mesas criadas antes de um campo existir não têm esse campo no documento.

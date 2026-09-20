@@ -21,22 +21,43 @@ service cloud.firestore {
 
     function isGM(tableId) {
       return signedIn() &&
-        get(/databases/$(database)/documents/tables/$(tableId)).data.gmUid == request.auth.uid;
+        (get(/databases/$(database)/documents/tables/$(tableId)).data.gmUid == request.auth.uid ||
+          isSuperAdmin());
     }
 
     function autoApproveKeys(tableId) {
       return get(/databases/$(database)/documents/tables/$(tableId)).data.autoApproveFields;
     }
 
+    // O super administrador é identificado por um documento em /superAdmins,
+    // criado fora do app (pelo Admin SDK) — nunca pelo cliente.
+    function isSuperAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+
+    match /superAdmins/{uid} {
+      // Cada um só consegue checar o próprio crachá; ninguém cria pelo app.
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+
+    // Índice particular de cada mestre: as mesas que ele criou, para
+    // reencontrá-las ao entrar de outro dispositivo. Só o dono lê e escreve.
+    match /gmTables/{uid}/tables/{tableId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
     match /tables/{tableId} {
       allow get: if signedIn();
-      allow list: if false;
+      // Listar todas as mesas revelaria os códigos alheios: só o super admin.
+      allow list: if isSuperAdmin();
       allow create: if signedIn() &&
         request.resource.data.gmUid == request.auth.uid &&
         request.resource.data.id == tableId &&
         request.resource.data.code == tableId;
       allow update: if isGM(tableId) && request.resource.data.gmUid == resource.data.gmUid;
-      allow delete: if false;
+      // Apagar a mesa inteira é privilégio do super administrador.
+      allow delete: if isSuperAdmin();
 
       match /characters/{characterId} {
         allow read: if signedIn();

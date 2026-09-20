@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { GMAccount } from '../components/GMAccount'
 import { Button, Card, Input, SectionTitle } from '../components/ui'
-import { useAuthUid } from '../hooks/useAuth'
+import { useAuthUser } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
 import { getRecentTables, rememberTable, setStoredName } from '../lib/localMemory'
 import { createTable, getTableByCode } from '../lib/store'
 
 export function Home() {
-  const uid = useAuthUid()
+  const user = useAuthUser()
+  const uid = user?.uid ?? null
   const navigate = useNavigate()
   const recent = getRecentTables()
 
@@ -26,7 +28,7 @@ export function Home() {
     setCreating(true)
     setCreateError('')
     try {
-      const table = await createTable(gmName.trim(), uid, tableName.trim())
+      const table = await createTable(gmName.trim(), uid, tableName.trim(), user?.email ?? undefined)
       setStoredName(table.id, gmName.trim())
       rememberTable({ tableId: table.id, tableName: table.name, characterName: gmName.trim(), isGM: true })
       navigate(`/t/${table.id}`)
@@ -74,6 +76,8 @@ export function Home() {
           entrar em mesas.
         </Card>
       )}
+
+      <GMAccount />
 
       <Card className="flex flex-col gap-3 p-5">
         <SectionTitle>Criar uma Mesa (Mestre)</SectionTitle>
