@@ -309,13 +309,17 @@ export interface GameTable {
 
 // ---------- Pedidos de rolagem ----------
 
-export type RollRequestKind = 'check' | 'attack' | 'damage'
+export type RollRequestKind = 'check' | 'attack' | 'damage' | 'free'
 
 export const ROLL_REQUEST_KIND_LABELS: Record<RollRequestKind, string> = {
   check: 'Teste',
   attack: 'Ataque',
   damage: 'Dano',
+  free: 'Dados livres',
 }
+
+/** Os dados que o rolador livre oferece. */
+export const FREE_DICE = [4, 6, 8, 10, 12, 20, 100] as const
 
 export type RollRequestStatus = 'pending' | 'approved' | 'denied'
 
@@ -482,6 +486,25 @@ export interface SceneSnapshot {
   locationLit?: boolean
   fog?: SceneFog
   tokens: SceneToken[]
+}
+
+/**
+ * Rolagem secreta do mestre.
+ *
+ * Mora fora do registro da mesa de propósito: o log é legível por qualquer
+ * um na mesa, então uma rolagem "secreta" gravada lá seria secreta só na
+ * tela — bastaria abrir o console do navegador para ler. Aqui as regras do
+ * Firestore fecham a coleção inteira para quem não é o mestre.
+ */
+export interface GMRoll {
+  id: string
+  tableId: string
+  ts: number
+  label: string
+  summary: string
+  dice: number[]
+  diceSides: number
+  total: number
 }
 
 export interface Mission {

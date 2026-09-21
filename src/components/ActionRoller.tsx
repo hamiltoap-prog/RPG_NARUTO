@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from './ui'
 import { describeIntent, requestRoll } from '../lib/rollFlow'
 import { listenMyRollRequests } from '../lib/store'
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
+import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, FREE_DICE } from '../types'
 import type { AttributeKey, Character, GameTable, RollRequest } from '../types'
 
 const ATTACK_PRESETS: { label: string; attribute: AttributeKey }[] = [
@@ -28,7 +28,12 @@ export function ActionRoller({
   actorIsGM: boolean
   requesterUid: string
 }) {
-  const [mode, setMode] = useState<'check' | 'attack' | 'damage'>('check')
+  const [mode, setMode] = useState<'check' | 'attack' | 'damage' | 'free'>('check')
+
+  // Rolador livre: d4 a d100, para o que as regras não preveem.
+  const [freeSides, setFreeSides] = useState(20)
+  const [freeCount, setFreeCount] = useState(1)
+  const [freeMod, setFreeMod] = useState(0)
 
   const [attr, setAttr] = useState<AttributeKey>('strength')
   const [skillLabel, setSkillLabel] = useState('')
@@ -75,6 +80,7 @@ export function ActionRoller({
             ['check', 'Teste'],
             ['attack', 'Ataque'],
             ['damage', 'Dano'],
+            ['free', 'Dados livres'],
           ] as const
         ).map(([key, label]) => (
           <TabChip key={key} active={mode === key} className="px-3 py-1 text-xs" onClick={() => setMode(key)}>
@@ -181,8 +187,47 @@ export function ActionRoller({
         </div>
       )}
 
+      {mode === 'free' && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+            quantos
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              value={freeCount}
+              onChange={(e) => setFreeCount(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+              className="w-20"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+            dado
+            <Select value={freeSides} onChange={(e) => setFreeSides(Number(e.target.value))} className="w-24">
+              {FREE_DICE.map((d) => (
+                <option key={d} value={d}>
+                  d{d}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+            modificador
+            <Input type="number" value={freeMod} onChange={(e) => setFreeMod(Number(e.target.value) || 0)} className="w-24" />
+          </label>
+          <Button
+            variant="primary"
+            onClick={() => {
+              const notacao = `${freeCount}d${freeSides}${freeMod ? (freeMod > 0 ? `+${freeMod}` : freeMod) : ''}`
+              send({ kind: 'free', description: notacao, notation: notacao })
+            }}
+          >
+            {needsApproval ? 'Pedir Rolagem' : 'Rolar'}
+          </Button>
+        </div>
+      )}
+
       {feedback && (
-        <div className="well rounded-lg p-2 text-sm text-orange-100">
+        <div className="well rounded-sm p-2 text-sm text-orange-100">
           <Badge tone="good">resultado</Badge> <span className="ml-1">{feedback}</span>
         </div>
       )}

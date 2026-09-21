@@ -102,6 +102,13 @@ service cloud.firestore {
         allow update, delete: if isGM(tableId);
       }
 
+      // Rolagens secretas do mestre. Fechada de ponta a ponta: é isto, e não
+      // um campo "secreto" no registro da mesa, que impede um jogador curioso
+      // de ler o resultado pelo console do navegador.
+      match /gmRolls/{rollId} {
+        allow read, write: if isGM(tableId);
+      }
+
       // Fila de rolagens: o jogador pede, só o mestre libera. O resultado é
       // sorteado no cliente do mestre na hora da liberação — por isso o
       // jogador não pode escrever no documento depois de criá-lo.

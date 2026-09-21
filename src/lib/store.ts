@@ -17,6 +17,7 @@ import { db } from '../firebase'
 import type {
   Character,
   CombatParticipant,
+  GMRoll,
   GameTable,
   LogEntry,
   Mission,
@@ -136,7 +137,18 @@ export function listenAllTables(cb: (tables: GameTable[]) => void, onError?: (e:
   )
 }
 
-const TABLE_SUBCOLLECTIONS = ['characters', 'requests', 'rollRequests', 'npcs', 'missions', 'log', 'scene', 'sceneLibrary', 'pings']
+const TABLE_SUBCOLLECTIONS = [
+  'characters',
+  'requests',
+  'rollRequests',
+  'npcs',
+  'missions',
+  'log',
+  'scene',
+  'sceneLibrary',
+  'pings',
+  'gmRolls',
+]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
 export async function deleteTableCompletely(tableId: string): Promise<void> {
@@ -502,6 +514,30 @@ export async function addLogEntry(tableId: string, entry: Omit<LogEntry, 'id' | 
   const id = newId()
   const full: LogEntry = { ...entry, id, tableId, ts: Date.now() }
   await setDoc(doc(logCol(tableId), id), stripUndefined(full))
+}
+
+/* ---------------------------------------------------------------------------
+ * Rolagens secretas do mestre
+ *
+ * Coleção à parte, e não uma marca no registro da mesa: o log é legível por
+ * todo mundo que está na mesa, então "secreto" ali seria secreto só na tela.
+ * As regras do Firestore fecham esta coleção para quem não é o mestre.
+ * ------------------------------------------------------------------------- */
+
+export function gmRollsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'gmRolls')
+}
+
+export async function addGMRoll(tableId: string, roll: Omit<GMRoll, 'id' | 'tableId' | 'ts'>): Promise<GMRoll> {
+  const id = newId()
+  const entry: GMRoll = { ...roll, id, tableId, ts: Date.now() }
+  await setDoc(doc(gmRollsCol(tableId), id), stripUndefined(entry))
+  return entry
+}
+
+export function listenGMRolls(tableId: string, cb: (rolls: GMRoll[]) => void, max = 30) {
+  const q = query(gmRollsCol(tableId), orderBy('ts', 'desc'), limit(max))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as GMRoll)), defaultOnError('rolagens do mestre'))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {

@@ -5,6 +5,7 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { NpcManager } from '../components/NpcManager'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
+import { GMRoller } from '../components/GMRoller'
 import { RollRequestsPanel } from '../components/RollRequestsPanel'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
 import {
@@ -21,7 +22,7 @@ import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'combate' | 'npcs' | 'missoes' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
@@ -88,6 +89,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['combate', 'Combate'],
             ['npcs', `NPCs (${npcs.length})`],
             ['missoes', `Missões (${missions.length})`],
+            ['rolagens', 'Rolagens'],
             ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls})`],
             ['config', 'Configurações'],
           ] as [Tab, string][]
@@ -155,6 +157,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
       {tab === 'npcs' && <NpcManager tableId={table.id} npcs={npcs} />}
 
       {tab === 'missoes' && <MissionBoard tableId={table.id} missions={missions} asGM />}
+
+      {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} />}
 
       {tab === 'pedidos' && (
         <div className="flex flex-col gap-3">

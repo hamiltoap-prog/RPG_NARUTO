@@ -1,6 +1,6 @@
 import type { AttributeKey, Character, GameTable, RollRequest, RollRequestKind } from '../types'
 import { applyCriticalMultiplier, rollD20, rollDice } from './dice'
-import { addLogEntry, createRollRequest, resolveRollRequest } from './store'
+import { addGMRoll, addLogEntry, createRollRequest, resolveRollRequest } from './store'
 
 /** O que o jogador quer rolar — sem nenhum dado sorteado ainda. */
 export interface RollIntent {
@@ -25,6 +25,18 @@ export interface RollOutcome {
 /** Sorteia os dados e monta a frase do resultado. Usado tanto na rolagem
  * direta quanto no momento em que o mestre libera um pedido. */
 export function executeRollIntent(intent: RollIntent): RollOutcome {
+  if (intent.kind === 'free') {
+    const result = rollDice(intent.notation ?? '1d20')
+    const sides = Number((intent.notation ?? '1d20').split('d')[1]?.match(/\d+/)?.[0] ?? 20)
+    const modNote = result.modifier ? ` ${result.modifier > 0 ? '+' : '−'} ${Math.abs(result.modifier)}` : ''
+    return {
+      summary: `${intent.description}: [${result.rolls.join(', ')}]${modNote} = ${result.total}`,
+      dice: result.rolls,
+      diceSides: sides,
+      total: result.total,
+    }
+  }
+
   if (intent.kind === 'damage') {
     let result = rollDice(intent.notation ?? '1d6')
     let critNote = ''
@@ -166,4 +178,40 @@ export async function denyRollRequest(table: GameTable, request: RollRequest, gm
     kind: 'system',
     summary: `Negou a rolagem de ${request.characterName} (${request.description})${reason ? `: ${reason}` : ''}`,
   })
+}
+
+export interface GMRollParams {
+  table: GameTable
+  gmName: string
+  intent: RollIntent
+  /** Secreta não passa pelo registro da mesa — ver store.addGMRoll. */
+  secret: boolean
+}
+
+/**
+ * Rolagem do próprio mestre. Aberta vai para o registro e anima os dados na
+ * tela de todo mundo; secreta fica só com ele.
+ */
+export async function rollAsGM({ table, gmName, intent, secret }: GMRollParams): Promise<RollOutcome> {
+  const outcome = executeRollIntent(intent)
+  if (secret) {
+    await addGMRoll(table.id, {
+      label: intent.description,
+      summary: outcome.summary,
+      dice: outcome.dice,
+      diceSides: outcome.diceSides,
+      total: outcome.total,
+    })
+    return outcome
+  }
+  await addLogEntry(table.id, {
+    actorName: gmName,
+    actorType: 'gm',
+    kind: 'roll',
+    summary: outcome.summary,
+    dice: outcome.dice,
+    diceSides: outcome.diceSides,
+    diceLabel: intent.description,
+  })
+  return outcome
 }
