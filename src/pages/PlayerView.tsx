@@ -6,6 +6,7 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { PartyPanel } from '../components/PartyPanel'
 import { ChakraGiftCard } from '../components/ChakraGiftPanel'
+import { JutsuCastCard } from '../components/JutsuCastPanel'
 import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
@@ -109,6 +110,14 @@ export function PlayerView({
           actorName={actorName}
           actorIsGM={asGM}
           requesterUid={actorUid}
+        />
+        <JutsuCastCard
+          table={table}
+          character={character}
+          characters={allCharacters}
+          npcs={npcs}
+          requesterUid={actorUid}
+          asGM={asGM}
         />
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />

@@ -10,6 +10,7 @@ import { BestiaryPanel } from '../components/BestiaryPanel'
 import { ClanManager } from '../components/ClanManager'
 import { ItemForge } from '../components/ItemForge'
 import { ChakraGiftPanel } from '../components/ChakraGiftPanel'
+import { JutsuCastQueue } from '../components/JutsuCastPanel'
 import { GMRoller } from '../components/GMRoller'
 import { RollRequestsPanel } from '../components/RollRequestsPanel'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
@@ -20,6 +21,7 @@ import {
   listenNPCs,
   listenPendingRequests,
   listenPendingChakraGifts,
+  listenPendingJutsuCasts,
   listenPendingRollRequests,
   rememberGMTable,
   updateTable,
@@ -37,6 +39,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingRolls, setPendingRolls] = useState(0)
   const [pendingGifts, setPendingGifts] = useState(0)
+  const [pendingCasts, setPendingCasts] = useState(0)
   const [tab, setTab] = useState<Tab>('personagens')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [criandoNPC, setCriandoNPC] = useState(false)
@@ -59,6 +62,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
   useEffect(() => listenPendingRequests(table.id, (reqs) => setPendingCount(reqs.length)), [table.id])
   useEffect(() => listenPendingRollRequests(table.id, (reqs) => setPendingRolls(reqs.length)), [table.id])
   useEffect(() => listenPendingChakraGifts(table.id, (gifts) => setPendingGifts(gifts.length)), [table.id])
+  useEffect(() => listenPendingJutsuCasts(table.id, (casts) => setPendingCasts(casts.length)), [table.id])
 
   const selected = characters.find((c) => c.id === selectedId) ?? characters[0] ?? null
 
@@ -106,7 +110,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['loja', 'Loja'],
             ['missoes', `Missões (${missions.length})`],
             ['rolagens', 'Rolagens'],
-            ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls + pendingGifts})`],
+            ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls + pendingGifts + pendingCasts})`],
             ['config', 'Configurações'],
           ] as [Tab, string][]
         ).map(([key, label]) => (
@@ -222,6 +226,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
       {tab === 'pedidos' && (
         <div className="flex flex-col gap-3">
           <RollRequestsPanel table={table} />
+          <JutsuCastQueue table={table} characters={characters} npcs={npcs} />
           <ChakraGiftPanel table={table} characters={characters} />
           <PendingRequestsPanel tableId={table.id} gmName={table.gmName} />
         </div>

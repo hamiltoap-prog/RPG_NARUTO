@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "tsx src/lib/__checks__/geo.check.ts && tsx src/lib/__checks__/jutsu.check.ts"
+    "check": "tsx src/lib/__checks__/geo.check.ts && tsx src/lib/__checks__/jutsu.check.ts && tsx src/lib/__checks__/cast.check.ts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

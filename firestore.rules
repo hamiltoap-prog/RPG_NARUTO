@@ -162,6 +162,18 @@ service cloud.firestore {
         allow update, delete: if isGM(tableId);
       }
 
+      // Lançamento de jutsu: o conjurador manda a intenção, o mestre libera.
+      // Aplicar dano mexe na ficha do alvo, então quem escreve o resultado é
+      // o cliente do mestre — o pedido em si é só um bilhete.
+      match /jutsuCasts/{castId} {
+        allow read: if signedIn();
+        allow create: if signedIn() &&
+          request.resource.data.requesterUid == request.auth.uid &&
+          request.resource.data.tableId == tableId &&
+          request.resource.data.status == 'pending';
+        allow update, delete: if isGM(tableId);
+      }
+
       // Loja: todos veem a vitrine, só o mestre define preço e estoque.
       match /shop/{itemId} {
         allow read: if signedIn();

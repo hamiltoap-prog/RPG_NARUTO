@@ -687,6 +687,45 @@ export interface ChakraGift {
   deniedReason?: string
 }
 
+/* ---------------------------------------------------------------------------
+ * Lançamento de jutsu
+ *
+ * Mesma razão da doação de chakra para ter fila própria: aplicar dano mexe na
+ * ficha do alvo, e um jogador não escreve na ficha alheia. O conjurador manda
+ * a intenção; o mestre libera, e o cliente dele rola, compara e aplica.
+ * ------------------------------------------------------------------------- */
+
+export interface JutsuCast {
+  id: string
+  tableId: string
+  casterId: string
+  casterName: string
+  requesterUid: string
+
+  jutsuName: string
+  classification: string
+  chakraCost: number
+
+  /** Como o jutsu resolve: ataque contra CA, resistência contra PR, ou nada. */
+  mode: 'attack' | 'save' | 'none'
+  attackAttribute: AttributeKey
+  proficient: boolean
+  saveAttribute?: AttributeKey
+  damage?: string
+  damageType?: string
+  onSaveSuccess?: 'none' | 'half'
+
+  /** "character:<id>" ou "npc:<id>". Sem alvo, o jutsu só é narrado. */
+  targetRef?: string
+  targetName?: string
+
+  status: 'pending' | 'resolved' | 'denied'
+  createdAt: number
+  resolvedBy?: string
+  resultSummary?: string
+  deniedReason?: string
+}
+
 export interface Mission {
   id: string
   tableId: string

@@ -9,8 +9,8 @@ import { createCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
 import type { Attributes, Character, CharacterDescription, Clan, GameTable, InventoryItem, Jutsu } from '../types'
 import { newId } from '../lib/id'
-import { allClans } from '../lib/clans'
-import { listenCustomClans } from '../lib/store'
+import { allClans, clanIdFromName, emptyClan } from '../lib/clans'
+import { listenCustomClans, saveCustomClan } from '../lib/store'
 import { xpForLevel } from '../data/xpTable'
 import { SHINOBI_RANKS, suggestedRank } from '../data/ranks'
 import { ELEMENTS, clanElements } from '../lib/jutsuAccess'
@@ -74,6 +74,29 @@ export function CharacterCreate({
   const [imageUrl, setImageUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const [criandoCla, setCriandoCla] = useState<Clan | null>(null)
+  const [clanElementsDraft, setClanElementsDraft] = useState<string[]>([])
+  const [salvandoCla, setSalvandoCla] = useState(false)
+
+  /** Guarda o clã na mesa e já o escolhe para este personagem. */
+  async function salvarCla() {
+    if (!criandoCla?.name.trim()) return
+    setSalvandoCla(true)
+    try {
+      const id = clanIdFromName(criandoCla.name)
+      const bonusText = ATTRIBUTE_KEYS.filter((k) => criandoCla.bonuses[k] !== 0)
+        .map((k) => `${criandoCla.bonuses[k] > 0 ? '+' : ''}${criandoCla.bonuses[k]} ${ATTRIBUTE_LABELS[k]}`)
+        .join(', ')
+      const featuresText = clanElementsDraft.length ? `Afinidade Passiva: ${clanElementsDraft.join(', ')}.` : ''
+      await saveCustomClan(table.id, { ...criandoCla, id, bonusText, featuresText })
+      setClanId(id)
+      setCriandoCla(null)
+      setClanElementsDraft([])
+    } finally {
+      setSalvandoCla(false)
+    }
+  }
 
   const sugestao = suggestedRank(level)
   // O posto acompanha o nível até o mestre escolher um à mão.
@@ -237,7 +260,89 @@ export function CharacterCreate({
 
       {step === 0 && (
         <Card className="flex flex-col gap-3 p-4">
-          <SectionTitle>Escolha o Clã</SectionTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <SectionTitle>Escolha o Clã</SectionTitle>
+            {/* O mestre inventa um clã sem sair do assistente: fechar a ficha
+                no meio para ir até a aba Clãs perderia tudo que já escolheu. */}
+            {asGM && (
+              <Button variant="secondary" onClick={() => setCriandoCla(criandoCla ? null : emptyClan(''))}>
+                {criandoCla ? 'cancelar' : '+ Criar clã novo'}
+              </Button>
+            )}
+          </div>
+
+          {criandoCla && (
+            <div className="well flex flex-col gap-2 rounded-sm p-3">
+              <div className="flex flex-wrap gap-2">
+                <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
+                  nome do clã
+                  <Input
+                    value={criandoCla.name}
+                    onChange={(e) => setCriandoCla({ ...criandoCla, name: e.target.value })}
+                    placeholder="Kazehana"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+                  deslocamento
+                  <Input value={criandoCla.speed} onChange={(e) => setCriandoCla({ ...criandoCla, speed: e.target.value })} className="w-28" />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+                descrição
+                <Textarea rows={2} value={criandoCla.description} onChange={(e) => setCriandoCla({ ...criandoCla, description: e.target.value })} />
+              </label>
+              <div>
+                <p className="mb-1 text-xs text-orange-400/60">Bônus de atributo</p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {ATTRIBUTE_KEYS.map((k) => (
+                    <label key={k} className="flex flex-col gap-1 text-[11px] text-orange-400/60">
+                      {ATTRIBUTE_LABELS[k]}
+                      <Input
+                        type="number"
+                        value={criandoCla.bonuses[k]}
+                        onChange={(e) => setCriandoCla({ ...criandoCla, bonuses: { ...criandoCla.bonuses, [k]: Number(e.target.value) || 0 } })}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-orange-400/60">Afinidade passiva (opcional)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ELEMENTS.map((el) => {
+                    const ativo = clanElementsDraft.includes(el)
+                    return (
+                      <button
+                        key={el}
+                        onClick={() => setClanElementsDraft((p) => (ativo ? p.filter((x) => x !== el) : [...p, el]))}
+                        className={`rounded-sm border px-2.5 py-1 font-display text-xs uppercase tracking-[0.08em] transition ${
+                          ativo
+                            ? 'border-[color:var(--orange)] bg-[color:var(--orange)] text-[color:var(--orange-ink)]'
+                            : 'border-[color:var(--line)] text-orange-300/50 hover:border-[color:var(--line-strong)]'
+                        }`}
+                      >
+                        {el}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+                perícias do clã (separadas por vírgula)
+                <Input
+                  value={criandoCla.skillProficiencies.join(', ')}
+                  onChange={(e) =>
+                    setCriandoCla({ ...criandoCla, skillProficiencies: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })
+                  }
+                  placeholder="Percepção, Furtividade"
+                />
+              </label>
+              <Button variant="primary" disabled={!criandoCla.name.trim() || salvandoCla} onClick={salvarCla}>
+                {salvandoCla ? 'Guardando...' : 'Guardar clã e usar neste personagem'}
+              </Button>
+            </div>
+          )}
+
           <div className="grid gap-2 sm:grid-cols-2">
             {clansDaMesa.map((c) => (
               <button

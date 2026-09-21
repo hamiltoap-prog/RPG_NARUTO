@@ -20,6 +20,7 @@ import type {
   BestiaryEntry,
   Clan,
   ChakraGift,
+  JutsuCast,
   ShopItem,
   GMRoll,
   GameTable,
@@ -156,6 +157,7 @@ const TABLE_SUBCOLLECTIONS = [
   'clans',
   'shop',
   'chakraGifts',
+  'jutsuCasts',
 ]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
@@ -711,6 +713,69 @@ export async function approveChakraGift(tableId: string, gift: ChakraGift, doado
 
 export async function denyChakraGift(tableId: string, giftId: string, gmName: string, reason: string) {
   await updateDoc(doc(chakraGiftsCol(tableId), giftId), stripUndefined({ status: 'denied', resolvedBy: gmName, deniedReason: reason }))
+}
+
+/* ---------------------------------------------------------------------------
+ * Lançamento de jutsu: o conjurador manda a intenção, o mestre libera.
+ * ------------------------------------------------------------------------- */
+
+export function jutsuCastsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'jutsuCasts')
+}
+
+export async function createJutsuCast(
+  tableId: string,
+  cast: Omit<JutsuCast, 'id' | 'tableId' | 'status' | 'createdAt'>,
+): Promise<JutsuCast> {
+  const id = newId()
+  const full: JutsuCast = { ...cast, id, tableId, status: 'pending', createdAt: Date.now() }
+  await setDoc(doc(jutsuCastsCol(tableId), id), stripUndefined(full))
+  return full
+}
+
+export function listenPendingJutsuCasts(tableId: string, cb: (casts: JutsuCast[]) => void) {
+  const q = query(jutsuCastsCol(tableId), where('status', '==', 'pending'), orderBy('createdAt', 'asc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as JutsuCast)), defaultOnError('jutsus lançados'))
+}
+
+export function listenMyJutsuCasts(tableId: string, casterId: string, cb: (casts: JutsuCast[]) => void) {
+  const q = query(jutsuCastsCol(tableId), where('casterId', '==', casterId), orderBy('createdAt', 'desc'), limit(5))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as JutsuCast)), defaultOnError('meus jutsus'))
+}
+
+/**
+ * Aplica o resultado de um lançamento: desconta o chakra do conjurador, tira
+ * os PV do alvo e marca o pedido como resolvido — tudo numa escrita só, para
+ * não sobrar meio golpe se algo falhar no meio.
+ */
+export async function applyJutsuCast(
+  tableId: string,
+  cast: JutsuCast,
+  caster: Character,
+  target: { kind: 'character' | 'npc'; id: string; hpAfter: number; hp: { current: number; max: number } } | null,
+  resultSummary: string,
+) {
+  const database = requireDb()
+  const batch = writeBatch(database)
+  batch.update(doc(charactersCol(tableId), caster.id), {
+    chakra: { ...caster.chakra, current: Math.max(0, caster.chakra.current - cast.chakraCost) },
+    updatedAt: Date.now(),
+  })
+  if (target) {
+    const ref = target.kind === 'character' ? doc(charactersCol(tableId), target.id) : doc(npcsCol(tableId), target.id)
+    const patch: Record<string, unknown> = { hp: { ...target.hp, current: target.hpAfter } }
+    if (target.kind === 'character') {
+      patch.updatedAt = Date.now()
+      if (target.hpAfter === 0) patch.isAlive = false
+    }
+    batch.update(ref, patch)
+  }
+  batch.update(doc(jutsuCastsCol(tableId), cast.id), { status: 'resolved', resultSummary })
+  await batch.commit()
+}
+
+export async function denyJutsuCast(tableId: string, castId: string, gmName: string, reason: string) {
+  await updateDoc(doc(jutsuCastsCol(tableId), castId), stripUndefined({ status: 'denied', resolvedBy: gmName, deniedReason: reason }))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {
