@@ -264,10 +264,12 @@ export function CharacterCreate({
                 <p className="text-2xl text-orange-100">
                   {finalAttributes[attr]}
                   {clan && clan.bonuses[attr] !== 0 && (
+                    /* Antes de escolher o valor não há conta a mostrar — só o
+                     * bônus do clã. Depois, a conta inteira: 10+1. */
                     <span className="ml-1 text-xs text-emerald-400">
-                      ({assigned[attr] ?? '-'}
-                      {clan.bonuses[attr] > 0 ? '+' : ''}
-                      {clan.bonuses[attr] !== 0 ? clan.bonuses[attr] : ''})
+                      {assigned[attr] === undefined
+                        ? `(${clan.bonuses[attr] > 0 ? '+' : ''}${clan.bonuses[attr]} do clã)`
+                        : `(${assigned[attr]}${clan.bonuses[attr] > 0 ? '+' : ''}${clan.bonuses[attr]})`}
                     </span>
                   )}
                 </p>

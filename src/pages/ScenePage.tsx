@@ -519,7 +519,7 @@ export function ScenePage() {
       )}
 
       {/* Palco */}
-      <div ref={setWrapEl} className="relative flex flex-1 items-center justify-center overflow-hidden bg-[color:var(--surface-board)] p-2">
+      <div ref={setWrapEl} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[color:var(--surface-board)] p-2">
         {waiting ? (
           <div className="flex flex-col items-center gap-3 text-center">
             <p className="hero-title font-serif text-3xl font-extrabold">Preparando a cena</p>
@@ -732,7 +732,7 @@ function GMPanel({
   }
 
   return (
-    <Card className="z-10 flex flex-col gap-3 rounded-none border-x-0 p-3">
+    <Card className="z-10 flex max-h-[38vh] shrink-0 flex-col gap-3 overflow-y-auto rounded-none border-x-0 p-3">
       {panel === 'mapa' && (
         <div className="flex flex-col gap-2">
           <SectionTitle>Mapa</SectionTitle>
