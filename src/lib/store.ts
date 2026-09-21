@@ -17,6 +17,7 @@ import { db } from '../firebase'
 import type {
   Character,
   CombatParticipant,
+  BestiaryEntry,
   GMRoll,
   GameTable,
   LogEntry,
@@ -148,6 +149,7 @@ const TABLE_SUBCOLLECTIONS = [
   'sceneLibrary',
   'pings',
   'gmRolls',
+  'bestiary',
 ]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
@@ -538,6 +540,28 @@ export async function addGMRoll(tableId: string, roll: Omit<GMRoll, 'id' | 'tabl
 export function listenGMRolls(tableId: string, cb: (rolls: GMRoll[]) => void, max = 30) {
   const q = query(gmRollsCol(tableId), orderBy('ts', 'desc'), limit(max))
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as GMRoll)), defaultOnError('rolagens do mestre'))
+}
+
+/* ---------------------------------------------------------------------------
+ * Bestiário da mesa: as criaturas que o mestre inventou. Bastidor dele — as do
+ * manual não vêm daqui, vivem no código (src/data/summons.ts).
+ * ------------------------------------------------------------------------- */
+
+export function bestiaryCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'bestiary')
+}
+
+export async function saveBestiaryEntry(tableId: string, entry: BestiaryEntry) {
+  await setDoc(doc(bestiaryCol(tableId), entry.id), stripUndefined(entry))
+}
+
+export async function deleteBestiaryEntry(tableId: string, id: string) {
+  await deleteDoc(doc(bestiaryCol(tableId), id))
+}
+
+export function listenBestiary(tableId: string, cb: (entries: BestiaryEntry[]) => void) {
+  const q = query(bestiaryCol(tableId), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as BestiaryEntry)), defaultOnError('bestiário'))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {

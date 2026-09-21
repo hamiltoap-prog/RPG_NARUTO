@@ -43,6 +43,16 @@ Na seção de Invocação (Kuchiyose), testes de atributo/resistência de criatu
 - As descrições completas (nome + Classificação + Rank + Tempo + Alcance + Duração + Componentes + Custo + Palavras-chave + Descrição integral) de **todos os 631 jutsus/técnicas** do documento (Ninjutsu não-elemental, 5 estilos elementais, Genjutsu, Taijutsu, Bukijutsu, e todos os jutsus exclusivos de clã) foram extraídas **programaticamente e de forma fiel** (sem resumir texto) para `04-jutsus.md`, com uma cópia estruturada em JSON (`jutsus_parsed.json`) para facilitar conversão a código. Nenhum jutsu foi omitido — a extração automática foi verificada contra a contagem de campos "Classificação:" no texto-fonte (631 = 631, sem sobras nem faltas).
 - A seção de Invocação (Kuchiyose) foi copiada **literalmente e por completo** (doutrina + as 16 criaturas com stat-blocks e tabelas de progressão) em `04b-invocacoes.md`, por ser extensa e autocontida.
 
+## 13b. Contradição nos Dados de Vida da invocação
+Na seção de Invocação (`04b-invocacoes.md`), a tabela de Rank e a nota de rodapé logo abaixo dela discordam:
+
+- a **tabela** dá a coluna "Dados de Vida/Chakra" explícita por Rank — D: Nível 2, **2 DV / 2 DC**; C: Nível 4, 4 DV / 4 DC; e assim por diante (ou seja, **1 DV por nível**);
+- a **nota de rodapé** diz "*Cada nível concede **2** Dados de Vida (DV) e 2 Dados de Chakra (DC) à invocação*" — o que daria 4 DV no Rank D, não 2.
+
+As duas leituras não fecham. O app segue a **coluna da tabela** (2/4/6/8/10 DV por Rank D/C/B/A/S), por ser o dado concreto e por a nota de rodapé ser consistente se "nível" ali for lido como "degrau de Rank". Vale confirmar qual das duas é a intenção; se for a nota de rodapé, é só dobrar os valores em `SUMMON_RANKS` (`src/types.ts`).
+
+Também vale notar: o resumo no topo de `04b-invocacoes.md` fala em "16 criaturas", mas o documento traz **17** stat-blocks (Urso, Javali, Cachorro/Lobo, Lebre/Coelho, Falcão/Aves Predadoras, Enxame de Insetos, Lagarto, Macaco/Primata, Boi/Carneiro, Rato, Tubarão, Lesma, Cobra, Aranha, Tigre/Leão, Sapo, Tartaruga). As 17 foram extraídas para `src/data/summons.ts`.
+
 ## 14. Itens que aparecem em mais de um lugar com o mesmo nome
 Existe uma técnica chamada **"FLORESCER VELOZ"** em duas categorias diferentes (uma classificada como Taijutsu Rank-D, outra como Bukijutsu Rank-C usando Braçadeiras/Garra de Ferro) — não é um erro de extração, são duas técnicas distintas com o mesmo nome em categorias diferentes; ambas foram preservadas em `04-jutsus.md`.
 

@@ -5,6 +5,7 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { NpcManager } from '../components/NpcManager'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
+import { BestiaryPanel } from '../components/BestiaryPanel'
 import { GMRoller } from '../components/GMRoller'
 import { RollRequestsPanel } from '../components/RollRequestsPanel'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
@@ -22,7 +23,7 @@ import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'combate' | 'npcs' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
@@ -88,6 +89,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['personagens', `Personagens (${characters.length})`],
             ['combate', 'Combate'],
             ['npcs', `NPCs (${npcs.length})`],
+            ['bestiario', 'Bestiário'],
             ['missoes', `Missões (${missions.length})`],
             ['rolagens', 'Rolagens'],
             ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls})`],
@@ -157,6 +159,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
       {tab === 'npcs' && <NpcManager tableId={table.id} npcs={npcs} />}
 
       {tab === 'missoes' && <MissionBoard tableId={table.id} missions={missions} asGM />}
+
+      {tab === 'bestiario' && <BestiaryPanel table={table} />}
 
       {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} />}
 

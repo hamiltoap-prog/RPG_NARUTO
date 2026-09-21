@@ -507,6 +507,79 @@ export interface GMRoll {
   total: number
 }
 
+/* ---------------------------------------------------------------------------
+ * Bestiário
+ *
+ * Duas camadas, de propósito:
+ *  - SummonCreature: as 17 tribos de invocação do manual. São referência,
+ *    iguais em qualquer mesa, e vivem no código (src/data/summons.ts).
+ *  - BestiaryEntry: a criatura que o mestre inventa. Vive na mesa dele.
+ *
+ * A ficha é uma só para NPC, animal, monstro, chefe e invocação — o que muda
+ * é o rótulo e o quanto de cada campo o mestre resolve preencher.
+ * ------------------------------------------------------------------------- */
+
+/** Ficha de uma tribo de invocação, como o manual a descreve. */
+export interface SummonCreature {
+  id: string
+  name: string
+  description: string
+  /** Temperamento: Bestial, Leal, Soberano, Astuto, Incessante. */
+  summonType: string
+  hitDie: string
+  chakraDie: string
+  saves: string
+  skills: string
+  naturalWeapons: string
+  attackModifier: string
+  specialFeatures: string
+}
+
+export type CreatureKind = 'npc' | 'animal' | 'monster' | 'boss' | 'summon'
+
+export const CREATURE_KIND_LABELS: Record<CreatureKind, string> = {
+  npc: 'NPC',
+  animal: 'Animal',
+  monster: 'Monstro',
+  boss: 'Chefe',
+  summon: 'Invocação',
+}
+
+/**
+ * Ranks de invocação (04b-invocacoes.md). O manual se contradiz sobre os
+ * dados de vida: a tabela diz "Nível 2 → 2 DV" (um por nível) e a nota de
+ * rodapé diz "cada nível concede 2 DV". Seguimos a COLUNA DA TABELA, que é o
+ * dado concreto — ver docs/rules/00-observacoes.md.
+ */
+export const SUMMON_RANKS = [
+  { rank: 'D', title: 'Soldado', level: 2, dice: 2, cost: 5 },
+  { rank: 'C', title: 'Protetor', level: 4, dice: 4, cost: 10 },
+  { rank: 'B', title: 'Guardião', level: 6, dice: 6, cost: 15 },
+  { rank: 'A', title: 'Nobre', level: 8, dice: 8, cost: 20 },
+  { rank: 'S', title: 'Campeão', level: 10, dice: 10, cost: 30 },
+] as const
+
+/** Criatura criada pelo mestre, guardada na mesa dele. */
+export interface BestiaryEntry {
+  id: string
+  tableId: string
+  kind: CreatureKind
+  name: string
+  imageUrl?: string
+  description: string
+  armorClass: number
+  hp: { current: number; max: number }
+  resistancePoints: number
+  attackModifier: number
+  attacksText: string
+  skills: string
+  specialFeatures: string
+  notes: string
+  /** Quando nasceu de uma tribo do manual, qual foi. */
+  sourceId?: string
+  createdAt: number
+}
+
 export interface Mission {
   id: string
   tableId: string

@@ -139,6 +139,12 @@ service cloud.firestore {
         allow update, delete: if isGM(tableId);
       }
 
+      // Bestiário da mesa: criaturas que o mestre preparou. Bastidor — o grupo
+      // só conhece a criatura quando ela vira NPC na mesa.
+      match /bestiary/{creatureId} {
+        allow read, write: if isGM(tableId);
+      }
+
       // Biblioteca de mapas e peças prontas: coisa de bastidor do mestre.
       match /sceneLibrary/{itemId} {
         allow read, write: if isGM(tableId);
