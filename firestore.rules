@@ -150,6 +150,18 @@ service cloud.firestore {
         allow write: if isGM(tableId);
       }
 
+      // Doação de chakra: o médico pede, só o mestre libera. A transferência
+      // em si é feita pelo cliente do mestre, que tem permissão nas duas
+      // fichas — por isso o pedido é só um bilhete, e não uma escrita.
+      match /chakraGifts/{giftId} {
+        allow read: if signedIn();
+        allow create: if signedIn() &&
+          request.resource.data.requesterUid == request.auth.uid &&
+          request.resource.data.tableId == tableId &&
+          request.resource.data.status == 'pending';
+        allow update, delete: if isGM(tableId);
+      }
+
       // Loja: todos veem a vitrine, só o mestre define preço e estoque.
       match /shop/{itemId} {
         allow read: if signedIn();

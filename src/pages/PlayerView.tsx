@@ -5,6 +5,7 @@ import { ActionRoller } from '../components/ActionRoller'
 import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { PartyPanel } from '../components/PartyPanel'
+import { ChakraGiftCard } from '../components/ChakraGiftPanel'
 import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
@@ -14,7 +15,7 @@ import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownF
 import { calculateDerivedStats } from '../lib/characterMath'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
 import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter, listenShop } from '../lib/store'
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, REQUESTABLE_FIELD_LABELS } from '../types'
+import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CHAKRA_DONOR_CLASS_ID, REQUESTABLE_FIELD_LABELS } from '../types'
 import type {
   Armor,
   ArmorCatalogEntry,
@@ -112,6 +113,9 @@ export function PlayerView({
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
         <ShopCard character={character} table={table} shopItems={shopItems} onSubmit={submit} pendingFields={pendingFields} />
+        {character.classId === CHAKRA_DONOR_CLASS_ID && (
+          <ChakraGiftCard table={table} character={character} party={allCharacters} requesterUid={actorUid} />
+        )}
         <ElementsCard character={character} clan={clan} onSubmit={submit} asGM={asGM} />
         <JutsusCard character={character} clan={clan} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
         <XpCard character={character} charClass={charClass} onSubmit={submit} asGM={asGM} />

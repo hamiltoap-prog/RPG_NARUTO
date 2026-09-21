@@ -658,6 +658,35 @@ export interface ShopItem {
   createdAt: number
 }
 
+/* ---------------------------------------------------------------------------
+ * Doação de chakra (regra da casa)
+ *
+ * Não vem do manual: é uma regra da mesa, restrita ao Ninja Médico.
+ *
+ * Precisa de fila própria porque mexe em DUAS fichas ao mesmo tempo, e as
+ * regras do Firestore não deixam um jogador escrever na ficha alheia — nem
+ * deveriam. O médico pede, o mestre libera, e a transferência acontece nas
+ * duas pontas de uma vez.
+ * ------------------------------------------------------------------------- */
+
+/** Classe que pode doar chakra, conforme a mesa decidiu. */
+export const CHAKRA_DONOR_CLASS_ID = 'medical_ninja'
+
+export interface ChakraGift {
+  id: string
+  tableId: string
+  fromCharacterId: string
+  fromCharacterName: string
+  toCharacterId: string
+  toCharacterName: string
+  amount: number
+  requesterUid: string
+  status: 'pending' | 'approved' | 'denied'
+  createdAt: number
+  resolvedBy?: string
+  deniedReason?: string
+}
+
 export interface Mission {
   id: string
   tableId: string

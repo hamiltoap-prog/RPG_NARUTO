@@ -19,6 +19,7 @@ import type {
   CombatParticipant,
   BestiaryEntry,
   Clan,
+  ChakraGift,
   ShopItem,
   GMRoll,
   GameTable,
@@ -154,6 +155,7 @@ const TABLE_SUBCOLLECTIONS = [
   'bestiary',
   'clans',
   'shop',
+  'chakraGifts',
 ]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
@@ -645,6 +647,70 @@ export async function deleteShopItem(tableId: string, id: string) {
 export function listenShop(tableId: string, cb: (items: ShopItem[]) => void) {
   const q = query(shopCol(tableId), orderBy('createdAt', 'desc'))
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ShopItem)), defaultOnError('loja da mesa'))
+}
+
+/* ---------------------------------------------------------------------------
+ * Doação de chakra: regra da casa, restrita ao Ninja Médico.
+ *
+ * Fila própria porque a transferência mexe em duas fichas, e um jogador não
+ * escreve na ficha alheia. O médico pede; o mestre libera, e aí as duas
+ * pontas mudam numa escrita só — ninguém fica sem o chakra que o outro não
+ * recebeu.
+ * ------------------------------------------------------------------------- */
+
+export function chakraGiftsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'chakraGifts')
+}
+
+export async function createChakraGift(
+  tableId: string,
+  gift: Omit<ChakraGift, 'id' | 'tableId' | 'status' | 'createdAt'>,
+): Promise<ChakraGift> {
+  const id = newId()
+  const full: ChakraGift = { ...gift, id, tableId, status: 'pending', createdAt: Date.now() }
+  await setDoc(doc(chakraGiftsCol(tableId), id), stripUndefined(full))
+  return full
+}
+
+export function listenPendingChakraGifts(tableId: string, cb: (gifts: ChakraGift[]) => void) {
+  const q = query(chakraGiftsCol(tableId), where('status', '==', 'pending'), orderBy('createdAt', 'asc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ChakraGift)), defaultOnError('doações de chakra'))
+}
+
+export function listenMyChakraGifts(tableId: string, characterId: string, cb: (gifts: ChakraGift[]) => void) {
+  const q = query(chakraGiftsCol(tableId), where('fromCharacterId', '==', characterId), orderBy('createdAt', 'desc'), limit(5))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ChakraGift)), defaultOnError('minhas doações'))
+}
+
+/**
+ * Libera a doação: tira do doador e põe no recebedor numa escrita só.
+ *
+ * O batch importa — sem ele, uma falha no meio deixaria o médico sem o
+ * chakra que o aliado nunca recebeu.
+ */
+export async function approveChakraGift(tableId: string, gift: ChakraGift, doador: Character, recebedor: Character, gmName: string) {
+  const database = requireDb()
+  // Três limites ao mesmo tempo: o pedido, o que o doador tem, e o que cabe
+  // no outro. Sem o terceiro, doar para quem está com o chakra cheio
+  // queimaria o do médico sem ninguém ganhar nada.
+  const cabe = Math.max(0, recebedor.chakra.max - recebedor.chakra.current)
+  const saiu = Math.min(gift.amount, doador.chakra.current, cabe)
+  const batch = writeBatch(database)
+  batch.update(doc(charactersCol(tableId), doador.id), {
+    chakra: { ...doador.chakra, current: doador.chakra.current - saiu },
+    updatedAt: Date.now(),
+  })
+  batch.update(doc(charactersCol(tableId), recebedor.id), {
+    chakra: { ...recebedor.chakra, current: recebedor.chakra.current + saiu },
+    updatedAt: Date.now(),
+  })
+  batch.update(doc(chakraGiftsCol(tableId), gift.id), { status: 'approved', resolvedBy: gmName })
+  await batch.commit()
+  return saiu
+}
+
+export async function denyChakraGift(tableId: string, giftId: string, gmName: string, reason: string) {
+  await updateDoc(doc(chakraGiftsCol(tableId), giftId), stripUndefined({ status: 'denied', resolvedBy: gmName, deniedReason: reason }))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {
