@@ -1,68 +1,91 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
- * Identidade visual: placas de madeira queimada com fios de bronze e brasa —
- * a linguagem de "tabuleiro iluminado por fogueira", no espírito do Hearthstone,
- * mantendo laranja e preto como cores da casa.
+ * Identidade visual: preto chapado, laranja e branco.
+ *
+ * Três regras que valem para a interface inteira:
+ *   1) superfície é cor sólida — degradê só aparece onde representa luz de
+ *      verdade (a poça de uma tocha no mapa), nunca como enfeite de painel;
+ *   2) a estrutura é feita de fio de 1px, não de sombra e relevo;
+ *   3) laranja é sinal, não decoração: marca o que está ativo, o que é a ação
+ *      principal e para onde olhar. O resto é preto e branco.
  *
  * Dois atalhos viram o tema inteiro de uma vez, sem reescrever classe por
  * classe em cada componente:
- *   1) @theme redefine os tokens do Tailwind (fontes e raios);
- *   2) a rampa "orange" (usada em todo o app) é reapontada para os tons novos.
+ *   a) @theme redefine os tokens do Tailwind (fontes e raios);
+ *   b) a rampa "orange" (usada em todo o app) é reapontada — 50..400 viram a
+ *      escala de cinza do texto, 500/600/700 são o laranja de fato, e 800..950
+ *      são os fios e as chapas escuras.
  * ------------------------------------------------------------------------- */
 @theme {
-  --font-serif: 'Bitter', ui-serif, Georgia, 'Times New Roman', serif;
-  --font-sans: 'Barlow', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --font-display: 'Oswald', 'Barlow Condensed', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Oswald', 'Barlow Condensed', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
 
-  /* Cantos generosos: as peças são placas talhadas, não fichas de papel. */
-  --radius-sm: 0.3rem;
-  --radius-md: 0.45rem;
-  --radius-lg: 0.65rem;
-  --radius-xl: 0.9rem;
-  --radius-2xl: 1.15rem;
+  /* Cantos quase retos: a interface é feita de chapas, não de bolhas.
+   * `rounded-full` continua redondo (peças do mapa, retratos, selos). */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
 }
 
 :root {
   color-scheme: dark;
 
-  /* Brasa e bronze — os metais da casa */
-  --ember: #e4590c;
-  --ember-bright: #ff8a3d;
-  --ember-deep: #8f3505;
-  --gold: #d9a441;
-  --gold-bright: #f7dda6;
-  --gold-deep: #7c5a1d;
-  --gold-dark: #43300f;
+  /* Laranja da casa */
+  --orange: #ff6a1a;
+  --orange-hot: #ff8c47;
+  --orange-deep: #c04a08;
+  --orange-ink: #140700;
 
-  /* Superfícies próprias do app (fora da paleta do Tailwind). */
-  --surface-page: #0f0a06;
-  --surface-page-glow: #33190a;
-  --surface-card: #1d1309;
-  --surface-card-top: #2a1b0e;
-  --surface-card-hover: #251708;
-  --surface-well: #0c0805;
-  --surface-raised: #2b1b0d;
-  --surface-tab: #1f1509;
-  --surface-tab-hover: #2c1d0d;
-  --surface-board: #090604;
-  --die-face: #2a1a0c;
-  --body-text: #f6e7d2;
-  --scrollbar-track: #0c0805;
-  --scrollbar-thumb: #4a3117;
+  /* Superfícies: preto chapado, sem degradê. */
+  --surface-page: #000000;
+  --surface-card: #0b0b0b;
+  --surface-card-hover: #141414;
+  --surface-well: #060606;
+  --surface-raised: #161616;
+  --surface-tab: #111111;
+  --surface-board: #000000;
+  --die-face: #141414;
 
-  /* Rampa "orange" reapontada: texto em pergaminho, estruturas em madeira
-   * queimada, e o 500/600 vira ouro (foco, abas e destaques). */
-  --color-orange-50: #fdf7ee;
-  --color-orange-100: #f6e7d2;
-  --color-orange-200: #e9cfa8;
-  --color-orange-300: #cdab78;
-  --color-orange-400: #a8844f;
-  --color-orange-500: #d9a441;
-  --color-orange-600: #b8801f;
-  --color-orange-700: #c2560c;
-  --color-orange-800: #45290f;
-  --color-orange-900: #33200d;
-  --color-orange-950: #1d1309;
+  /* Fios: toda a estrutura da interface sai daqui. */
+  --line: #232323;
+  --line-strong: #3a3a3a;
+  --line-orange: rgba(255, 106, 26, 0.55);
+
+  --body-text: #ededed;
+  --scrollbar-track: #0b0b0b;
+  --scrollbar-thumb: #2e2e2e;
+
+  /* Nomes herdados da identidade anterior, mantidos para não quebrar as telas
+   * que já os usam — agora apontando para a paleta nova. */
+  --ember: var(--orange);
+  --ember-bright: var(--orange-hot);
+  --ember-deep: var(--orange-deep);
+  --gold: var(--orange);
+  --gold-bright: #ffffff;
+  --gold-deep: var(--line-strong);
+  --gold-dark: var(--line);
+  --surface-card-top: var(--surface-card);
+  --surface-page-glow: #140700;
+  --surface-tab-hover: var(--surface-card-hover);
+
+  /* Rampa "orange" reapontada: 50..400 é a escala de cinza do texto,
+   * 500..700 é o laranja, 800..950 são fios e chapas escuras. */
+  --color-orange-50: #ffffff;
+  --color-orange-100: #f4f4f4;
+  --color-orange-200: #d8d8d8;
+  --color-orange-300: #d0d0d0;
+  --color-orange-400: #c8c8c8;
+  --color-orange-500: #ff6a1a;
+  --color-orange-600: #e2560c;
+  --color-orange-700: #c2500c;
+  --color-orange-800: #6b6b6b;
+  --color-orange-900: #7a7a7a;
+  --color-orange-950: #141414;
 }
 
 html,
@@ -76,26 +99,20 @@ body {
   background: var(--surface-page);
   color: var(--body-text);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Brasa no alto da tela + veios de madeira, feitos só com gradiente: sem
- * imagem para carregar, e o fundo acompanha qualquer tamanho de tela. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 120% 70% at 50% -10%, var(--surface-page-glow) 0%, transparent 65%),
-    repeating-linear-gradient(
-      92deg,
-      rgba(255, 255, 255, 0.012) 0px,
-      rgba(255, 255, 255, 0.012) 1px,
-      transparent 1px,
-      transparent 7px
-    ),
-    var(--surface-page);
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  accent-color: var(--orange);
 }
 
 ::-webkit-scrollbar {
@@ -107,121 +124,112 @@ body::before {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--gold-deep);
+  background: var(--orange-deep);
 }
 
 /* ---------------------------------------------------------------------------
  * Peças da interface
  * ------------------------------------------------------------------------- */
 
-/* A placa: madeira clara em cima, escura embaixo, com fio de bronze na borda e
- * um brilho fino no topo — como uma tábua pegando a luz da fogueira. */
+/* A chapa: fundo sólido, fio de 1px, nada mais. */
 .plaque {
-  background: linear-gradient(180deg, var(--surface-card-top) 0%, var(--surface-card) 55%, var(--surface-well) 100%);
-  border: 1px solid var(--gold-deep);
-  box-shadow:
-    /* fio de ouro por dentro da borda: a moldura dupla das cartas */
-    inset 0 0 0 1px rgba(217, 164, 65, 0.1),
-    inset 0 1px 0 rgba(247, 221, 166, 0.12),
-    inset 0 0 26px rgba(0, 0, 0, 0.5),
-    0 8px 22px rgba(0, 0, 0, 0.55);
+  background: var(--surface-card);
+  border: 1px solid var(--line);
 }
 
-/* Poço: onde a informação fica "afundada" (listas, campos, registros). */
+/* Poço: onde a informação fica "dentro" (listas, campos, registros). Mais
+ * escuro que a chapa, e é só isso que o separa — sem sombra interna. */
 .well {
-  background: linear-gradient(180deg, var(--surface-board) 0%, var(--surface-well) 100%);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  background: var(--surface-well);
+  border: 1px solid var(--line);
 }
 
-/* Aba/ficha: pastilha de madeira que acende em brasa quando escolhida. */
+/* Aba: fio apagado quando dormindo, chapa laranja quando escolhida. */
 .tab-chip {
-  background: linear-gradient(180deg, var(--surface-tab-hover) 0%, var(--surface-tab) 100%);
-  border: 1px solid var(--gold-dark);
+  background: transparent;
+  border: 1px solid var(--line);
   color: var(--color-orange-300);
-  transition: all 0.16s ease;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background-color 0.12s ease;
 }
 .tab-chip:hover {
-  border-color: var(--gold-deep);
-  color: var(--color-orange-100);
+  border-color: var(--line-strong);
+  color: #ffffff;
 }
 .tab-chip[data-active='true'] {
-  background: linear-gradient(180deg, var(--ember-bright) 0%, var(--ember) 45%, var(--ember-deep) 100%);
-  border-color: var(--gold);
-  color: #fff6e9;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 0 14px rgba(228, 89, 12, 0.35);
+  background: var(--orange);
+  border-color: var(--orange);
+  color: var(--orange-ink);
+  font-weight: 600;
 }
 
-/* Botão talhado: aresta clara em cima, sombra embaixo, e afunda ao apertar. */
+/* Botão: chapa de cor sólida com fio. Sem bisel, sem brilho no topo — o
+ * retorno do clique é a cor mudando e o botão descendo 1px. */
 .btn-carved {
-  position: relative;
-  border: 1px solid var(--gold-dark);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
-    0 2px 6px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line);
   transition:
-    transform 0.08s ease,
-    filter 0.16s ease,
-    box-shadow 0.16s ease;
-}
-.btn-carved:hover:not(:disabled) {
-  filter: brightness(1.12);
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    transform 0.06s ease;
 }
 .btn-carved:active:not(:disabled) {
   transform: translateY(1px);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.45),
-    0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* Título de seção com um fio de ouro que se apaga à direita. */
+/* Título de seção: fio laranja curto embaixo, do tamanho de um traço. */
 .rule-gold::after {
   content: '';
   display: block;
-  height: 1px;
-  margin-top: 0.4rem;
-  background: linear-gradient(90deg, var(--gold-deep), transparent);
+  height: 2px;
+  width: 1.75rem;
+  margin-top: 0.45rem;
+  background: var(--orange);
 }
 
-/* Título de herói: letras em ouro escovado com brasa por trás. */
+/* Título de herói: branco chapado, bem fechado. O laranja fica por conta do
+ * que estiver em volta. */
 .hero-title {
-  background: linear-gradient(180deg, var(--gold-bright) 0%, var(--gold) 55%, var(--gold-deep) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 2px 10px rgba(228, 89, 12, 0.35));
+  color: #ffffff;
+  letter-spacing: 0.06em;
 }
 
-/* Ornamento: fio de ouro que nasce e morre no nada, com um losango no meio. */
+/* Ornamento: fio que nasce e morre no nada, com um quadrado laranja no meio. */
 .ornament {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  color: var(--gold-deep);
+  gap: 0.75rem;
+  color: var(--orange);
 }
 .ornament::before,
 .ornament::after {
   content: '';
   height: 1px;
-  width: 4.5rem;
-  background: linear-gradient(90deg, transparent, var(--gold-deep));
+  width: 3.5rem;
+  background: linear-gradient(90deg, transparent, var(--line-strong));
 }
 .ornament::after {
-  background: linear-gradient(90deg, var(--gold-deep), transparent);
+  background: linear-gradient(90deg, var(--line-strong), transparent);
 }
 
-/* Moldura de retrato: anel de bronze com brilho interno. */
+/* Moldura de retrato: um fio, e ponto. */
 .portrait-ring {
-  border: 2px solid var(--gold-deep);
-  box-shadow:
-    inset 0 0 10px rgba(0, 0, 0, 0.6),
-    0 0 10px rgba(217, 164, 65, 0.15);
+  border: 1px solid var(--line-strong);
+}
+
+/* Canto cortado: o recorte das molduras do jogo, sem virar enfeite. */
+.chamfer {
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+
+/* Fio laranja no topo de um painel — o único "brilho" da casa. */
+.edge-top {
+  background-image: linear-gradient(90deg, transparent, var(--orange) 50%, transparent);
 }
 
 /* ---------------------------------------------------------------------------
@@ -231,45 +239,46 @@ body::before {
 @keyframes roll-in {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.98);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 .animate-roll-in {
-  animation: roll-in 0.25s ease-out;
+  animation: roll-in 0.22s ease-out;
 }
 
 /* O tombo do dado enquanto "rola": gira e sacode sem sair do lugar. */
 @keyframes dice-tumble {
   0% {
-    transform: rotate(0deg) translateY(0) scale(1);
+    transform: rotate(0deg) translateY(0);
   }
   25% {
-    transform: rotate(90deg) translateY(-5px) scale(1.06);
+    transform: rotate(90deg) translateY(-5px);
   }
   50% {
-    transform: rotate(180deg) translateY(0) scale(1);
+    transform: rotate(180deg) translateY(0);
   }
   75% {
-    transform: rotate(270deg) translateY(-3px) scale(1.04);
+    transform: rotate(270deg) translateY(-3px);
   }
   100% {
-    transform: rotate(360deg) translateY(0) scale(1);
+    transform: rotate(360deg) translateY(0);
   }
 }
 
+/* Vez de quem age no combate. */
 @keyframes ember-pulse {
   0%,
   100% {
-    box-shadow: 0 0 10px rgba(228, 89, 12, 0.25);
+    box-shadow: 0 0 0 0 rgba(255, 106, 26, 0.55);
   }
   50% {
-    box-shadow: 0 0 20px rgba(228, 89, 12, 0.5);
+    box-shadow: 0 0 0 6px rgba(255, 106, 26, 0);
   }
 }
 .animate-ember {
-  animation: ember-pulse 2.4s ease-in-out infinite;
+  animation: ember-pulse 1.8s ease-out infinite;
 }

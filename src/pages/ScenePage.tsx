@@ -37,12 +37,14 @@ import {
   updateCharacterDirect,
   updateTable,
 } from '../lib/store'
-import { CREATURE_SIZES, PING_LIFETIME_MS, SCENE_TOKEN_LABELS } from '../types'
+import { CREATURE_SIZES, DEFAULT_STAGE_ASPECT, PING_LIFETIME_MS, SCENE_TOKEN_LABELS } from '../types'
 import type { Character, GameTable, NPC, Scene, SceneLibraryItem, ScenePing, SceneToken, SceneTokenKind } from '../types'
 
-/** Escuridão do local sem luz: forte o bastante para pesar, fraca o bastante
- * para o cenário continuar legível. */
+/** Escuridão do local sem luz, para os jogadores. */
 const DARKNESS_ALPHA = 0.82
+/** O mestre precisa enxergar a cena que está narrando: para ele a escuridão é
+ * só uma sombra que mostra até onde a luz chega, como a névoa. */
+const DARKNESS_ALPHA_GM = 0.45
 /** Alcance da luz como fração da largura do palco — assim a poça de luz é a
  * mesma em qualquer tela. */
 const LIGHT_RX = 0.13
@@ -56,6 +58,14 @@ const GLOW_SCALE = 1.25
 const TORCH_DURATION = 60 * 60 * 1000
 
 type Tool = 'mover' | 'revelar' | 'esconder' | 'marcar' | 'regua'
+
+const PRESET_ASPECTS = [
+  { label: '16:10', value: 16 / 10 },
+  { label: '16:9', value: 16 / 9 },
+  { label: '4:3', value: 4 / 3 },
+  { label: '3:2', value: 3 / 2 },
+  { label: 'quadrado', value: 1 },
+]
 
 const EMPTY_SCENE: Scene = {
   backgroundUrl: '',
@@ -88,7 +98,10 @@ export function ScenePage() {
   const [now, setNow] = useState(Date.now())
 
   const stageRef = useRef<HTMLDivElement | null>(null)
-  const wrapRef = useRef<HTMLDivElement | null>(null)
+  /** Estado, e não ref: o elemento só nasce depois que a mesa carrega, e um
+   * `useRef` não avisa o efeito de que ele apareceu — era por isso que o palco
+   * ficava preso na faixa de 300px. */
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null)
   const fogCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const draggingToken = useRef<string | null>(null)
@@ -141,15 +154,13 @@ export function ScenePage() {
   }, [tableId, isGM])
 
   useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const observer = new ResizeObserver(() => {
-      setViewport({ width: el.clientWidth, height: el.clientHeight })
-    })
-    observer.observe(el)
-    setViewport({ width: el.clientWidth, height: el.clientHeight })
+    if (!wrapEl) return
+    const measure = () => setViewport({ width: wrapEl.clientWidth, height: wrapEl.clientHeight })
+    const observer = new ResizeObserver(measure)
+    observer.observe(wrapEl)
+    measure()
     return () => observer.disconnect()
-  }, [])
+  }, [wrapEl])
 
   const scene = sceneState ?? EMPTY_SCENE
   sceneRef.current = scene
@@ -277,16 +288,37 @@ export function ScenePage() {
   }
 
   // ---------- Ações do mestre ----------
+  /**
+   * Procura um quadrado vazio começando pelo canto de cima à esquerda. Sem
+   * isso toda peça nova nasce no meio do palco, em cima da anterior, e o
+   * mestre precisa separar as peças na mão antes de usar.
+   */
+  function freeSpot(squares: number): { x: number; y: number } {
+    const cellX = 1 / columns
+    const cellY = aspect / columns
+    const taken = scene.tokens.filter((t) => t.onBoard !== false)
+    for (let row = 0; row * cellY < 1; row++) {
+      for (let col = 0; col * cellX < 1; col++) {
+        const spot = snapToGrid(col * cellX + (squares * cellX) / 2, row * cellY + (squares * cellY) / 2, squares, columns, aspect)
+        const livre = taken.every((t) => Math.abs(t.x - spot.x) > cellX / 2 || Math.abs(t.y - spot.y) > cellY / 2)
+        if (livre) return spot
+      }
+    }
+    return snapToGrid(0.5, 0.5, squares, columns, aspect)
+  }
+
   function addToken(partial: Partial<SceneToken> & { label: string; kind: SceneTokenKind }) {
+    const squares = partial.squares ?? 1
+    const spot = freeSpot(squares)
     const token: SceneToken = {
       id: newId(),
       label: partial.label,
       kind: partial.kind,
       imageUrl: partial.imageUrl,
-      x: 0.5,
-      y: 0.5,
+      x: spot.x,
+      y: spot.y,
       size: 0.07,
-      squares: partial.squares ?? 1,
+      squares,
       refType: partial.refType,
       refId: partial.refId,
       onBoard: false,
@@ -296,6 +328,14 @@ export function ScenePage() {
 
   function updateToken(id: string, patch: Partial<SceneToken>) {
     persist({ ...scene, tokens: scene.tokens.map((t) => (t.id === id ? { ...t, ...patch } : t)) })
+  }
+
+  /** Pôr no mapa é também achar onde: mesma regra da peça nova. */
+  function putOnBoard(id: string) {
+    const token = scene.tokens.find((t) => t.id === id)
+    if (!token) return
+    const spot = freeSpot(token.squares ?? 1)
+    updateToken(id, { onBoard: true, x: spot.x, y: spot.y })
   }
 
   function removeToken(id: string) {
@@ -345,14 +385,15 @@ export function ScenePage() {
 
   const visibleTokens = isGM ? scene.tokens.filter((t) => t.onBoard !== false) : boardTokens.filter((t) => !hiddenInTheDark(t))
 
+  const darkAlpha = isGM ? DARKNESS_ALPHA_GM : DARKNESS_ALPHA
   const darkEllipse = `${(LIGHT_RX * 100).toFixed(2)}% ${(lightRy * 100).toFixed(2)}%`
   const glowEllipse = `${(LIGHT_RX * GLOW_SCALE * 100).toFixed(2)}% ${(lightRy * GLOW_SCALE * 100).toFixed(2)}%`
   const darknessBackground = [
     ...litTokens.map(
       (t) =>
-        `radial-gradient(ellipse ${darkEllipse} at ${t.x * 100}% ${t.y * 100}%, rgba(6,4,2,0) 0%, rgba(6,4,2,0) ${LIGHT_CLEAR * 100}%, rgba(6,4,2,0.3) 74%, rgba(6,4,2,${DARKNESS_ALPHA}) 100%)`,
+        `radial-gradient(ellipse ${darkEllipse} at ${t.x * 100}% ${t.y * 100}%, rgba(6,4,2,0) 0%, rgba(6,4,2,0) ${LIGHT_CLEAR * 100}%, rgba(6,4,2,0.3) 74%, rgba(6,4,2,${darkAlpha}) 100%)`,
     ),
-    `linear-gradient(rgba(6,4,2,${DARKNESS_ALPHA}), rgba(6,4,2,${DARKNESS_ALPHA}))`,
+    `linear-gradient(rgba(6,4,2,${darkAlpha}), rgba(6,4,2,${darkAlpha}))`,
   ].join(', ')
   const lightGlowBackground = litTokens
     .map(
@@ -408,7 +449,7 @@ export function ScenePage() {
         </div>
 
         {isGM && (
-          <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-[color:var(--gold-dark)] pt-2">
+          <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-[color:var(--line)] pt-2">
             <Button variant={scene.revealed ? 'good' : 'secondary'} onClick={() => persist({ ...scene, revealed: !scene.revealed })}>
               {scene.revealed ? 'Cena no ar' : 'Revelar cena'}
             </Button>
@@ -466,9 +507,11 @@ export function ScenePage() {
           npcs={npcs}
           library={library}
           tableId={tableId}
+          viewportAspect={viewport.width > 0 && viewport.height > 0 ? viewport.width / viewport.height : DEFAULT_STAGE_ASPECT}
           stagedTokens={stagedTokens}
           addToken={addToken}
           updateToken={updateToken}
+          putOnBoard={putOnBoard}
           removeToken={removeToken}
           toggleTorch={toggleTorch}
           now={now}
@@ -476,7 +519,7 @@ export function ScenePage() {
       )}
 
       {/* Palco */}
-      <div ref={wrapRef} className="relative flex flex-1 items-center justify-center overflow-hidden bg-[color:var(--surface-board)] p-2">
+      <div ref={setWrapEl} className="relative flex flex-1 items-center justify-center overflow-hidden bg-[color:var(--surface-board)] p-2">
         {waiting ? (
           <div className="flex flex-col items-center gap-3 text-center">
             <p className="hero-title font-serif text-3xl font-extrabold">Preparando a cena</p>
@@ -489,7 +532,7 @@ export function ScenePage() {
             onPointerMove={onStagePointerMove}
             onPointerUp={onStagePointerUp}
             onPointerLeave={onStagePointerUp}
-            className="relative overflow-hidden rounded-xl border border-[color:var(--gold-deep)] shadow-[0_10px_40px_rgba(0,0,0,0.6)]"
+            className="relative overflow-hidden rounded-sm border border-[color:var(--line-strong)]"
             style={{ width: stage.width || '100%', height: stage.height || 300, touchAction: 'none' }}
           >
             {/* 1. Mapa */}
@@ -506,10 +549,10 @@ export function ScenePage() {
             {/* 2. Grade */}
             {scene.showGrid && (
               <div
-                className="pointer-events-none absolute inset-0 z-[2] opacity-30"
+                className="pointer-events-none absolute inset-0 z-[2]"
                 style={{
                   backgroundImage:
-                    'linear-gradient(to right, rgba(217,164,65,0.5) 1px, transparent 1px), linear-gradient(to bottom, rgba(217,164,65,0.5) 1px, transparent 1px)',
+                    'linear-gradient(to right, rgba(255,255,255,0.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.16) 1px, transparent 1px)',
                   backgroundSize: `${100 / columns}% ${(100 * aspect) / columns}%`,
                 }}
               />
@@ -534,14 +577,14 @@ export function ScenePage() {
                 >
                   <div
                     className={`relative aspect-square overflow-hidden rounded-full border-2 ${
-                      isActive ? 'animate-ember border-[color:var(--gold-bright)]' : 'border-[color:var(--gold-deep)]'
-                    } ${t.kind === 'boss' ? 'ring-2 ring-red-500/70' : ''}`}
+                      isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-white/70'
+                    } ${t.kind === 'boss' ? 'ring-2 ring-red-500/80' : ''}`}
                     style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
                   >
                     {t.imageUrl ? (
                       <img src={t.imageUrl} alt={t.label} draggable={false} className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-raised)] text-[color:var(--gold-bright)]">
+                      <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-raised)] font-display text-white">
                         <span style={{ fontSize: `${Math.max(10, width * stage.width * 0.35)}px` }}>{t.label.slice(0, 2).toUpperCase()}</span>
                       </div>
                     )}
@@ -586,8 +629,8 @@ export function ScenePage() {
                 className="pointer-events-none absolute z-[7] -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
               >
-                <div className="h-8 w-8 animate-ping rounded-full border-2 border-[color:var(--ember-bright)]" />
-                <p className="mt-0.5 text-center text-[10px] text-[color:var(--gold-bright)]">{p.label}</p>
+                <div className="h-8 w-8 animate-ping rounded-full border-2 border-[color:var(--orange)]" />
+                <p className="mt-0.5 text-center font-display text-[10px] uppercase tracking-wide text-white">{p.label}</p>
               </div>
             ))}
             {ruler && (
@@ -597,11 +640,11 @@ export function ScenePage() {
                   y1={`${ruler.from.y * 100}%`}
                   x2={`${ruler.to.x * 100}%`}
                   y2={`${ruler.to.y * 100}%`}
-                  stroke="var(--gold-bright)"
+                  stroke="var(--orange)"
                   strokeWidth={2}
                   strokeDasharray="6 4"
                 />
-                <text x={`${ruler.to.x * 100}%`} y={`${ruler.to.y * 100 - 2}%`} fill="var(--gold-bright)" fontSize="14" fontWeight="700">
+                <text x={`${ruler.to.x * 100}%`} y={`${ruler.to.y * 100 - 2}%`} fill="#ffffff" fontSize="14" fontWeight="700">
                   {distanceInSquares(ruler.from, ruler.to, columns, aspect).toFixed(1)} quadrados
                 </text>
               </svg>
@@ -623,9 +666,11 @@ function GMPanel({
   npcs,
   library,
   tableId,
+  viewportAspect,
   stagedTokens,
   addToken,
   updateToken,
+  putOnBoard,
   removeToken,
   toggleTorch,
   now,
@@ -637,9 +682,11 @@ function GMPanel({
   npcs: NPC[]
   library: SceneLibraryItem[]
   tableId: string
+  viewportAspect: number
   stagedTokens: SceneToken[]
   addToken: (t: Partial<SceneToken> & { label: string; kind: SceneTokenKind }) => void
   updateToken: (id: string, patch: Partial<SceneToken>) => void
+  putOnBoard: (id: string) => void
   removeToken: (id: string) => void
   toggleTorch: (c: Character) => void
   now: number
@@ -653,14 +700,59 @@ function GMPanel({
 
   const map = scene.map ?? EMPTY_MAP
 
+  // O input acompanha o que a cena tem de fato (ex: mapa escolhido na
+  // biblioteca), desde que o mestre não esteja no meio de uma digitação.
+  const [touchedUrl, setTouchedUrl] = useState(false)
+  useEffect(() => {
+    if (!touchedUrl) setMapUrl(scene.backgroundUrl)
+  }, [scene.backgroundUrl, touchedUrl])
+
+  /**
+   * Usar um mapa é também decidir o formato do palco: lemos o tamanho natural
+   * da imagem e adotamos a proporção dela. Sem isso o palco ficava sempre em
+   * 16:10 e sobrava tarja preta em volta de qualquer mapa de outro formato.
+   */
+  function useMap(url: string) {
+    const clean = url.trim()
+    if (!clean) {
+      persist({ ...scene, backgroundUrl: '' })
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      const aspect = img.naturalWidth / img.naturalHeight
+      persist({
+        ...scene,
+        backgroundUrl: clean,
+        map: { ...map, fit: 'cover', aspect: Number.isFinite(aspect) && aspect > 0.1 && aspect < 10 ? aspect : map.aspect },
+      })
+    }
+    img.onerror = () => persist({ ...scene, backgroundUrl: clean })
+    img.src = clean
+  }
+
   return (
     <Card className="z-10 flex flex-col gap-3 rounded-none border-x-0 p-3">
       {panel === 'mapa' && (
         <div className="flex flex-col gap-2">
           <SectionTitle>Mapa</SectionTitle>
           <div className="flex flex-wrap items-center gap-2">
-            <Input placeholder="URL da imagem do mapa" value={mapUrl} onChange={(e) => setMapUrl(e.target.value)} className="w-80" />
-            <Button variant="primary" onClick={() => persist({ ...scene, backgroundUrl: mapUrl.trim() })}>
+            <Input
+              placeholder="URL da imagem do mapa"
+              value={mapUrl}
+              onChange={(e) => {
+                setTouchedUrl(true)
+                setMapUrl(e.target.value)
+              }}
+              className="w-80"
+            />
+            <Button
+              variant="primary"
+              onClick={() => {
+                useMap(mapUrl)
+                setTouchedUrl(false)
+              }}
+            >
               Usar mapa
             </Button>
             {scene.backgroundUrl && (
@@ -732,7 +824,11 @@ function GMPanel({
                 min={MIN_GRID_COLUMNS}
                 max={MAX_GRID_COLUMNS}
                 value={scene.gridColumns ?? 20}
-                onChange={(e) => persist({ ...scene, gridColumns: Number(e.target.value) })}
+                onChange={(e) => {
+                  const n = Number(e.target.value)
+                  if (!Number.isFinite(n) || n < MIN_GRID_COLUMNS) return
+                  persist({ ...scene, gridColumns: Math.min(MAX_GRID_COLUMNS, Math.round(n)) })
+                }}
                 className="w-20"
               />
             </label>
@@ -744,15 +840,25 @@ function GMPanel({
               <option value="contain">mapa inteiro</option>
               <option value="cover">preencher</option>
             </Select>
+            <Button variant="secondary" onClick={() => persist({ ...scene, map: { ...map, aspect: viewportAspect } })}>
+              Ajustar palco à minha tela
+            </Button>
             <Select
-              value={String(scene.map?.aspect ?? 1.6)}
-              onChange={(e) => persist({ ...scene, map: { ...map, aspect: Number(e.target.value) } })}
-              className="w-28"
+              value={PRESET_ASPECTS.some((a) => Math.abs(a.value - (scene.map?.aspect ?? DEFAULT_STAGE_ASPECT)) < 0.005)
+                ? String(scene.map?.aspect ?? DEFAULT_STAGE_ASPECT)
+                : 'custom'}
+              onChange={(e) => {
+                if (e.target.value === 'custom') return
+                persist({ ...scene, map: { ...map, aspect: Number(e.target.value) } })
+              }}
+              className="w-36"
             >
-              <option value="1.6">16:10</option>
-              <option value="1.7778">16:9</option>
-              <option value="1.3333">4:3</option>
-              <option value="1">quadrado</option>
+              {PRESET_ASPECTS.map((a) => (
+                <option key={a.label} value={String(a.value)}>
+                  {a.label}
+                </option>
+              ))}
+              <option value="custom">sob medida</option>
             </Select>
             <Button variant="ghost" onClick={() => persist({ ...scene, map: EMPTY_MAP })}>
               reiniciar enquadramento
@@ -836,7 +942,7 @@ function GMPanel({
               {stagedTokens.map((t) => (
                 <div key={t.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
                   <span className="text-orange-100">{t.label}</span>
-                  <Button variant="good" className="px-2 py-0.5 text-[11px]" onClick={() => updateToken(t.id, { onBoard: true })}>
+                  <Button variant="good" className="px-2 py-0.5 text-[11px]" onClick={() => putOnBoard(t.id)}>
                     pôr no mapa
                   </Button>
                   <button className="text-[11px] text-red-400 hover:text-red-200" onClick={() => removeToken(t.id)}>

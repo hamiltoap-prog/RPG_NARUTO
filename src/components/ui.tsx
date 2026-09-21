@@ -2,12 +2,12 @@ import { useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, PropsWithChildren, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
-  return <div className={`plaque rounded-xl ${className}`}>{children}</div>
+  return <div className={`plaque rounded-lg ${className}`}>{children}</div>
 }
 
 export function SectionTitle({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
   return (
-    <h2 className={`rule-gold font-serif text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--gold)] ${className}`}>
+    <h2 className={`rule-gold font-display text-xs font-semibold uppercase tracking-[0.22em] text-white ${className}`}>
       {children}
     </h2>
   )
@@ -15,15 +15,23 @@ export function SectionTitle({ children, className = '' }: PropsWithChildren<{ c
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'good'
 
+/* Chapas de cor sólida. A hierarquia vem da cor de fundo, não de relevo:
+ * laranja é a ação principal, o resto é preto com fio. */
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'btn-carved bg-[linear-gradient(180deg,var(--ember-bright)_0%,var(--ember)_45%,var(--ember-deep)_100%)] text-[#fff6e9] border-[color:var(--gold-deep)]',
+    'btn-carved bg-[color:var(--orange)] text-[color:var(--orange-ink)] border-[color:var(--orange)] hover:bg-[color:var(--orange-hot)] hover:border-[color:var(--orange-hot)]',
   secondary:
-    'btn-carved bg-[linear-gradient(180deg,var(--surface-raised)_0%,var(--surface-tab)_100%)] text-orange-100',
-  ghost: 'bg-transparent text-orange-200 hover:bg-white/5 transition',
-  danger: 'btn-carved bg-[linear-gradient(180deg,#a3321f_0%,#7a2114_55%,#4d130b_100%)] text-red-50',
-  good: 'btn-carved bg-[linear-gradient(180deg,#3f8f5a_0%,#2c6b42_55%,#194728_100%)] text-emerald-50',
+    'btn-carved bg-[color:var(--surface-raised)] text-white hover:bg-[color:var(--surface-card-hover)] hover:border-[color:var(--line-strong)]',
+  ghost: 'border border-transparent text-orange-300 transition hover:border-[color:var(--line)] hover:text-white',
+  danger: 'btn-carved bg-[#2a0f0c] text-red-200 border-[#5c1b14] hover:bg-[#3a1511] hover:text-red-100',
+  good: 'btn-carved bg-[#0c2117] text-emerald-200 border-[#1d4d36] hover:bg-[#123024] hover:text-emerald-100',
 }
+
+/* Desligado é uma chapa neutra, nunca um laranja lavado — que virava marrom
+ * com texto escuro por cima. O `hover` também precisa ser desarmado: um botão
+ * desabilitado continua casando com `:hover` no CSS. */
+const disabledClasses =
+  'disabled:cursor-not-allowed disabled:border-[color:var(--line)] disabled:bg-[color:var(--surface-well)] disabled:text-orange-400/35 disabled:hover:border-[color:var(--line)] disabled:hover:bg-[color:var(--surface-well)] disabled:hover:text-orange-400/35'
 
 export function Button({
   variant = 'secondary',
@@ -32,14 +40,14 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   return (
     <button
-      className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold tracking-wide disabled:cursor-not-allowed disabled:opacity-40 disabled:saturate-50 ${variantClasses[variant]} ${className}`}
+      className={`whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-semibold ${variantClasses[variant]} ${disabledClasses} ${className}`}
       {...props}
     />
   )
 }
 
 const fieldClasses =
-  'w-full rounded-lg border border-[color:var(--gold-dark)] bg-[color:var(--surface-well)] px-3 py-1.5 text-sm text-orange-100 shadow-[inset_0_2px_5px_rgba(0,0,0,0.55)] outline-none transition placeholder:text-orange-400/40 focus:border-[color:var(--gold)] focus:shadow-[inset_0_2px_5px_rgba(0,0,0,0.55),0_0_0_2px_rgba(217,164,65,0.18)]'
+  'w-full rounded-sm border border-[color:var(--line)] bg-[color:var(--surface-well)] px-3 py-1.5 text-sm text-white outline-none transition placeholder:text-orange-400/35 focus:border-[color:var(--orange)]'
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${fieldClasses} ${props.className ?? ''}`} />
@@ -55,14 +63,14 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Badge({ children, tone = 'default' }: PropsWithChildren<{ tone?: 'default' | 'good' | 'bad' | 'warn' }>) {
   const toneClasses = {
-    default: 'border-[color:var(--gold-deep)] bg-[#2a1a0c] text-[color:var(--gold-bright)]',
-    good: 'border-emerald-800/70 bg-emerald-950/60 text-emerald-200',
-    bad: 'border-red-900/70 bg-red-950/60 text-red-200',
-    warn: 'border-amber-800/70 bg-amber-950/60 text-amber-200',
+    default: 'border-[color:var(--line-strong)] text-white',
+    good: 'border-emerald-700/60 text-emerald-300',
+    bad: 'border-red-800/70 text-red-300',
+    warn: 'border-[color:var(--orange)] text-[color:var(--orange)]',
   }[tone]
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] ${toneClasses}`}
+      className={`inline-flex items-center rounded-sm border bg-transparent px-2 py-0.5 font-display text-[11px] font-medium uppercase tracking-[0.1em] ${toneClasses}`}
     >
       {children}
     </span>
@@ -78,7 +86,7 @@ export function TabChip({
   return (
     <button
       data-active={active}
-      className={`tab-chip rounded-full px-3 py-1.5 text-sm font-semibold ${className}`}
+      className={`tab-chip rounded-sm px-3 py-1.5 font-display text-sm uppercase tracking-[0.08em] ${className}`}
       {...props}
     />
   )
@@ -95,7 +103,7 @@ export function Avatar({ url, name, size = 40 }: { url?: string; name: string; s
   const showImage = Boolean(url) && !broken
   return (
     <div
-      className="portrait-ring flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[color:var(--surface-raised)] font-serif font-bold text-[color:var(--gold-bright)]"
+      className="portrait-ring flex shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[color:var(--surface-raised)] font-display font-semibold text-white"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {showImage ? (

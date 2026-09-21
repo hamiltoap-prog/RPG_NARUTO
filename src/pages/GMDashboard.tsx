@@ -127,7 +127,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             {characters.length === 0 && <p className="text-sm text-orange-300/50">Nenhum jogador entrou ainda. Compartilhe o código da mesa!</p>}
           </div>
           {selected && (
-            <div className="rounded-xl border border-orange-800/40">
+            <div className="rounded-sm border border-[color:var(--line)]">
               <div className="flex items-center justify-between px-4 pt-3">
                 <p className="text-xs uppercase tracking-wide text-orange-400/60">
                   Controlando ficha como Mestre — todas as ações abaixo aplicam direto em {selected.name}, sem fila.

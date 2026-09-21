@@ -70,10 +70,10 @@ export function DieFace({
     const pips = PIP_LAYOUT[Math.min(6, Math.max(1, value))] ?? PIP_LAYOUT[1]
     return (
       <div
-        className={`grid grid-cols-3 grid-rows-3 gap-0.5 rounded-xl border-2 p-1.5 shadow-lg transition ${
+        className={`grid grid-cols-3 grid-rows-3 gap-0.5 rounded-sm border-2 p-1.5 transition ${
           rolling
-            ? `border-[color:var(--gold-deep)] bg-[color:var(--surface-raised)] ${tumbling}`
-            : 'border-[color:var(--gold-deep)] bg-gradient-to-br from-[color:var(--gold-bright)] to-[color:var(--gold)]'
+            ? `border-[color:var(--orange)] bg-[color:var(--surface-raised)] ${tumbling}`
+            : 'border-white bg-white'
         }`}
         style={{ width: size, height: size, animationDelay: `${delay}ms` }}
         title={`d6: ${value}`}
@@ -85,7 +85,7 @@ export function DieFace({
           return (
             <span
               key={i}
-              className={`h-full w-full rounded-full ${on ? (rolling ? 'bg-[color:var(--gold)]/60' : 'bg-[color:var(--die-face)]') : ''}`}
+              className={`h-full w-full rounded-full ${on ? (rolling ? 'bg-[color:var(--orange)]' : 'bg-black') : ''}`}
             />
           )
         })}
@@ -105,8 +105,8 @@ export function DieFace({
       <svg viewBox="0 0 100 100" width={size} height={size}>
         <polygon
           points={points}
-          fill={rolling ? 'var(--surface-raised)' : 'var(--gold-bright)'}
-          stroke="var(--gold-deep)"
+          fill={rolling ? 'var(--surface-raised)' : '#ffffff'}
+          stroke={rolling ? 'var(--orange)' : '#ffffff'}
           strokeWidth={5}
           strokeLinejoin="round"
         />
@@ -116,7 +116,7 @@ export function DieFace({
           textAnchor="middle"
           fontSize={value > 99 ? 32 : 40}
           fontWeight="700"
-          fill={rolling ? 'var(--gold)' : '#1b1205'}
+          fill={rolling ? 'var(--orange)' : '#000000'}
           fontFamily="ui-sans-serif, system-ui, sans-serif"
         >
           {value}

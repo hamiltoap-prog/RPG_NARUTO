@@ -69,8 +69,8 @@ export function DiceOverlay({ tableId }: { tableId: string }) {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-      <div className="plaque animate-roll-in pointer-events-auto flex max-w-md flex-col items-center gap-2 rounded-2xl px-5 py-4 backdrop-blur">
-        <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--gold)]">
+      <div className="plaque animate-roll-in pointer-events-auto flex max-w-md flex-col items-center gap-2 rounded-sm px-5 py-4 backdrop-blur">
+        <p className="font-display text-xs uppercase tracking-[0.18em] text-[color:var(--orange)]">
           {current.actorName} · {current.label}
         </p>
         <div className="flex max-w-[22rem] flex-wrap justify-center gap-2">

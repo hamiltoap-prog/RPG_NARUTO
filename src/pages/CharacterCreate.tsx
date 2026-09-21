@@ -179,12 +179,12 @@ export function CharacterCreate({
           {STEPS.map((label, i) => (
             <span
               key={label}
-              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+              className={`rounded-sm border px-2.5 py-1 font-display text-xs uppercase tracking-[0.08em] ${
                 i === step
-                  ? 'border-[color:var(--gold)] bg-[linear-gradient(180deg,var(--ember-bright)_0%,var(--ember)_45%,var(--ember-deep)_100%)] text-[#fff6e9] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]'
+                  ? 'border-[color:var(--orange)] bg-[color:var(--orange)] font-semibold text-[color:var(--orange-ink)]'
                   : i < step
-                    ? 'border-emerald-800/70 bg-emerald-950/60 text-emerald-200'
-                    : 'border-[color:var(--gold-dark)] bg-[color:var(--surface-tab)] text-orange-300/50'
+                    ? 'border-emerald-700/60 text-emerald-300'
+                    : 'border-[color:var(--line)] text-orange-300/50'
               }`}
             >
               {i + 1}. {label}
