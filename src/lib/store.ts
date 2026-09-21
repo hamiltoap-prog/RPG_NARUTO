@@ -21,6 +21,7 @@ import type {
   Clan,
   ChakraGift,
   JutsuCast,
+  SoundTrack,
   ShopItem,
   GMRoll,
   GameTable,
@@ -158,6 +159,7 @@ const TABLE_SUBCOLLECTIONS = [
   'shop',
   'chakraGifts',
   'jutsuCasts',
+  'sound',
 ]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
@@ -776,6 +778,28 @@ export async function applyJutsuCast(
 
 export async function denyJutsuCast(tableId: string, castId: string, gmName: string, reason: string) {
   await updateDoc(doc(jutsuCastsCol(tableId), castId), stripUndefined({ status: 'denied', resolvedBy: gmName, deniedReason: reason }))
+}
+
+/* ---------------------------------------------------------------------------
+ * Mesa de som: a trilha que o mestre guardou. Todos leem (o player de cada um
+ * precisa saber o que tocar), só o mestre escreve.
+ * ------------------------------------------------------------------------- */
+
+export function soundCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'sound')
+}
+
+export async function saveSoundTrack(tableId: string, track: SoundTrack) {
+  await setDoc(doc(soundCol(tableId), track.id), stripUndefined(track))
+}
+
+export async function deleteSoundTrack(tableId: string, id: string) {
+  await deleteDoc(doc(soundCol(tableId), id))
+}
+
+export function listenSoundTracks(tableId: string, cb: (tracks: SoundTrack[]) => void) {
+  const q = query(soundCol(tableId), orderBy('createdAt', 'asc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as SoundTrack)), defaultOnError('mesa de som'))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {

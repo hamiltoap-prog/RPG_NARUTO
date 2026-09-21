@@ -337,6 +337,8 @@ export interface GameTable {
   /** Quando ligado, cada jogador arrasta a peça do próprio personagem na tela
    * de jogo. As peças de NPCs, inimigos e chefes continuam só com o mestre. */
   playersMoveTokens?: boolean
+  /** Faixa no ar para a mesa inteira. */
+  audio?: TableAudio
   /** Loja aberta ao grupo. Fechada, some da ficha. */
   shopOpen?: boolean
   /** Se o catálogo de equipamento do manual está à venda junto com os itens
@@ -724,6 +726,45 @@ export interface JutsuCast {
   resolvedBy?: string
   resultSummary?: string
   deniedReason?: string
+}
+
+/* ---------------------------------------------------------------------------
+ * Mesa de som
+ *
+ * A faixa toca do YouTube, no navegador de cada um. O documento da mesa
+ * guarda só o que está no ar e desde quando — assim quem chega no meio entra
+ * no ponto certo em vez de começar do zero.
+ * ------------------------------------------------------------------------- */
+
+export type SoundCategory = 'ambiente' | 'clima' | 'combate'
+
+export const SOUND_CATEGORY_LABELS: Record<SoundCategory, string> = {
+  ambiente: 'Ambientação',
+  clima: 'Clima',
+  combate: 'Combate',
+}
+
+export interface SoundTrack {
+  id: string
+  tableId: string
+  category: SoundCategory
+  label: string
+  /** Link do YouTube como o mestre colou; o id é extraído na hora de tocar. */
+  url: string
+  createdAt: number
+}
+
+/** O que está tocando agora, para todo mundo. */
+export interface TableAudio {
+  /** Id do vídeo no YouTube. Vazio = silêncio. */
+  videoId: string
+  label: string
+  /** Quando começou (epoch ms) — é o que deixa a mesa em sincronia. */
+  startedAt: number
+  playing: boolean
+  loop: boolean
+  /** 0 a 100. */
+  volume: number
 }
 
 export interface Mission {

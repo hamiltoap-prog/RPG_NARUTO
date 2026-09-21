@@ -9,6 +9,7 @@ import { CharacterCreate } from './CharacterCreate'
 import { BestiaryPanel } from '../components/BestiaryPanel'
 import { ClanManager } from '../components/ClanManager'
 import { ItemForge } from '../components/ItemForge'
+import { SoundBoard } from '../components/TableSound'
 import { ChakraGiftPanel } from '../components/ChakraGiftPanel'
 import { JutsuCastQueue } from '../components/JutsuCastPanel'
 import { GMRoller } from '../components/GMRoller'
@@ -30,7 +31,7 @@ import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 'som' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
@@ -108,6 +109,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['bestiario', 'Bestiário'],
             ['clas', 'Clãs'],
             ['loja', 'Loja'],
+            ['som', 'Som'],
             ['missoes', `Missões (${missions.length})`],
             ['rolagens', 'Rolagens'],
             ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls + pendingGifts + pendingCasts})`],
@@ -220,6 +222,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
       {tab === 'clas' && <ClanManager table={table} />}
 
       {tab === 'loja' && <ItemForge table={table} />}
+
+      {tab === 'som' && <SoundBoard table={table} />}
 
       {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} />}
 

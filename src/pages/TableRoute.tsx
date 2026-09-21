@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { Button, Card, Input } from '../components/ui'
 import { DiceOverlay } from '../components/DiceOverlay'
+import { TableSoundPlayer } from '../components/TableSound'
 import { useAuthUid } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
 import { getStoredName, rememberTable, setStoredName } from '../lib/localMemory'
@@ -83,41 +85,47 @@ export function TableRoute() {
 
   // A animação de dados acompanha a mesa inteira: quem estiver nela vê a
   // rolagem de qualquer um, seja o mestre ou um jogador.
-  const diceOverlay = <DiceOverlay tableId={table.id} />
+  const diceOverlay = (
+    <>
+      <DiceOverlay tableId={table.id} />
+      {/* O som da mesa acompanha quem estiver nela, mestre ou jogador. */}
+      <TableSoundPlayer table={table} />
+    </>
+  )
 
-  if (isGM) {
+  /** Os dados e o som valem para quem estiver na mesa, em qualquer tela dela
+   * — inclusive na entrada e na criação de personagem, que também fazem parte
+   * da sessão. */
+  function naMesa(conteudo: ReactNode) {
     return (
       <>
         {diceOverlay}
-        <GMDashboard table={table} />
+        {conteudo}
       </>
     )
   }
 
+  if (isGM) return naMesa(<GMDashboard table={table} />)
+
   if (!name) {
-    return (
+    return naMesa(
       <NamePrompt
         tableName={table.name}
         onSubmit={(n) => {
           setStoredName(tableId, n)
           setName(n)
         }}
-      />
+      />,
     )
   }
 
   if (myCharacter === undefined) {
-    return <p className="p-8 text-center text-orange-300/60">Procurando seu personagem...</p>
+    return naMesa(<p className="p-8 text-center text-orange-300/60">Procurando seu personagem...</p>)
   }
   if (myCharacter === null) {
-    return <CharacterCreate table={table} uid={uid} characterName={name} onCreated={setMyCharacter} />
+    return naMesa(<CharacterCreate table={table} uid={uid} characterName={name} onCreated={setMyCharacter} />)
   }
-  return (
-    <>
-      {diceOverlay}
-      <PlayerView table={table} characterId={myCharacter.id} />
-    </>
-  )
+  return naMesa(<PlayerView table={table} characterId={myCharacter.id} />)
 }
 
 function NamePrompt({ tableName, onSubmit }: { tableName: string; onSubmit: (name: string) => void }) {
