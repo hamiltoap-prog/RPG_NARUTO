@@ -1,7 +1,7 @@
 import { CONDITIONS } from '../data/conditions'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { applyCriticalMultiplier, rollD20, rollDice } from './dice'
-import type { AttributeKey, Character, JutsuCatalogEntry, NPC } from '../types'
+import type { AttributeKey, Character, JutsuCatalogEntry, Modifiers, NPC } from '../types'
 
 /**
  * Lançar um jutsu sem fazer conta na mão.
@@ -110,8 +110,32 @@ export function effectiveResistance(base: number, conditions: string[] = []): nu
 
 export type CastTarget = (Character | NPC) & { conditions?: string[] }
 
+/**
+ * Quem conjura pode ser um personagem ou uma criatura. O que a conta precisa
+ * é sempre o mesmo: modificadores, bônus de proficiência e chakra.
+ */
+export interface Caster {
+  id: string
+  name: string
+  modifiers: Modifiers
+  proficiencyBonus: number
+  chakra: { current: number; max: number }
+}
+
+/** Empresta a um NPC a forma que a conta de lançamento espera. */
+export function npcAsCaster(npc: NPC): Caster {
+  const zero: Modifiers = { strength: 0, dexterity: 0, constitution: 0, intelligence: 0, wisdom: 0, charisma: 0 }
+  return {
+    id: npc.id,
+    name: npc.name,
+    modifiers: npc.modifiers ?? zero,
+    proficiencyBonus: npc.proficiencyBonus ?? 3,
+    chakra: npc.chakra ?? { current: 0, max: 0 },
+  }
+}
+
 export interface CastInput {
-  caster: Character
+  caster: Caster
   jutsuName: string
   classification: string
   mode: CastMode
@@ -165,7 +189,8 @@ export function resolveCast(input: CastInput): CastOutcome {
 
   // ---- Resistência: quem rola é o ALVO, contra o PR dele mesmo.
   if (input.mode === 'save') {
-    const alvoMod = target && 'modifiers' in target && input.saveAttribute ? target.modifiers[input.saveAttribute] : 0
+    // NPC pode ou não ter modificadores; sem eles, resiste no d20 seco.
+    const alvoMod = target?.modifiers && input.saveAttribute ? target.modifiers[input.saveAttribute] : 0
     const pr = effectiveResistance(target?.resistancePoints ?? 0, input.targetConditions)
     const rolagem = rollD20(alvoMod, false, 0)
     const resistiu = rolagem.total >= pr

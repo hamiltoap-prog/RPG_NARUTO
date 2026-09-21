@@ -423,11 +423,36 @@ input[type='range'] {
   border-top: 1px solid var(--line);
   margin: 1.2rem 0;
 }
+/* Tabela larga rola sozinha em vez de espremer as colunas ou estourar a
+ * página. O markdown gera a tabela direto, sem um invólucro onde pôr classe —
+ * então a rolagem vai na própria tabela. */
 .regras table {
-  width: 100%;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 0.8rem 0;
   font-size: 0.8125rem;
+}
+.regras table thead,
+.regras table tbody {
+  width: max-content;
+  min-width: 100%;
+}
+.regras td,
+.regras th {
+  min-width: 9rem;
+}
+@media (min-width: 640px) {
+  .regras td,
+  .regras th {
+    min-width: 0;
+  }
+}
+/* Palavra longa demais quebra em vez de estourar — mas só ela, e só quando
+ * não couber: `anywhere` partia palavras comuns no meio ("al/teração"). */
+.regras {
+  overflow-wrap: break-word;
 }
 .regras th,
 .regras td {

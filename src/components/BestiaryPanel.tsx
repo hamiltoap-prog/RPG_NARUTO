@@ -4,7 +4,7 @@ import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from '../lib/id'
 import { createNPC, deleteBestiaryEntry, listenBestiary, saveBestiaryEntry } from '../lib/store'
 import { CREATURE_KIND_LABELS, SUMMON_RANKS } from '../types'
-import type { BestiaryEntry, CreatureKind, GameTable, SummonCreature } from '../types'
+import type { BestiaryEntry, CreatureKind, GameTable, NpcAttack, SummonCreature } from '../types'
 
 type Aba = 'minhas' | 'manual'
 
@@ -71,8 +71,36 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
     })
   }
 
-  /** Põe a criatura na mesa: vira NPC, e aí o grupo passa a vê-la. */
+  /**
+   * Nomes das armas naturais, que no manual vêm como títulos soltos antes da
+   * descrição ("Garras", "Mordida"). É o suficiente para montar um golpe
+   * pronto e o mestre não precisar digitar tudo de novo.
+   */
+  function armasDe(texto: string): string[] {
+    return texto
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && l.length < 28 && !/[.:]$/.test(l) && !/^(ataque|dano|alcance)/i.test(l))
+      .slice(0, 3)
+  }
+
+  /**
+   * Põe a criatura na mesa: vira NPC, e aí o grupo passa a vê-la.
+   *
+   * Leva os golpes prontos junto — sem isso o ataque do bicho ficava só como
+   * texto e o mestre fazia a conta na mão toda vez. O dado de dano parte do
+   * Dado de Vida da tribo, que é o que o manual usa como "Dado de Dano" das
+   * armas naturais; o mestre ajusta se a mesa entender diferente.
+   */
   async function porNaMesa(e: BestiaryEntry) {
+    const fonte = e.sourceId ? SUMMON_BESTIARY.find((c) => c.id === e.sourceId) : undefined
+    const dadoDeDano = fonte?.hitDie?.replace(/^d/, '1d') ?? '1d6'
+    const golpes: NpcAttack[] = armasDe(e.attacksText).map((nome) => ({
+      id: newId(),
+      name: nome,
+      bonus: e.attackModifier,
+      damage: dadoDeDano,
+    }))
     await createNPC(table.id, {
       tableId: table.id,
       name: e.name,
@@ -83,8 +111,14 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
       notes: e.notes,
       visible: false,
       createdAt: Date.now(),
+      imageUrl: e.imageUrl,
+      attacks: golpes.length > 0 ? golpes : [{ id: newId(), name: 'Ataque', bonus: e.attackModifier, damage: dadoDeDano }],
+      proficiencyBonus: 3,
     })
-    setAviso(`${e.name} entrou na mesa como NPC (oculto — marque "visível" na aba NPCs).`)
+    setAviso(
+      `${e.name} entrou na mesa como NPC, oculto e com ${golpes.length || 1} golpe(s) pronto(s). ` +
+        'Marque "visível" na aba NPCs quando o grupo encontrar a criatura.',
+    )
   }
 
   return (

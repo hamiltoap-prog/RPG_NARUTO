@@ -107,7 +107,18 @@ function Capitulos() {
 
   return (
     <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[220px_1fr] lg:items-start">
-      <Card className="flex flex-col gap-1 p-2">
+      {/* Em tela estreita a lista de capítulos empurrava o texto para fora da
+          primeira tela — dez itens empilhados antes de uma linha de regra.
+          Vira um seletor; a lista volta quando há largura para ela. */}
+      <Select value={aberto} onChange={(e) => setAberto(e.target.value)} className="lg:hidden">
+        {SECOES.map((s) => (
+          <option key={s.caminho} value={s.caminho}>
+            {s.titulo}
+          </option>
+        ))}
+      </Select>
+
+      <Card className="hidden flex-col gap-1 p-2 lg:flex">
         {SECOES.map((s) => (
           <button
             key={s.caminho}
@@ -122,7 +133,7 @@ function Capitulos() {
           </button>
         ))}
       </Card>
-      <Card className="p-4">
+      <Card className="min-w-0 p-3 sm:p-4">
         {carregando ? (
           <p className="text-sm text-orange-300/60">Abrindo o capítulo...</p>
         ) : (
@@ -160,7 +171,7 @@ function BuscaJutsus() {
           onChange={(e) => setBusca(e.target.value)}
           className="min-w-56 flex-1"
         />
-        <Select value={rank} onChange={(e) => setRank(e.target.value)} className="w-32">
+        <Select value={rank} onChange={(e) => setRank(e.target.value)} className="w-full sm:w-32">
           <option value="">Todo rank</option>
           {RANKS.map((r) => (
             <option key={r} value={r}>
@@ -168,7 +179,7 @@ function BuscaJutsus() {
             </option>
           ))}
         </Select>
-        <Select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-56">
+        <Select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="w-full sm:w-56">
           <option value="">Toda categoria</option>
           {categorias.map((c) => (
             <option key={c} value={c}>
@@ -195,12 +206,12 @@ function JutsuLinha({ j, aberto, onToggle }: { j: JutsuCatalogEntry; aberto: boo
   const el = jutsuElement(j)
   return (
     <Card className="p-3">
-      <button onClick={onToggle} className="flex w-full flex-wrap items-center gap-2 text-left">
-        <span className="font-display text-sm uppercase tracking-[0.06em] text-white">{j.name}</span>
+      <button onClick={onToggle} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left">
+        <span className="min-w-0 break-words font-display text-sm uppercase tracking-[0.06em] text-white">{j.name}</span>
         <Badge>Rank {normalizeRank(j.rank)}</Badge>
         {el && <Badge tone="warn">{el}</Badge>}
         {j.clanId && <Badge tone="bad">clã {j.clanId}</Badge>}
-        <span className="ml-auto text-xs text-orange-400/60">
+        <span className="basis-full text-xs text-orange-400/60 sm:ml-auto sm:basis-auto">
           {j.cost} · {j.castingTime}
         </span>
       </button>

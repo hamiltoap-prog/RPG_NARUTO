@@ -218,7 +218,15 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'combate' && <CombatTracker table={table} characters={characters} npcs={npcs} />}
 
-      {tab === 'npcs' && <NpcManager tableId={table.id} npcs={npcs} />}
+      {tab === 'npcs' && <NpcManager
+          tableId={table.id}
+          npcs={npcs}
+          npcCharacters={characters.filter((c) => c.isNPC)}
+          onOpenCharacter={(id) => {
+            setSelectedId(id)
+            setTab('personagens')
+          }}
+        />}
 
       {tab === 'missoes' && <MissionBoard tableId={table.id} missions={missions} asGM />}
 
@@ -232,7 +240,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'sobrevivencia' && <SurvivalPanel table={table} characters={characters} />}
 
-      {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} />}
+      {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} characters={characters} />}
 
       {tab === 'pedidos' && (
         <div className="flex flex-col gap-3">

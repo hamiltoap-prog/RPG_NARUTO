@@ -274,6 +274,17 @@ export interface Character {
  * mas o app deixa isso como texto livre pro mestre preencher conforme
  * julgar, seguindo a filosofia do próprio manual de "foco no raciocínio,
  * não nos dados"). */
+/** Um golpe pronto da criatura, para o mestre rolar em um clique. */
+export interface NpcAttack {
+  id: string
+  name: string
+  /** Bônus somado ao d20. */
+  bonus: number
+  damage: string
+  damageType?: string
+  note?: string
+}
+
 export interface NPC {
   id: string
   tableId: string
@@ -281,10 +292,23 @@ export interface NPC {
   armorClass: number
   hp: { current: number; max: number }
   resistancePoints: number
+  /** Descrição livre dos ataques — continua valendo para o que não couber
+   * nos ataques estruturados. */
   attacksText: string
   notes: string
   visible: boolean
   createdAt: number
+
+  imageUrl?: string
+  /** Modificadores, para a criatura resistir a jutsu como qualquer um. */
+  modifiers?: Modifiers
+  /** Bicho também gasta chakra quando usa jutsu. */
+  chakra?: { current: number; max: number }
+  proficiencyBonus?: number
+  /** Golpes prontos: nome, bônus e dano, para rolar sem digitar nada. */
+  attacks?: NpcAttack[]
+  /** Sim, alguns bichos usam jutsu — invocações de Rank C ou mais, sobretudo. */
+  jutsus?: Jutsu[]
 }
 
 /** Condição pegando em alguém durante o combate. */
