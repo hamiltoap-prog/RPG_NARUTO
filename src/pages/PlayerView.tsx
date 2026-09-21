@@ -220,6 +220,9 @@ function HeaderCard({
           <Link to={`/t/${tableCode}/mapa`}>
             <Button variant="secondary">🗺️ Tela de jogo</Button>
           </Link>
+          <Link to="/regras" target="_blank">
+            <Button variant="secondary">📖 Manual</Button>
+          </Link>
           {!character.isAlive && <Badge tone="bad">Caído</Badge>}
           <PendingNote fields={['imageUrl']} pending={pendingFields} />
         </div>

@@ -282,3 +282,98 @@ input[type='range'] {
 .animate-ember {
   animation: ember-pulse 1.8s ease-out infinite;
 }
+
+/* ---------------------------------------------------------------------------
+ * Texto do manual dentro do app
+ *
+ * O markdown das regras vira HTML, então a tipografia precisa vir do CSS —
+ * não há como pôr classe em cada parágrafo gerado.
+ * ------------------------------------------------------------------------- */
+.regras {
+  color: var(--color-orange-200);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+.regras h1,
+.regras h2,
+.regras h3,
+.regras h4 {
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 1.4rem 0 0.5rem;
+}
+.regras h1 {
+  font-size: 1.25rem;
+}
+.regras h2 {
+  font-size: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.35rem;
+}
+.regras h3,
+.regras h4 {
+  font-size: 0.8125rem;
+  color: var(--orange);
+}
+.regras h1:first-child,
+.regras h2:first-child {
+  margin-top: 0;
+}
+.regras p {
+  margin: 0.6rem 0;
+}
+.regras strong {
+  color: #ffffff;
+}
+.regras em {
+  color: var(--color-orange-300);
+}
+.regras ul,
+.regras ol {
+  margin: 0.6rem 0;
+  padding-left: 1.2rem;
+}
+.regras li {
+  margin: 0.25rem 0;
+}
+.regras code {
+  background: var(--surface-well);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--orange);
+}
+.regras hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.2rem 0;
+}
+.regras table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8rem 0;
+  font-size: 0.8125rem;
+}
+.regras th,
+.regras td {
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.regras th {
+  background: var(--surface-well);
+  color: #ffffff;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+}
+.regras blockquote {
+  border-left: 2px solid var(--orange);
+  margin: 0.8rem 0;
+  padding-left: 0.8rem;
+  color: var(--color-orange-300);
+}

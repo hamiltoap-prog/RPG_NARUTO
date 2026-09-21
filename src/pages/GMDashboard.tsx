@@ -86,6 +86,9 @@ export function GMDashboard({ table }: { table: GameTable }) {
           <Link to={`/t/${table.code}/mapa`}>
             <Button variant="secondary">🗺️ Tela de jogo</Button>
           </Link>
+          <Link to="/regras" target="_blank">
+            <Button variant="secondary">📖 Manual</Button>
+          </Link>
           <button onClick={copyCode} className="rounded-lg border border-orange-700/50 bg-orange-950/40 px-3 py-1.5 text-sm text-orange-100">
             Código da mesa: <b className="tracking-widest">{table.code}</b> {copied ? '✓ copiado' : '⧉'}
           </button>

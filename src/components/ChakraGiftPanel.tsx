@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select } from './ui'
-import { addLogEntry, approveChakraGift, denyChakraGift, listenPendingChakraGifts } from '../lib/store'
+import { addLogEntry, approveChakraGift, createChakraGift, denyChakraGift, listenMyChakraGifts, listenPendingChakraGifts } from '../lib/store'
 import type { ChakraGift, Character, GameTable } from '../types'
 
 /** Fila de doações de chakra esperando o mestre. */
@@ -108,9 +108,7 @@ export function ChakraGiftCard({
   const [aviso, setAviso] = useState('')
   const [meus, setMeus] = useState<ChakraGift[]>([])
 
-  useEffect(() => {
-    import('../lib/store').then((m) => m.listenMyChakraGifts(table.id, character.id, setMeus))
-  }, [table.id, character.id])
+  useEffect(() => listenMyChakraGifts(table.id, character.id, setMeus), [table.id, character.id])
 
   const possiveis = party.filter((c) => c.id !== character.id && !c.isNPC)
   const pendente = meus.find((g) => g.status === 'pending')
@@ -119,7 +117,6 @@ export function ChakraGiftCard({
   async function pedir() {
     const recebedor = possiveis.find((c) => c.id === alvo)
     if (!recebedor || quanto < 1) return
-    const { createChakraGift } = await import('../lib/store')
     await createChakraGift(table.id, {
       fromCharacterId: character.id,
       fromCharacterName: character.name,
