@@ -415,6 +415,10 @@ export function ScenePage() {
     .join(', ')
 
   const activeCombatant = table?.combatActive ? table.combatOrder[table.combatTurnIndex]?.ref : undefined
+  /** O que o combate sabe sobre cada peça — condições pegando e quem é chefe.
+   * Sem isso o mestre teria que olhar a lista de combate e o mapa ao mesmo
+   * tempo para lembrar quem está envenenado. */
+  const combatePorRef = new Map((table?.combatOrder ?? []).map((p) => [p.ref, p]))
   const livePings = pings.filter((p) => now - p.at < PING_LIFETIME_MS)
 
   if (!firebaseConfigured) return <p className="p-8 text-center text-amber-200">Firebase não configurado.</p>
@@ -575,10 +579,10 @@ export function ScenePage() {
               const width = tokenWidth(t, columns)
               const ref = t.refType === 'character' ? characters.find((c) => c.id === t.refId) : npcs.find((n) => n.id === t.refId)
               const hp = ref?.hp
-              const isActive =
-                activeCombatant && t.refType && t.refId
-                  ? activeCombatant === `${t.refType}:${t.refId}`
-                  : false
+              const combatRef = t.refType && t.refId ? `${t.refType}:${t.refId}` : undefined
+              const isActive = Boolean(activeCombatant && combatRef && activeCombatant === combatRef)
+              const naLuta = combatRef ? combatePorRef.get(combatRef) : undefined
+              const condicoes = naLuta?.conditions ?? []
               return (
                 <div
                   key={t.id}
@@ -590,7 +594,7 @@ export function ScenePage() {
                   <div
                     className={`relative aspect-square overflow-hidden rounded-full border-2 ${
                       isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-white/70'
-                    } ${t.kind === 'boss' ? 'ring-2 ring-red-500/80' : ''}`}
+                    } ${t.kind === 'boss' || naLuta?.boss ? 'ring-2 ring-red-500/80' : ''}`}
                     style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
                   >
                     {t.imageUrl ? (
@@ -601,6 +605,20 @@ export function ScenePage() {
                       </div>
                     )}
                   </div>
+                  {condicoes.length > 0 && (
+                    <div className="pointer-events-none absolute -top-1 left-1/2 flex -translate-x-1/2 -translate-y-full gap-0.5">
+                      {condicoes.slice(0, 4).map((c) => (
+                        <span
+                          key={c.name}
+                          title={`${c.name}${c.rounds !== undefined ? ` (${c.rounds} rodada(s))` : ''}`}
+                          className="rounded-sm border border-[color:var(--orange)] bg-black/85 px-1 font-display text-[9px] uppercase leading-tight text-[color:var(--orange)]"
+                        >
+                          {c.name.slice(0, 3)}
+                          {c.rounds !== undefined && c.rounds}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {hp && hp.max > 0 && (
                     <div className="mx-auto mt-0.5 h-1 w-4/5 overflow-hidden rounded-full bg-black/60">
                       <div

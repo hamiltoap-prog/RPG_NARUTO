@@ -284,10 +284,27 @@ export interface NPC {
   createdAt: number
 }
 
+/** Condição pegando em alguém durante o combate. */
+export interface ActiveCondition {
+  name: string
+  /**
+   * Rodadas restantes. Ausente = sem prazo: dura até o mestre tirar — que é
+   * o caso de boa parte das condições do manual ("até ser curado", "enquanto
+   * vê a fonte do medo").
+   */
+  rounds?: number
+}
+
 export interface CombatParticipant {
   ref: string // "character:<id>" ou "npc:<id>"
   name: string
   initiative: number
+  /** Surpreso não age no primeiro turno e vai para o fim da ordem
+   * (05-combate.md, "Surpresa"). */
+  surprised?: boolean
+  /** Chefe do encontro: destaque na lista e no mapa. */
+  boss?: boolean
+  conditions?: ActiveCondition[]
 }
 
 export interface GameTable {
@@ -305,6 +322,15 @@ export interface GameTable {
   combatActive: boolean
   combatOrder: CombatParticipant[]
   combatTurnIndex: number
+  /**
+   * Rodada atual — uma volta completa na ordem de iniciativa.
+   *
+   * O manual chama de "turno" a vez de cada um (6 segundos) e de "rodada" o
+   * ciclo de todos, dizendo "10 turnos = 1 rodada = 1 minuto" (isto é, uma
+   * mesa nominal de 10 participantes). Contamos a rodada como o ciclo de
+   * fato, que é o que serve para marcar duração de condição.
+   */
+  combatRound?: number
   /** Quando ligado, toda rolagem de jogador (teste, ataque, dano) precisa da
    * liberação do mestre antes do dado rolar. */
   requireRollApproval: boolean

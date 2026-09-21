@@ -46,19 +46,31 @@ export function Button({
   )
 }
 
-const fieldClasses =
-  'w-full rounded-sm border border-[color:var(--line)] bg-[color:var(--surface-well)] px-3 py-1.5 text-sm text-white outline-none transition placeholder:text-orange-400/35 focus:border-[color:var(--orange)]'
+const fieldBase =
+  'rounded-sm border border-[color:var(--line)] bg-[color:var(--surface-well)] px-3 py-1.5 text-sm text-white outline-none transition placeholder:text-orange-400/35 focus:border-[color:var(--orange)]'
+
+/**
+ * Campos ocupam a linha toda por padrão, mas um `w-` vindo de fora manda.
+ *
+ * Empilhar "w-full w-16" deixa a largura na mão da ordem em que o Tailwind
+ * gera o CSS, não na ordem das classes — e o campo estreito saía largo. Aqui
+ * o `w-full` só entra quando ninguém pediu largura.
+ */
+function fieldClasses(className?: string): string {
+  const pediuLargura = /(^|\s)(w-|min-w-|max-w-|flex-1|grow)/.test(className ?? '')
+  return `${pediuLargura ? '' : 'w-full '}${fieldBase} ${className ?? ''}`
+}
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`${fieldClasses} ${props.className ?? ''}`} />
+  return <input {...props} className={fieldClasses(props.className)} />
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={`${fieldClasses} ${props.className ?? ''}`} />
+  return <textarea {...props} className={fieldClasses(props.className)} />
 }
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={`${fieldClasses} ${props.className ?? ''}`} />
+  return <select {...props} className={fieldClasses(props.className)} />
 }
 
 export function Badge({ children, tone = 'default' }: PropsWithChildren<{ tone?: 'default' | 'good' | 'bad' | 'warn' }>) {

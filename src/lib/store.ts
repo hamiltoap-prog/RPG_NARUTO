@@ -201,16 +201,41 @@ export async function updateTable(tableId: string, patch: Partial<GameTable>) {
 }
 
 export async function startCombat(tableId: string, order: CombatParticipant[]) {
-  await updateTable(tableId, { combatActive: true, combatOrder: order, combatTurnIndex: 0 })
+  await updateTable(tableId, { combatActive: true, combatOrder: order, combatTurnIndex: 0, combatRound: 1 })
 }
 
 export async function endCombat(tableId: string) {
-  await updateTable(tableId, { combatActive: false, combatOrder: [], combatTurnIndex: 0 })
+  await updateTable(tableId, { combatActive: false, combatOrder: [], combatTurnIndex: 0, combatRound: 0 })
 }
 
-export async function advanceCombatTurn(tableId: string, currentIndex: number, participantCount: number) {
-  const nextIndex = participantCount > 0 ? (currentIndex + 1) % participantCount : 0
-  await updateTable(tableId, { combatTurnIndex: nextIndex })
+/** A ordem inteira, para mexer em condição, surpresa ou chefe sem reiniciar. */
+export async function setCombatOrder(tableId: string, order: CombatParticipant[]) {
+  await updateTable(tableId, { combatOrder: order })
+}
+
+/**
+ * Passa a vez. Ao voltar ao primeiro da lista, fecha a rodada — e é aí que as
+ * condições com prazo perdem uma rodada e as que zeram caem sozinhas.
+ */
+export async function advanceCombatTurn(tableId: string, table: GameTable) {
+  const total = table.combatOrder.length
+  if (total === 0) return
+  const nextIndex = (table.combatTurnIndex + 1) % total
+  const fechouRodada = nextIndex === 0
+  const round = (table.combatRound ?? 1) + (fechouRodada ? 1 : 0)
+
+  const order = fechouRodada
+    ? table.combatOrder.map((p) => ({
+        ...p,
+        // Passada a primeira rodada, ninguém segue surpreso.
+        surprised: false,
+        conditions: (p.conditions ?? [])
+          .map((c) => (c.rounds === undefined ? c : { ...c, rounds: c.rounds - 1 }))
+          .filter((c) => c.rounds === undefined || c.rounds > 0),
+      }))
+    : table.combatOrder
+
+  await updateTable(tableId, { combatTurnIndex: nextIndex, combatRound: round, combatOrder: order })
 }
 
 // ---------- Personagens ----------
