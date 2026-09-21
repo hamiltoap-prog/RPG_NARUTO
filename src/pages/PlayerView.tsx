@@ -13,7 +13,7 @@ import { JUTSU_CATALOG } from '../data/jutsus'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
-import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter } from '../lib/store'
+import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter, listenShop } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type {
   Armor,
@@ -29,6 +29,7 @@ import type {
   Mission,
   NPC,
   RequestableField,
+  ShopItem,
   Weapon,
   WeaponCatalogEntry,
 } from '../types'
@@ -51,6 +52,7 @@ export function PlayerView({
   const [pendingFields, setPendingFields] = useState<Set<RequestableField>>(new Set())
   const [noteDraft, setNoteDraft] = useState('')
   const [customClans, setCustomClans] = useState<Clan[]>([])
+  const [shopItems, setShopItems] = useState<ShopItem[]>([])
 
   useEffect(() => {
     setCharacter(undefined)
@@ -62,6 +64,7 @@ export function PlayerView({
 
   useEffect(() => listenCharacters(table.id, setAllCharacters), [table.id])
   useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
+  useEffect(() => listenShop(table.id, setShopItems), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
   useEffect(() => listenMissions(table.id, setMissions), [table.id])
 
@@ -108,7 +111,7 @@ export function PlayerView({
         />
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
-        <ShopCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <ShopCard character={character} table={table} shopItems={shopItems} onSubmit={submit} pendingFields={pendingFields} />
         <ElementsCard character={character} clan={clan} onSubmit={submit} asGM={asGM} />
         <JutsusCard character={character} clan={clan} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
         <XpCard character={character} charClass={charClass} onSubmit={submit} asGM={asGM} />
@@ -1073,10 +1076,14 @@ function parseRyoCost(cost: string): number {
 
 function ShopCard({
   character,
+  table,
+  shopItems,
   onSubmit,
   pendingFields,
 }: {
   character: Character
+  table: GameTable
+  shopItems: ShopItem[]
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
 }) {
@@ -1104,6 +1111,42 @@ function ShopCard({
     await onSubmit({ equipment, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
   }
 
+  /** Item da forja do mestre: mesma compra, catálogo diferente. */
+  async function comprarDaMesa(item: ShopItem) {
+    if (character.ryo < item.cost) return
+    if (item.kind === 'weapon') {
+      const weapons: Weapon[] = [
+        ...character.weapons,
+        { id: newId(), name: item.name, damage: item.damage ?? '1d4', note: item.properties, equipped: true },
+      ]
+      await onSubmit({ weapons, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
+      return
+    }
+    if (item.kind === 'armor') {
+      const armor: Armor[] = [
+        ...character.armor,
+        { id: newId(), name: item.name, defenseBonus: item.armorBonus ?? 0, note: item.description, equipped: true },
+      ]
+      await onSubmit({ armor, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
+      return
+    }
+    const equipment: InventoryItem[] = [
+      ...character.equipment,
+      { id: newId(), name: item.name, quantity: 1, note: item.description },
+    ]
+    await onSubmit({ equipment, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
+  }
+
+  const aberta = table.shopOpen ?? true
+  const usaManual = table.shopUsesManual ?? true
+  const daMesa = shopItems.filter((i) => i.available && i.stock !== 0)
+  const daMesaNaAba = daMesa.filter((i) =>
+    tab === 'weapons' ? i.kind === 'weapon' : tab === 'armor' ? i.kind === 'armor' : i.kind === 'gear',
+  )
+
+  // Loja fechada pelo mestre não aparece para o grupo.
+  if (!aberta) return null
+
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
@@ -1127,7 +1170,30 @@ function ShopCard({
         ))}
       </div>
       <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-        {tab === 'weapons' &&
+        {/* O que o mestre forjou vem primeiro: é o que a campanha tem de próprio. */}
+        {daMesaNaAba.map((i) => (
+          <div
+            key={i.id}
+            className="flex items-center justify-between gap-2 rounded-sm border border-[color:var(--orange)]/40 bg-black/20 px-2.5 py-1.5 text-sm"
+          >
+            <span className="min-w-0 text-orange-100">
+              {i.name}{' '}
+              <span className="text-xs text-orange-400/60">
+                {i.kind === 'weapon' && `(${i.damage ?? '—'} ${i.damageType ?? ''})`}
+                {i.kind === 'armor' && `(+${i.armorBonus ?? 0} CA)`}
+                {i.stock !== undefined && ` · ${i.stock} em estoque`}
+              </span>
+              {i.description && <span className="block text-xs text-orange-300/50">{i.description}</span>}
+            </span>
+            <Button variant="primary" disabled={blocked || character.ryo < i.cost} onClick={() => comprarDaMesa(i)}>
+              {i.cost} ryo
+            </Button>
+          </div>
+        ))}
+        {!usaManual && daMesaNaAba.length === 0 && (
+          <p className="text-xs text-orange-300/50">Nada desta categoria à venda nesta mesa.</p>
+        )}
+        {usaManual && tab === 'weapons' &&
           WEAPONS.map((w) => (
             <div key={w.name} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/20 bg-black/20 px-2.5 py-1.5 text-sm">
               <span className="text-orange-100">
@@ -1138,7 +1204,7 @@ function ShopCard({
               </Button>
             </div>
           ))}
-        {tab === 'armor' &&
+        {usaManual && tab === 'armor' &&
           ARMORS.map((a) => (
             <div key={a.name} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/20 bg-black/20 px-2.5 py-1.5 text-sm">
               <span className="text-orange-100">
@@ -1149,7 +1215,7 @@ function ShopCard({
               </Button>
             </div>
           ))}
-        {tab === 'gear' &&
+        {usaManual && tab === 'gear' &&
           GEAR.map((g) => (
             <div key={g.name} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/20 bg-black/20 px-2.5 py-1.5 text-sm">
               <span className="text-orange-100">{g.name}</span>

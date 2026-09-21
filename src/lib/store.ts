@@ -19,6 +19,7 @@ import type {
   CombatParticipant,
   BestiaryEntry,
   Clan,
+  ShopItem,
   GMRoll,
   GameTable,
   LogEntry,
@@ -152,6 +153,7 @@ const TABLE_SUBCOLLECTIONS = [
   'gmRolls',
   'bestiary',
   'clans',
+  'shop',
 ]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
@@ -621,6 +623,28 @@ export async function deleteCustomClan(tableId: string, id: string) {
 
 export function listenCustomClans(tableId: string, cb: (clans: Clan[]) => void) {
   return onSnapshot(clansCol(tableId), (snap) => cb(snap.docs.map((d) => d.data() as Clan)), defaultOnError('clãs da mesa'))
+}
+
+/* ---------------------------------------------------------------------------
+ * Loja da mesa: itens forjados pelo mestre. Todos leem (o grupo precisa ver a
+ * vitrine), só o mestre escreve — preço e estoque não são do freguês.
+ * ------------------------------------------------------------------------- */
+
+export function shopCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'shop')
+}
+
+export async function saveShopItem(tableId: string, item: ShopItem) {
+  await setDoc(doc(shopCol(tableId), item.id), stripUndefined(item))
+}
+
+export async function deleteShopItem(tableId: string, id: string) {
+  await deleteDoc(doc(shopCol(tableId), id))
+}
+
+export function listenShop(tableId: string, cb: (items: ShopItem[]) => void) {
+  const q = query(shopCol(tableId), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as ShopItem)), defaultOnError('loja da mesa'))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {

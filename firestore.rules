@@ -150,6 +150,12 @@ service cloud.firestore {
         allow write: if isGM(tableId);
       }
 
+      // Loja: todos veem a vitrine, só o mestre define preço e estoque.
+      match /shop/{itemId} {
+        allow read: if signedIn();
+        allow write: if isGM(tableId);
+      }
+
       // Bestiário da mesa: criaturas que o mestre preparou. Bastidor — o grupo
       // só conhece a criatura quando ela vira NPC na mesa.
       match /bestiary/{creatureId} {

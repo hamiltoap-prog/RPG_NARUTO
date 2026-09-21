@@ -337,6 +337,11 @@ export interface GameTable {
   /** Quando ligado, cada jogador arrasta a peça do próprio personagem na tela
    * de jogo. As peças de NPCs, inimigos e chefes continuam só com o mestre. */
   playersMoveTokens?: boolean
+  /** Loja aberta ao grupo. Fechada, some da ficha. */
+  shopOpen?: boolean
+  /** Se o catálogo de equipamento do manual está à venda junto com os itens
+   * forjados pelo mestre. */
+  shopUsesManual?: boolean
   /** Nível com que um personagem novo entra na mesa. O manual permite começar
    * acima do 1º ("Mestre pode permitir começar em nível superior",
    * 06-progressao.md), e quem decide isso é o mestre — não o jogador. */
@@ -613,6 +618,43 @@ export interface BestiaryEntry {
   notes: string
   /** Quando nasceu de uma tribo do manual, qual foi. */
   sourceId?: string
+  createdAt: number
+}
+
+/* ---------------------------------------------------------------------------
+ * Loja da mesa e forja do mestre
+ *
+ * A loja do manual é uma lista fixa de equipamento. Aqui o mestre decide o
+ * que está à venda: liga ou desliga o catálogo do manual, forja itens da
+ * campanha e escolhe preço e estoque de cada um.
+ * ------------------------------------------------------------------------- */
+
+export type ShopItemKind = 'weapon' | 'armor' | 'gear'
+
+export const SHOP_ITEM_KIND_LABELS: Record<ShopItemKind, string> = {
+  weapon: 'Arma',
+  armor: 'Armadura',
+  gear: 'Item',
+}
+
+export interface ShopItem {
+  id: string
+  tableId: string
+  kind: ShopItemKind
+  name: string
+  /** Preço em ryo. */
+  cost: number
+  description?: string
+  /** Arma: dano e tipo. */
+  damage?: string
+  damageType?: string
+  properties?: string
+  /** Armadura: bônus de CA. */
+  armorBonus?: number
+  /** Unidades restantes. Ausente = sem limite. Zero esgota o item. */
+  stock?: number
+  /** Fora do ar sem precisar apagar — útil para item sazonal ou de enredo. */
+  available: boolean
   createdAt: number
 }
 
