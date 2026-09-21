@@ -10,6 +10,7 @@ import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
 import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
+import { CLAN_ELEMENTS, ELEMENTS, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
 import { listenCharacter, listenCharacters, listenMissions, listenNPCs, listenRequestsForCharacter } from '../lib/store'
@@ -105,9 +106,10 @@ export function PlayerView({
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
         <ShopCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <ElementsCard character={character} onSubmit={submit} asGM={asGM} />
         <JutsusCard character={character} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
-        <XpCard character={character} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
-        <DescriptionCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <XpCard character={character} charClass={charClass} onSubmit={submit} asGM={asGM} />
+        <DescriptionCard character={character} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
         <Card className="p-4">
           <SectionTitle className="mb-2">Anotações (livre, sem aprovação)</SectionTitle>
           <Textarea
@@ -660,9 +662,69 @@ function InventoryCard({
   )
 }
 
-// ---------- Jutsus ----------
+// ---------- Afinidades elementais ----------
 
-const RANK_ORDER = ['Rank-E', 'Rank-D', 'Rank-C', 'Rank-B', 'Rank-A', 'Rank-S']
+/**
+ * Afinidade de natureza. Vem do clã de graça (Uchiha com Fogo, Hatake com
+ * Relâmpago) ou é concedida pelo mestre — por subclasse, pelo talento
+ * "Liberação de Natureza" ou por escolha da mesa. É ela que destranca os
+ * jutsus de Liberação, então fica visível na ficha.
+ */
+function ElementsCard({
+  character,
+  onSubmit,
+  asGM,
+}: {
+  character: Character
+  onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
+  asGM: boolean
+}) {
+  const doClan = CLAN_ELEMENTS[character.clanId] ?? []
+  const concedidas = character.elements ?? []
+
+  async function alternar(el: string) {
+    const tem = concedidas.some((x) => x.toLowerCase() === el.toLowerCase())
+    const proximas = tem ? concedidas.filter((x) => x.toLowerCase() !== el.toLowerCase()) : [...concedidas, el]
+    await onSubmit({ elements: proximas }, tem ? `Retirou a afinidade com ${el}` : `Concedeu afinidade com ${el}`)
+  }
+
+  return (
+    <Card className="p-4">
+      <SectionTitle className="mb-2">Afinidades elementais</SectionTitle>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {ELEMENTS.map((el) => {
+          const doCla = doClan.includes(el)
+          const ativa = doCla || concedidas.some((x) => x.toLowerCase() === el.toLowerCase())
+          return asGM && !doCla ? (
+            <TabChip key={el} active={ativa} onClick={() => alternar(el)} className="px-2.5 py-1 text-xs">
+              {el}
+            </TabChip>
+          ) : (
+            <span
+              key={el}
+              className={`rounded-sm border px-2.5 py-1 font-display text-xs uppercase tracking-[0.08em] ${
+                ativa
+                  ? 'border-[color:var(--orange)] bg-[color:var(--orange)] text-[color:var(--orange-ink)]'
+                  : 'border-[color:var(--line)] text-orange-300/40'
+              }`}
+              title={doCla ? `Afinidade passiva do clã` : undefined}
+            >
+              {el}
+              {doCla && ' ·clã'}
+            </span>
+          )
+        })}
+      </div>
+      <p className="mt-2 text-xs text-orange-400/60">
+        {asGM
+          ? 'Clique para conceder ou retirar. As marcadas com "clã" vêm do clã e não saem.'
+          : 'Destravam os jutsus de Liberação. Quem concede é o mestre.'}
+      </p>
+    </Card>
+  )
+}
+
+// ---------- Jutsus ----------
 
 function formatCatalogJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
   return [
@@ -693,15 +755,15 @@ function JutsusCard({
   const blocked = pendingFields.has('jutsus')
 
   const charClass = CLASSES.find((c) => c.id === character.classId)
-  const progressionEntry = charClass?.progression.find((p) => p.level === character.level)
-  const maxRankIndex = progressionEntry?.maxRank ? RANK_ORDER.indexOf(progressionEntry.maxRank) : RANK_ORDER.length - 1
-  // Jogador só pode escolher jutsus elegíveis pro rank atual do personagem
-  // (ou exclusivos do clã); o mestre pode liberar qualquer jutsu do catálogo
-  // completo, ou até um totalmente personalizado.
-  const eligibleJutsus = JUTSU_CATALOG.filter(
-    (j) => j.clanId === character.clanId || RANK_ORDER.indexOf(j.rank) <= maxRankIndex,
-  )
-  const selectableJutsus = asGM ? JUTSU_CATALOG : eligibleJutsus
+  // As três portas do manual: rank do nível, Hijutsu do próprio clã e
+  // afinidade elemental. O mestre passa por cima de todas — pode conceder
+  // qualquer jutsu do catálogo, ou um totalmente personalizado.
+  const afinidades = effectiveElements(character.clanId, character.elements)
+  const maxRank = maxRankForLevel(charClass, character.level)
+  const limiteJutsus = jutsusKnownForLevel(charClass, character.level)
+  const listaElegivel = eligibleJutsus({ clanId: character.clanId, elements: afinidades, maxRank })
+  const selectableJutsus = asGM ? JUTSU_CATALOG : listaElegivel
+  const noLimite = !asGM && limiteJutsus > 0 && jutsus.length >= limiteJutsus
 
   function startEdit() {
     setJutsus(character.jutsus)
@@ -711,6 +773,7 @@ function JutsusCard({
   function addFromCatalog() {
     const catalogMatch = selectableJutsus.find((j) => j.name === jutsuToAdd)
     if (!catalogMatch || jutsus.some((j) => j.name === catalogMatch.name)) return
+    if (noLimite) return
     setJutsus((prev) => [
       ...prev,
       { id: newId(), name: catalogMatch.name, details: formatCatalogJutsuDetails(catalogMatch), chakraCost: catalogMatch.cost },
@@ -750,6 +813,17 @@ function JutsusCard({
         )}
       </div>
       <PendingNote fields={['jutsus']} pending={pendingFields} />
+      {/* O jogador precisa saber por que a lista é curta — senão parece falha. */}
+      <p className="mt-1 text-xs leading-relaxed text-orange-400/60">
+        Acesso: até <b className="text-orange-200">Rank {maxRank}</b> (nível {character.level})
+        {limiteJutsus > 0 && <> · {jutsus.length}/{limiteJutsus} jutsus</>} · afinidade{' '}
+        {afinidades.length > 0 ? (
+          <b className="text-orange-200">{afinidades.join(', ')}</b>
+        ) : (
+          <span className="text-orange-400/50">nenhuma</span>
+        )}
+        {asGM && <> — como mestre você vê o catálogo inteiro.</>}
+      </p>
       <div className="mt-2 flex flex-col gap-2">
         {(editing ? jutsus : character.jutsus).map((j) => (
           <div key={j.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-2.5 text-sm">
@@ -774,8 +848,12 @@ function JutsusCard({
                 : 'Você só pode escolher entre os jutsus elegíveis pro rank e clã do seu personagem.'}
             </p>
             <div className="flex gap-1.5">
-              <Select value={jutsuToAdd} onChange={(e) => setJutsuToAdd(e.target.value)}>
-                <option value="">Selecione um jutsu{asGM ? ' (catálogo completo)' : ' elegível'}...</option>
+              <Select value={jutsuToAdd} onChange={(e) => setJutsuToAdd(e.target.value)} disabled={noLimite}>
+                <option value="">
+                  {noLimite
+                    ? `Você já conhece os ${limiteJutsus} jutsus do nível ${character.level}`
+                    : `Selecione um jutsu${asGM ? ' (catálogo completo)' : ' elegível'}...`}
+                </option>
                 {selectableJutsus
                   .filter((j) => !jutsus.some((added) => added.name === j.name))
                   .map((j) => (
@@ -808,19 +886,19 @@ function JutsusCard({
 
 // ---------- XP / Nível ----------
 
+/** XP é recompensa, não requerimento: só o mestre mexe. O jogador acompanha. */
 function XpCard({
   character,
   charClass,
   onSubmit,
-  pendingFields,
+  asGM,
 }: {
   character: Character
   charClass: ReturnType<typeof CLASSES.find>
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
-  pendingFields: Set<RequestableField>
+  asGM: boolean
 }) {
   const [xpDraft, setXpDraft] = useState(character.xp)
-  const blocked = pendingFields.has('xp') || pendingFields.has('level')
   const nextLevelXp = useMemo(() => getXpForNextLevel(character.level), [character.level])
 
   async function apply() {
@@ -848,18 +926,22 @@ function XpCard({
   return (
     <Card className="p-4">
       <SectionTitle className="mb-2">Experiência</SectionTitle>
-      <PendingNote fields={['xp', 'level']} pending={pendingFields} />
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex items-baseline gap-3">
+        <p className="font-display text-2xl text-white">Nível {character.level}</p>
         <p className="text-sm text-orange-300/60">
-          Nível {character.level} · próximo em {nextLevelXp} XP
+          {character.xp} XP · próximo em {nextLevelXp}
         </p>
       </div>
-      <div className="mt-2 flex items-center gap-2">
-        <Input type="number" value={xpDraft} onChange={(e) => setXpDraft(Number(e.target.value))} className="w-28" disabled={blocked} />
-        <Button variant="primary" disabled={blocked || xpDraft === character.xp} onClick={apply}>
-          Atualizar XP
-        </Button>
-      </div>
+      {asGM ? (
+        <div className="mt-3 flex items-center gap-2">
+          <Input type="number" value={xpDraft} onChange={(e) => setXpDraft(Number(e.target.value))} className="w-28" />
+          <Button variant="primary" disabled={xpDraft === character.xp} onClick={apply}>
+            Dar XP
+          </Button>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-orange-400/60">Quem concede XP é o mestre.</p>
+      )}
     </Card>
   )
 }
@@ -870,10 +952,12 @@ function DescriptionCard({
   character,
   onSubmit,
   pendingFields,
+  asGM,
 }: {
   character: Character
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
+  asGM: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<CharacterDescription>(character.description)
@@ -885,12 +969,16 @@ function DescriptionCard({
   }
 
   async function save() {
-    await onSubmit({ description: draft }, 'Alterou a descrição do personagem')
+    // O rank é promoção, não autodescrição: o que o jogador manda volta com o
+    // rank que já estava na ficha, mesmo que o campo tenha sido burlado.
+    const description = asGM ? draft : { ...draft, rank: character.description.rank }
+    await onSubmit({ description }, 'Alterou a descrição do personagem')
     setEditing(false)
   }
 
-  const fields: { key: keyof CharacterDescription; label: string }[] = [
-    { key: 'rank', label: 'Rank' },
+  // O rank aparece para todo mundo; só o mestre consegue mexer nele.
+  const fields: { key: keyof CharacterDescription; label: string; gmOnly?: boolean }[] = [
+    { key: 'rank', label: 'Rank', gmOnly: true },
     { key: 'title', label: 'Título' },
     { key: 'appearance', label: 'Aparência' },
     { key: 'personalityTraits', label: 'Personalidade' },
@@ -920,20 +1008,26 @@ function DescriptionCard({
       </div>
       <PendingNote fields={['description']} pending={pendingFields} />
       <div className="mt-2 flex flex-col gap-2 text-sm">
-        {fields.map(({ key, label }) => (
-          <div key={key}>
-            <p className="text-xs uppercase text-orange-400/60">{label}</p>
-            {editing ? (
-              <Textarea
-                rows={key === 'rank' || key === 'title' ? 1 : 2}
-                value={String(draft[key] ?? '')}
-                onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-              />
-            ) : (
-              <p className="text-orange-200">{String(character.description[key] || '—')}</p>
-            )}
-          </div>
-        ))}
+        {fields.map(({ key, label, gmOnly }) => {
+          const travado = Boolean(gmOnly) && !asGM
+          return (
+            <div key={key}>
+              <p className="text-xs uppercase text-orange-400/60">
+                {label}
+                {travado && <span className="ml-1 normal-case text-orange-400/40">· só o mestre altera</span>}
+              </p>
+              {editing && !travado ? (
+                <Textarea
+                  rows={key === 'rank' || key === 'title' ? 1 : 2}
+                  value={String(draft[key] ?? '')}
+                  onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                />
+              ) : (
+                <p className="text-orange-200">{String(character.description[key] || '—')}</p>
+              )}
+            </div>
+          )
+        })}
       </div>
     </Card>
   )

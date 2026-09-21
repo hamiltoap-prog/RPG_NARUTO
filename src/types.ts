@@ -156,12 +156,15 @@ export interface JutsuCatalogEntry {
 /** Campos da ficha que podem ser alterados por um jogador — sempre sujeitos
  * à fila de aprovação do mestre, a menos que o mestre marque como auto-aprovado.
  * "notes" nunca entra aqui: é sempre livre. */
+/**
+ * Campos que o jogador pode PEDIR para mudar. Nível, XP e o rank ninja não
+ * entram: quem dá XP é o mestre, e é ele quem promove o personagem — então
+ * não há o que pedir, nem sequer uma fila.
+ */
 export const REQUESTABLE_FIELDS = [
   'attributes',
   'clanId',
   'classId',
-  'level',
-  'xp',
   'hp',
   'chakra',
   'armorClass',
@@ -182,8 +185,6 @@ export const REQUESTABLE_FIELD_LABELS: Record<RequestableField, string> = {
   attributes: 'Atributos',
   clanId: 'Clã',
   classId: 'Classe',
-  level: 'Nível',
-  xp: 'XP',
   hp: 'Pontos de Vida',
   chakra: 'Chakra',
   armorClass: 'Classe de Armadura',
@@ -240,6 +241,10 @@ export interface Character {
   condition: string
 
   imageUrl: string
+
+  /** Afinidades elementais concedidas pelo mestre (classe, talento...). As do
+   * clã são somadas na leitura, não ficam gravadas — ver lib/jutsuAccess. */
+  elements?: string[]
 
   ryo: number
 

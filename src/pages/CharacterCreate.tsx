@@ -3,6 +3,7 @@ import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } fr
 import { CLANS } from '../data/clans'
 import { CLASSES } from '../data/classes'
 import { JUTSU_CATALOG } from '../data/jutsus'
+import { effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { averageStartingWealth, calculateDerivedStats, totalAttributes } from '../lib/characterMath'
 import { createCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
@@ -23,7 +24,8 @@ const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
 const STEPS = ['Clã', 'Classe', 'Atributos', 'Descrição', 'Equipamento', 'Jutsus', 'Imagem & Resumo'] as const
 
 const emptyDescription: CharacterDescription = {
-  rank: '',
+  // Todo mundo começa Genin; subir de rank é decisão do mestre.
+  rank: 'Genin',
   title: '',
   appearance: '',
   personalityTraits: '',
@@ -103,11 +105,16 @@ export function CharacterCreate({
     setEquipment((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i)))
   }
 
-  const eligibleJutsus = JUTSU_CATALOG.filter((j) => j.rank === 'Rank-D' || j.clanId === clanId)
+  // Nível 1 e sem afinidade concedida ainda: só o que o clã já dá.
+  const afinidades = effectiveElements(clanId, [])
+  const maxRank = maxRankForLevel(charClass, 1)
+  const listaElegivel = eligibleJutsus({ clanId, elements: afinidades, maxRank })
+  const limiteJutsus = jutsusKnownForLevel(charClass, 1)
 
   function addJutsu() {
-    const catalogMatch = eligibleJutsus.find((j) => j.name === jutsuToAdd)
+    const catalogMatch = listaElegivel.find((j) => j.name === jutsuToAdd)
     if (!catalogMatch || jutsus.some((j) => j.name === catalogMatch.name)) return
+    if (limiteJutsus > 0 && jutsus.length >= limiteJutsus) return
     setJutsus((prev) => [...prev, { id: newId(), name: catalogMatch.name, details: formatJutsuDetails(catalogMatch), chakraCost: catalogMatch.cost }])
     setJutsuToAdd('')
   }
@@ -312,11 +319,10 @@ export function CharacterCreate({
         <Card className="flex flex-col gap-3 p-4">
           <SectionTitle>Descrição do Personagem</SectionTitle>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              placeholder="Rank (Genin, Chunin...)"
-              value={description.rank}
-              onChange={(e) => setDescription((d) => ({ ...d, rank: e.target.value }))}
-            />
+            <div className="well flex items-center justify-between rounded-sm px-3 py-1.5 text-sm">
+              <span className="text-orange-400/60">Rank</span>
+              <span className="font-display uppercase tracking-[0.1em] text-white">{description.rank}</span>
+            </div>
             <Input
               placeholder="Título/Apelido"
               value={description.title}
@@ -396,10 +402,23 @@ export function CharacterCreate({
       {step === 5 && (
         <Card className="flex flex-col gap-3 p-4">
           <SectionTitle>Jutsus</SectionTitle>
-          <p className="text-xs text-orange-300/60">
-            Escolha entre os jutsus que seu personagem pode aprender no 1º nível: Rank-D de qualquer categoria, ou
-            exclusivos do clã {clan?.name}. Só o mestre pode liberar jutsus fora dessa lista.
+          <p className="text-xs leading-relaxed text-orange-300/60">
+            A lista traz só o que {characterName || 'seu personagem'} pode aprender no 1º nível: até{' '}
+            <b className="text-white">Rank {maxRank}</b>, Hijutsu do clã <b className="text-white">{clan?.name}</b> e
+            jutsus elementais das afinidades que você tem
+            {afinidades.length > 0 ? (
+              <> — <b className="text-white">{afinidades.join(', ')}</b>, do clã</>
+            ) : (
+              <> — <b className="text-white">nenhuma por enquanto</b>, então Liberações de Terra, Vento, Fogo, Água e
+                Relâmpago ficam de fora</>
+            )}
+            . Afinidade nova e jutsu fora da lista são liberação do mestre.
           </p>
+          {limiteJutsus > 0 && (
+            <p className="font-display text-xs uppercase tracking-[0.1em] text-orange-400/60">
+              Jutsus conhecidos: {jutsus.length} de {limiteJutsus}
+            </p>
+          )}
           {jutsus.map((j) => (
             <div key={j.id} className="rounded-lg border border-orange-900/30 bg-black/20 p-3 text-sm">
               <div className="flex items-center justify-between">
@@ -414,9 +433,17 @@ export function CharacterCreate({
             </div>
           ))}
           <div className="flex gap-2 rounded-lg border border-orange-900/30 bg-black/10 p-3">
-            <Select value={jutsuToAdd} onChange={(e) => setJutsuToAdd(e.target.value)}>
-              <option value="">Selecione um jutsu elegível...</option>
-              {eligibleJutsus
+            <Select
+              value={jutsuToAdd}
+              onChange={(e) => setJutsuToAdd(e.target.value)}
+              disabled={limiteJutsus > 0 && jutsus.length >= limiteJutsus}
+            >
+              <option value="">
+                {limiteJutsus > 0 && jutsus.length >= limiteJutsus
+                  ? `Você já conhece os ${limiteJutsus} jutsus do 1º nível`
+                  : 'Selecione um jutsu elegível...'}
+              </option>
+              {listaElegivel
                 .filter((j) => !jutsus.some((added) => added.name === j.name))
                 .map((j) => (
                   <option key={j.name} value={j.name}>
@@ -425,7 +452,7 @@ export function CharacterCreate({
                   </option>
                 ))}
             </Select>
-            <Button onClick={addJutsu} disabled={!jutsuToAdd} className="shrink-0">
+            <Button onClick={addJutsu} disabled={!jutsuToAdd || (limiteJutsus > 0 && jutsus.length >= limiteJutsus)} className="shrink-0">
               Adicionar
             </Button>
           </div>
