@@ -5,7 +5,9 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { NpcManager } from '../components/NpcManager'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
+import { CharacterCreate } from './CharacterCreate'
 import { BestiaryPanel } from '../components/BestiaryPanel'
+import { ClanManager } from '../components/ClanManager'
 import { GMRoller } from '../components/GMRoller'
 import { RollRequestsPanel } from '../components/RollRequestsPanel'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
@@ -23,7 +25,7 @@ import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
@@ -33,6 +35,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
   const [pendingRolls, setPendingRolls] = useState(0)
   const [tab, setTab] = useState<Tab>('personagens')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [criandoNPC, setCriandoNPC] = useState(false)
+  const [npcNome, setNpcNome] = useState('')
   const [nameDraft, setNameDraft] = useState(table.name)
   const [copied, setCopied] = useState(false)
 
@@ -90,6 +94,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['combate', 'Combate'],
             ['npcs', `NPCs (${npcs.length})`],
             ['bestiario', 'Bestiário'],
+            ['clas', 'Clãs'],
             ['missoes', `Missões (${missions.length})`],
             ['rolagens', 'Rolagens'],
             ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls})`],
@@ -104,6 +109,41 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'personagens' && (
         <div className="flex flex-col gap-3">
+          {/* Ficha completa de NPC: o mesmo assistente do jogador, sem as
+              travas de nível e posto. */}
+          {criandoNPC ? (
+            <Card className="flex flex-col gap-2 p-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
+                  nome do NPC
+                  <Input value={npcNome} onChange={(e) => setNpcNome(e.target.value)} placeholder="Zabuza Momochi" />
+                </label>
+                <Button variant="ghost" onClick={() => setCriandoNPC(false)}>
+                  cancelar
+                </Button>
+              </div>
+              {npcNome.trim() && (
+                <CharacterCreate
+                  key={npcNome.trim()}
+                  table={table}
+                  uid={table.gmUid}
+                  characterName={npcNome.trim()}
+                  asGM
+                  asNPC
+                  onCreated={(c) => {
+                    setCriandoNPC(false)
+                    setNpcNome('')
+                    setSelectedId(c.id)
+                  }}
+                />
+              )}
+            </Card>
+          ) : (
+            <Button variant="primary" className="self-start" onClick={() => setCriandoNPC(true)}>
+              + NPC com ficha completa
+            </Button>
+          )}
+
           <div className="flex flex-wrap gap-2">
             {characters.map((c) => (
               <button
@@ -115,7 +155,9 @@ export function GMDashboard({ table }: { table: GameTable }) {
               >
                 <Avatar url={c.imageUrl} name={c.name} size={28} />
                 <div>
-                  <p className="text-orange-100">{c.name}</p>
+                  <p className="text-orange-100">
+                    {c.name} {c.isNPC && <Badge>NPC</Badge>}
+                  </p>
                   <p className="text-xs text-orange-300/50">
                     PV {c.hp.current}/{c.hp.max} · Chakra {c.chakra.current}/{c.chakra.max}
                     {!c.isAlive && (
@@ -162,6 +204,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'bestiario' && <BestiaryPanel table={table} />}
 
+      {tab === 'clas' && <ClanManager table={table} />}
+
       {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} />}
 
       {tab === 'pedidos' && (
@@ -181,6 +225,21 @@ export function GMDashboard({ table }: { table: GameTable }) {
             </div>
             <p className="text-sm text-orange-300/60">
               Compartilhe o código <b className="tracking-widest text-orange-200">{table.code}</b> com seu grupo para que entrem na mesa.
+            </p>
+            <label className="mt-2 flex flex-wrap items-center gap-2 text-sm text-orange-100">
+              Nível inicial dos personagens
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={table.startingLevel ?? 1}
+                onChange={(e) => updateTable(table.id, { startingLevel: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })}
+                className="w-20"
+              />
+            </label>
+            <p className="text-xs text-orange-400/60">
+              O manual permite começar acima do 1º nível. Quem entra na mesa é criado neste nível, já com o XP mínimo
+              correspondente e o posto shinobi da faixa.
             </p>
           </Card>
 

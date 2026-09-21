@@ -1,6 +1,9 @@
 import { CLASSES } from '../../data/classes'
 import { JUTSU_CATALOG } from '../../data/jutsus'
-import { canLearn, effectiveElements, eligibleJutsus, jutsuElement, maxRankForLevel, normalizeRank } from '../jutsuAccess'
+import { canLearn, clanElements, effectiveElements, eligibleJutsus, jutsuElement, maxRankForLevel, normalizeRank } from '../jutsuAccess'
+import { CLANS } from '../../data/clans'
+
+const cla = (id: string) => CLANS.find((c) => c.id === id)
 
 const ok = (cond: boolean, msg: string) => { if (!cond) throw new Error('FALHOU: ' + msg); }
 
@@ -24,20 +27,24 @@ const gen = JUTSU_CATALOG.find((j) => j.category === 'Genjutsu')!
 ok(jutsuElement(gen) === null, 'genjutsu não exige elemento')
 
 // Afinidade de clã vem de graça
-ok(effectiveElements('uchiha', []).includes('Fogo'), 'Uchiha tem Fogo')
-ok(effectiveElements('hatake', []).includes('Relâmpago'), 'Hatake tem Relâmpago')
-ok(effectiveElements('nara', []).length === 0, 'Nara não tem afinidade passiva')
-ok(effectiveElements('nara', ['Água']).includes('Água'), 'mestre concede afinidade')
+ok(effectiveElements(cla('uchiha'), []).includes('Fogo'), 'Uchiha tem Fogo')
+ok(effectiveElements(cla('hatake'), []).includes('Relâmpago'), 'Hatake tem Relâmpago')
+ok(effectiveElements(cla('nara'), []).length === 0, 'Nara não tem afinidade passiva')
+ok(clanElements(cla('uchiha')).includes('Fogo'), 'afinidade lida do texto do clã')
+// Um clã inventado pelo mestre concede afinidade do mesmo jeito
+ok(clanElements({ featuresText: 'Afinidade Passiva: Liberação de Água. Outro traço.' }).includes('Água'),
+   'clã da casa concede afinidade pelo texto')
+ok(effectiveElements(cla('nara'), ['Água']).includes('Água'), 'mestre concede afinidade')
 
 // As três portas
-const nara1 = { clanId: 'nara', elements: effectiveElements('nara', []), maxRank: maxRankForLevel(genjutsu, 1) }
+const nara1 = { clanId: 'nara', elements: effectiveElements(cla('nara'), []), maxRank: maxRankForLevel(genjutsu, 1) }
 ok(!canLearn(fogo, nara1).ok, 'Nara sem afinidade não aprende jutsu de Fogo')
 const hijutsuUchiha = JUTSU_CATALOG.find((j) => j.clanId === 'uchiha')!
 ok(!canLearn(hijutsuUchiha, nara1).ok, 'Nara não aprende Hijutsu Uchiha')
 const rankS = JUTSU_CATALOG.find((j) => normalizeRank(j.rank) === 'S')!
 ok(!canLearn(rankS, nara1).ok, 'nível 1 não aprende Rank-S')
 
-const uchiha1 = { clanId: 'uchiha', elements: effectiveElements('uchiha', []), maxRank: maxRankForLevel(genjutsu, 1) }
+const uchiha1 = { clanId: 'uchiha', elements: effectiveElements(cla('uchiha'), []), maxRank: maxRankForLevel(genjutsu, 1) }
 const fogoD = JUTSU_CATALOG.find((j) => j.category === 'Ninjutsu - Estilo Fogo' && normalizeRank(j.rank) === 'D')!
 ok(canLearn(fogoD, uchiha1).ok, 'Uchiha nível 1 aprende Fogo Rank-D')
 ok(canLearn(JUTSU_CATALOG.find(j=>j.clanId==='uchiha' && normalizeRank(j.rank)==='D')!, uchiha1).ok, 'Uchiha aprende o próprio Hijutsu Rank-D')
@@ -45,7 +52,7 @@ ok(canLearn(JUTSU_CATALOG.find(j=>j.clanId==='uchiha' && normalizeRank(j.rank)==
 // Quantos aparecem na prática
 const listaNara1 = eligibleJutsus(nara1)
 const listaUchiha1 = eligibleJutsus(uchiha1)
-const listaUchiha17 = eligibleJutsus({ clanId: 'uchiha', elements: effectiveElements('uchiha', ['Água','Vento']), maxRank: maxRankForLevel(genjutsu, 17) })
+const listaUchiha17 = eligibleJutsus({ clanId: 'uchiha', elements: effectiveElements(cla('uchiha'), ['Água','Vento']), maxRank: maxRankForLevel(genjutsu, 17) })
 console.log('elegíveis -> Nara nv1:', listaNara1.length, '| Uchiha nv1:', listaUchiha1.length, '| Uchiha nv17 com 3 elementos:', listaUchiha17.length, '| catálogo inteiro:', JUTSU_CATALOG.length)
 ok(listaNara1.length < listaUchiha1.length, 'Uchiha devia ter mais opções que Nara no nível 1')
 ok(listaUchiha17.length > listaUchiha1.length, 'nível 17 devia abrir mais que nível 1')

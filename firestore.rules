@@ -78,7 +78,11 @@ service cloud.firestore {
           // entrando de outro dispositivo/navegador): só permite trocar o
           // ownerUid pro uid de quem chama, mais nada — nenhum outro campo
           // pode mudar na mesma escrita.
+          //
+          // Ficha de NPC nunca é reivindicável: ela vive na mesma coleção, e
+          // sem esta linha bastaria digitar o nome do vilão para assumi-lo.
           (signedIn() &&
+            resource.data.get('isNPC', false) == false &&
             request.resource.data.ownerUid == request.auth.uid &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid', 'updatedAt']));
         allow delete: if isGM(tableId) || resource.data.ownerUid == request.auth.uid;
@@ -137,6 +141,13 @@ service cloud.firestore {
       match /pings/{pingId} {
         allow read, create: if signedIn();
         allow update, delete: if isGM(tableId);
+      }
+
+      // Clãs da casa: o jogador precisa lê-los para escolher na criação, mas
+      // só o mestre cadastra.
+      match /clans/{clanId} {
+        allow read: if signedIn();
+        allow write: if isGM(tableId);
       }
 
       // Bestiário da mesa: criaturas que o mestre preparou. Bastidor — o grupo

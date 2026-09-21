@@ -48,3 +48,10 @@ export function getXpForNextLevel(currentLevel: number): number {
   if (currentLevel >= 20) return XP_TABLE[20]
   return XP_TABLE[currentLevel + 1]
 }
+
+/** O XP mínimo daquele nível — usado quando a ficha nasce acima do 1º, para o
+ * personagem não aparecer "devendo" XP. O manual pede exatamente isso:
+ * "registrar o XP mínimo daquele nível" (06-progressao.md). */
+export function xpForLevel(level: number): number {
+  return XP_TABLE[Math.min(20, Math.max(1, Math.round(level)))] ?? 0
+}

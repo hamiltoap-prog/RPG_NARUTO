@@ -242,9 +242,15 @@ export interface Character {
 
   imageUrl: string
 
-  /** Afinidades elementais concedidas pelo mestre (classe, talento...). As do
-   * clã são somadas na leitura, não ficam gravadas — ver lib/jutsuAccess. */
+  /** Afinidades elementais do personagem. As do clã são somadas na leitura,
+   * não ficam gravadas aqui — ver lib/jutsuAccess. */
   elements?: string[]
+
+  /** Ficha conduzida pelo mestre, e não por um jogador. Some da lista do
+   * grupo; aparece na mesa quando o mestre a torna visível. */
+  isNPC?: boolean
+  /** Só vale para ficha de NPC: se o grupo já a conhece. */
+  visible?: boolean
 
   ryo: number
 
@@ -305,6 +311,10 @@ export interface GameTable {
   /** Quando ligado, cada jogador arrasta a peça do próprio personagem na tela
    * de jogo. As peças de NPCs, inimigos e chefes continuam só com o mestre. */
   playersMoveTokens?: boolean
+  /** Nível com que um personagem novo entra na mesa. O manual permite começar
+   * acima do 1º ("Mestre pode permitir começar em nível superior",
+   * 06-progressao.md), e quem decide isso é o mestre — não o jogador. */
+  startingLevel?: number
 }
 
 // ---------- Pedidos de rolagem ----------

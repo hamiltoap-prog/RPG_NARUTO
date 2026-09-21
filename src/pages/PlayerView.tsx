@@ -5,15 +5,15 @@ import { ActionRoller } from '../components/ActionRoller'
 import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { PartyPanel } from '../components/PartyPanel'
-import { CLANS } from '../data/clans'
+import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
 import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
-import { CLAN_ELEMENTS, ELEMENTS, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
+import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
-import { listenCharacter, listenCharacters, listenMissions, listenNPCs, listenRequestsForCharacter } from '../lib/store'
+import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type {
   Armor,
@@ -21,6 +21,7 @@ import type {
   Attributes,
   Character,
   CharacterDescription,
+  Clan,
   GameTable,
   GearItem,
   InventoryItem,
@@ -49,6 +50,7 @@ export function PlayerView({
   const [missions, setMissions] = useState<Mission[]>([])
   const [pendingFields, setPendingFields] = useState<Set<RequestableField>>(new Set())
   const [noteDraft, setNoteDraft] = useState('')
+  const [customClans, setCustomClans] = useState<Clan[]>([])
 
   useEffect(() => {
     setCharacter(undefined)
@@ -59,6 +61,7 @@ export function PlayerView({
   }, [table.id, characterId])
 
   useEffect(() => listenCharacters(table.id, setAllCharacters), [table.id])
+  useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
   useEffect(() => listenMissions(table.id, setMissions), [table.id])
 
@@ -80,7 +83,7 @@ export function PlayerView({
     return <p className="p-6 text-center text-red-300">Personagem não encontrado.</p>
   }
 
-  const clan = CLANS.find((c) => c.id === character.clanId)
+  const clan = allClans(customClans).find((c) => c.id === character.clanId)
   const charClass = CLASSES.find((c) => c.id === character.classId)
 
   const actorName = asGM ? table.gmName : character.name
@@ -106,8 +109,8 @@ export function PlayerView({
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
         <ShopCard character={character} onSubmit={submit} pendingFields={pendingFields} />
-        <ElementsCard character={character} onSubmit={submit} asGM={asGM} />
-        <JutsusCard character={character} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
+        <ElementsCard character={character} clan={clan} onSubmit={submit} asGM={asGM} />
+        <JutsusCard character={character} clan={clan} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
         <XpCard character={character} charClass={charClass} onSubmit={submit} asGM={asGM} />
         <DescriptionCard character={character} onSubmit={submit} pendingFields={pendingFields} asGM={asGM} />
         <Card className="p-4">
@@ -124,7 +127,7 @@ export function PlayerView({
       </div>
 
       <div className="flex flex-col gap-4 lg:sticky lg:top-4">
-        <PartyPanel characters={allCharacters} currentCharacterId={asGM ? undefined : character.id} />
+        <PartyPanel characters={allCharacters} currentCharacterId={asGM ? undefined : character.id} clans={customClans} />
         {npcs.some((n) => n.visible) && <AdversariesPanel npcs={npcs.filter((n) => n.visible)} />}
         {missions.length > 0 && <MissionBoard tableId={table.id} missions={missions} asGM={false} />}
         <LogFeed tableId={table.id} />
@@ -362,7 +365,7 @@ function AttributesCard({
   pendingFields,
 }: {
   character: Character
-  clan: ReturnType<typeof CLANS.find>
+  clan?: Clan
   charClass: ReturnType<typeof CLASSES.find>
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
@@ -672,14 +675,16 @@ function InventoryCard({
  */
 function ElementsCard({
   character,
+  clan,
   onSubmit,
   asGM,
 }: {
   character: Character
+  clan?: Clan
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   asGM: boolean
 }) {
-  const doClan = CLAN_ELEMENTS[character.clanId] ?? []
+  const doClan = clanElements(clan)
   const concedidas = character.elements ?? []
 
   async function alternar(el: string) {
@@ -738,11 +743,13 @@ function formatCatalogJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): strin
 
 function JutsusCard({
   character,
+  clan,
   onSubmit,
   pendingFields,
   asGM,
 }: {
   character: Character
+  clan?: Clan
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
   asGM: boolean
@@ -758,7 +765,7 @@ function JutsusCard({
   // As três portas do manual: rank do nível, Hijutsu do próprio clã e
   // afinidade elemental. O mestre passa por cima de todas — pode conceder
   // qualquer jutsu do catálogo, ou um totalmente personalizado.
-  const afinidades = effectiveElements(character.clanId, character.elements)
+  const afinidades = effectiveElements(clan, character.elements)
   const maxRank = maxRankForLevel(charClass, character.level)
   const limiteJutsus = jutsusKnownForLevel(charClass, character.level)
   const listaElegivel = eligibleJutsus({ clanId: character.clanId, elements: afinidades, maxRank })

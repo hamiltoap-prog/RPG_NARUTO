@@ -1,17 +1,26 @@
-import { CLANS } from '../data/clans'
+import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { Avatar, Badge, Card, SectionTitle } from './ui'
-import type { Character } from '../types'
+import type { Character, Clan } from '../types'
 
-export function PartyPanel({ characters, currentCharacterId }: { characters: Character[]; currentCharacterId?: string }) {
-  const others = characters.filter((c) => c.id !== currentCharacterId)
+export function PartyPanel({
+  characters,
+  currentCharacterId,
+  clans,
+}: {
+  characters: Character[]
+  currentCharacterId?: string
+  clans?: Clan[]
+}) {
+  // Ficha de NPC é do mestre: só entra na lista do grupo quando ele a revela.
+  const others = characters.filter((c) => c.id !== currentCharacterId && (!c.isNPC || c.visible))
 
   return (
     <Card className="flex flex-col gap-2 p-4">
       <SectionTitle>Grupo</SectionTitle>
       {others.length === 0 && <p className="text-xs text-orange-300/40">Nenhum outro jogador na mesa ainda.</p>}
       {others.map((c) => {
-        const clan = CLANS.find((cl) => cl.id === c.clanId)
+        const clan = allClans(clans).find((cl) => cl.id === c.clanId)
         const charClass = CLASSES.find((cl) => cl.id === c.classId)
         const hpPct = c.hp.max > 0 ? Math.max(0, (c.hp.current / c.hp.max) * 100) : 0
         return (

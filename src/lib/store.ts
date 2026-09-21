@@ -18,6 +18,7 @@ import type {
   Character,
   CombatParticipant,
   BestiaryEntry,
+  Clan,
   GMRoll,
   GameTable,
   LogEntry,
@@ -150,6 +151,7 @@ const TABLE_SUBCOLLECTIONS = [
   'pings',
   'gmRolls',
   'bestiary',
+  'clans',
 ]
 
 /** Apaga a mesa e tudo que vive dentro dela. Não tem volta. */
@@ -260,10 +262,19 @@ export async function findMyCharacter(tableId: string, ownerUid: string): Promis
 /** Busca um personagem pelo nome exato na mesa — usado pra reconhecer um
  * jogador que está retornando (outro dispositivo/navegador) e evitar criar
  * um personagem duplicado quando o nome já existe. */
+/**
+ * Procura um personagem de JOGADOR pelo nome — é o que permite entrar de
+ * outro aparelho digitando o nome da ficha.
+ *
+ * Fichas de NPC ficam de fora de propósito: elas também vivem em
+ * /characters, e sem esse filtro bastaria digitar o nome do vilão para
+ * assumir a ficha dele.
+ */
 export async function findCharacterByName(tableId: string, name: string): Promise<Character | null> {
-  const q = query(charactersCol(tableId), where('name', '==', name.trim()), limit(1))
+  const q = query(charactersCol(tableId), where('name', '==', name.trim()), limit(5))
   const snap = await getDocs(q)
-  return snap.empty ? null : (snap.docs[0].data() as Character)
+  const doJogador = snap.docs.map((d) => d.data() as Character).find((c) => !c.isNPC)
+  return doJogador ?? null
 }
 
 /** "Reivindica" um personagem existente pro uid atual — usado quando o
@@ -562,6 +573,29 @@ export async function deleteBestiaryEntry(tableId: string, id: string) {
 export function listenBestiary(tableId: string, cb: (entries: BestiaryEntry[]) => void) {
   const q = query(bestiaryCol(tableId), orderBy('createdAt', 'desc'))
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as BestiaryEntry)), defaultOnError('bestiário'))
+}
+
+/* ---------------------------------------------------------------------------
+ * Clãs da casa: os que o mestre inventou para a campanha dele. Valem como os
+ * do manual em tudo — escolha na criação, bônus, jutsus exclusivos e
+ * afinidade elemental. Lidos por todos (o jogador precisa vê-los para
+ * escolher), escritos só pelo mestre.
+ * ------------------------------------------------------------------------- */
+
+export function clansCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'clans')
+}
+
+export async function saveCustomClan(tableId: string, clan: Clan) {
+  await setDoc(doc(clansCol(tableId), clan.id), stripUndefined(clan))
+}
+
+export async function deleteCustomClan(tableId: string, id: string) {
+  await deleteDoc(doc(clansCol(tableId), id))
+}
+
+export function listenCustomClans(tableId: string, cb: (clans: Clan[]) => void) {
+  return onSnapshot(clansCol(tableId), (snap) => cb(snap.docs.map((d) => d.data() as Clan)), defaultOnError('clãs da mesa'))
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {

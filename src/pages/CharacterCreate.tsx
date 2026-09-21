@@ -1,14 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from '../components/ui'
-import { CLANS } from '../data/clans'
+
 import { CLASSES } from '../data/classes'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { averageStartingWealth, calculateDerivedStats, totalAttributes } from '../lib/characterMath'
 import { createCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
-import type { Attributes, Character, CharacterDescription, GameTable, InventoryItem, Jutsu } from '../types'
+import type { Attributes, Character, CharacterDescription, Clan, GameTable, InventoryItem, Jutsu } from '../types'
 import { newId } from '../lib/id'
+import { allClans } from '../lib/clans'
+import { listenCustomClans } from '../lib/store'
+import { xpForLevel } from '../data/xpTable'
+import { SHINOBI_RANKS, suggestedRank } from '../data/ranks'
+import { ELEMENTS, clanElements } from '../lib/jutsuAccess'
 
 function formatJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
   return [
@@ -21,7 +26,7 @@ function formatJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
 }
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
-const STEPS = ['Clã', 'Classe', 'Atributos', 'Descrição', 'Equipamento', 'Jutsus', 'Imagem & Resumo'] as const
+const STEPS = ['Clã', 'Classe', 'Atributos', 'Afinidade', 'Descrição', 'Equipamento', 'Jutsus', 'Imagem & Resumo'] as const
 
 const emptyDescription: CharacterDescription = {
   // Todo mundo começa Genin; subir de rank é decisão do mestre.
@@ -39,14 +44,26 @@ export function CharacterCreate({
   uid,
   characterName,
   onCreated,
+  /** Mestre montando uma ficha (dele ou de um NPC): escolhe o nível e o posto
+   * livremente, sem o teto que vale para o jogador. */
+  asGM = false,
+  /** A ficha nasce como NPC conduzido pelo mestre. */
+  asNPC = false,
 }: {
   table: GameTable
   uid: string
   characterName: string
   onCreated: (c: Character) => void
+  asGM?: boolean
+  asNPC?: boolean
 }) {
   const [step, setStep] = useState(0)
   const [clanId, setClanId] = useState('')
+  const [customClans, setCustomClans] = useState<Clan[]>([])
+  const [level, setLevel] = useState(Math.max(1, table.startingLevel ?? 1))
+  const [chosenElements, setChosenElements] = useState<string[]>([])
+
+  useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
   const [classId, setClassId] = useState('')
   const [assigned, setAssigned] = useState<Partial<Record<(typeof ATTRIBUTE_KEYS)[number], number>>>({})
   const [description, setDescription] = useState<CharacterDescription>(emptyDescription)
@@ -58,7 +75,15 @@ export function CharacterCreate({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const clan = CLANS.find((c) => c.id === clanId)
+  const sugestao = suggestedRank(level)
+  // O posto acompanha o nível até o mestre escolher um à mão.
+  const [rankTocado, setRankTocado] = useState(false)
+  useEffect(() => {
+    if (!rankTocado) setDescription((d) => ({ ...d, rank: suggestedRank(level).label }))
+  }, [level, rankTocado])
+
+  const clansDaMesa = allClans(customClans)
+  const clan = clansDaMesa.find((c) => c.id === clanId)
   const charClass = CLASSES.find((c) => c.id === classId)
 
   const baseAttributes: Attributes = useMemo(() => {
@@ -68,7 +93,7 @@ export function CharacterCreate({
   }, [assigned])
 
   const finalAttributes = totalAttributes(baseAttributes, clan)
-  const derived = charClass ? calculateDerivedStats(finalAttributes, charClass, 1) : null
+  const derived = charClass ? calculateDerivedStats(finalAttributes, charClass, level) : null
 
   function assignValue(attr: (typeof ATTRIBUTE_KEYS)[number], value: number) {
     setAssigned((prev) => {
@@ -105,11 +130,16 @@ export function CharacterCreate({
     setEquipment((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i)))
   }
 
-  // Nível 1 e sem afinidade concedida ainda: só o que o clã já dá.
-  const afinidades = effectiveElements(clanId, [])
-  const maxRank = maxRankForLevel(charClass, 1)
+  // As do clã vêm de graça; as escolhidas somam por cima.
+  const doClan = clanElements(clan)
+  /** Quantas afinidades o jogador escolhe na criação. Uma, se o clã não deu
+   * nenhuma — é o que a "Liberação de Natureza" concede. Clã com afinidade
+   * passiva já entrega a dele, então não sobra escolha. */
+  const livresParaEscolher = doClan.length > 0 ? 0 : 1
+  const afinidades = effectiveElements(clan, chosenElements)
+  const maxRank = maxRankForLevel(charClass, level)
   const listaElegivel = eligibleJutsus({ clanId, elements: afinidades, maxRank })
-  const limiteJutsus = jutsusKnownForLevel(charClass, 1)
+  const limiteJutsus = jutsusKnownForLevel(charClass, level)
 
   function addJutsu() {
     const catalogMatch = listaElegivel.find((j) => j.name === jutsuToAdd)
@@ -123,10 +153,13 @@ export function CharacterCreate({
     setJutsus((prev) => prev.filter((j) => j.id !== id))
   }
 
+  // Um item por passo, na ordem de STEPS. Afinidade em diante não travam:
+  // dá para seguir sem escolher elemento, equipamento ou jutsu.
   const canNext = [
     Boolean(clanId),
     Boolean(classId),
     Object.keys(assigned).length === ATTRIBUTE_KEYS.length,
+    true,
     true,
     true,
     true,
@@ -145,8 +178,10 @@ export function CharacterCreate({
         name: characterName,
         clanId: clan.id,
         classId: charClass.id,
-        level: 1,
-        xp: 0,
+        level,
+        xp: xpForLevel(level),
+        elements: chosenElements,
+        ...(asNPC ? { isNPC: true, visible: false } : {}),
         attributes: finalAttributes,
         modifiers: derived.modifiers,
         hp: { current: derived.hp, max: derived.hp },
@@ -204,7 +239,7 @@ export function CharacterCreate({
         <Card className="flex flex-col gap-3 p-4">
           <SectionTitle>Escolha o Clã</SectionTitle>
           <div className="grid gap-2 sm:grid-cols-2">
-            {CLANS.map((c) => (
+            {clansDaMesa.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setClanId(c.id)}
@@ -317,18 +352,139 @@ export function CharacterCreate({
 
       {step === 3 && (
         <Card className="flex flex-col gap-3 p-4">
-          <SectionTitle>Descrição do Personagem</SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="well flex items-center justify-between rounded-sm px-3 py-1.5 text-sm">
-              <span className="text-orange-400/60">Rank</span>
-              <span className="font-display uppercase tracking-[0.1em] text-white">{description.rank}</span>
+          <SectionTitle>Afinidade Elemental</SectionTitle>
+          <p className="text-xs leading-relaxed text-orange-300/60">
+            A afinidade é o que destrava os jutsus de Liberação (Terra, Vento, Fogo, Água e Relâmpago). Pelo manual ela
+            vem do clã, da classe ou do talento "Liberação de Natureza" — sem ela, esses jutsus ficam fora da sua lista.
+          </p>
+
+          {doClan.length > 0 && (
+            <div className="well rounded-sm p-3">
+              <p className="font-display text-xs uppercase tracking-[0.12em] text-orange-400/60">Do clã {clan?.name}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {doClan.map((el) => (
+                  <span
+                    key={el}
+                    className="rounded-sm border border-[color:var(--orange)] bg-[color:var(--orange)] px-2.5 py-1 font-display text-xs uppercase tracking-[0.08em] text-[color:var(--orange-ink)]"
+                  >
+                    {el}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-orange-400/60">Afinidade passiva — já é sua, sem gastar escolha.</p>
             </div>
-            <Input
-              placeholder="Título/Apelido"
-              value={description.title}
-              onChange={(e) => setDescription((d) => ({ ...d, title: e.target.value }))}
-            />
+          )}
+
+          <div>
+            <p className="mb-1.5 text-xs text-orange-400/60">
+              {asGM
+                ? 'Como mestre, marque quantas afinidades esta ficha tiver.'
+                : `Escolha ${livresParaEscolher > 1 ? `até ${livresParaEscolher} afinidades` : 'uma afinidade'} — ou nenhuma, se preferir um shinobi sem Liberação.`}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {ELEMENTS.filter((el) => !doClan.includes(el)).map((el) => {
+                const ativo = chosenElements.includes(el)
+                const cheio = !asGM && !ativo && chosenElements.length >= livresParaEscolher
+                return (
+                  <button
+                    key={el}
+                    disabled={cheio}
+                    onClick={() => setChosenElements((p) => (ativo ? p.filter((x) => x !== el) : [...p, el]))}
+                    className={`rounded-sm border px-3 py-1.5 font-display text-sm uppercase tracking-[0.08em] transition ${
+                      ativo
+                        ? 'border-[color:var(--orange)] bg-[color:var(--orange)] text-[color:var(--orange-ink)]'
+                        : cheio
+                          ? 'cursor-not-allowed border-[color:var(--line)] text-orange-400/25'
+                          : 'border-[color:var(--line)] text-orange-300/60 hover:border-[color:var(--line-strong)] hover:text-white'
+                    }`}
+                  >
+                    {el}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+
+          <p className="text-xs text-orange-400/60">
+            Jutsus elegíveis com esta escolha: <b className="text-white">{listaElegivel.length}</b> de{' '}
+            {JUTSU_CATALOG.length}. O mestre pode conceder mais afinidades depois.
+          </p>
+        </Card>
+      )}
+
+      {step === 4 && (
+        <Card className="flex flex-col gap-3 p-4">
+          <SectionTitle>Descrição do Personagem</SectionTitle>
+          {/* Nível e posto: o jogador vê, o mestre decide. */}
+          <div className="well flex flex-wrap items-end gap-3 rounded-sm p-3">
+            <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+              nível
+              {asGM ? (
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={level}
+                  onChange={(e) => setLevel(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+                  className="w-24"
+                />
+              ) : (
+                <span className="font-display text-2xl leading-none text-white">{level}</span>
+              )}
+            </label>
+            <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
+              posto shinobi
+              {asGM ? (
+                <div className="flex gap-2">
+                  <Select
+                    value={SHINOBI_RANKS.some((r) => r.label === description.rank) ? description.rank : 'outro'}
+                    onChange={(e) => {
+                      if (e.target.value === 'outro') return
+                      setRankTocado(true)
+                      setDescription((d) => ({ ...d, rank: e.target.value }))
+                    }}
+                    className="w-56"
+                  >
+                    {SHINOBI_RANKS.map((r) => (
+                      <option key={r.id} value={r.label}>
+                        {r.label}
+                        {r.max > 0 ? ` (níveis ${r.min}–${r.max})` : ''}
+                      </option>
+                    ))}
+                    <option value="outro">outro (escreva ao lado)</option>
+                  </Select>
+                  <Input
+                    value={description.rank}
+                    onChange={(e) => {
+                      setRankTocado(true)
+                      setDescription((d) => ({ ...d, rank: e.target.value }))
+                    }}
+                    placeholder="Tokubetsu Jonin, ANBU..."
+                  />
+                </div>
+              ) : (
+                <span className="font-display uppercase tracking-[0.1em] text-white">{description.rank}</span>
+              )}
+            </label>
+            {!asGM && (
+              <p className="basis-full text-xs text-orange-400/60">
+                Nível e posto são do mestre — ele promove e concede XP durante a campanha.
+              </p>
+            )}
+            {asGM && sugestao.label !== description.rank && (
+              <button
+                className="basis-full text-left text-xs text-[color:var(--orange)] hover:underline"
+                onClick={() => setDescription((d) => ({ ...d, rank: sugestao.label }))}
+              >
+                O manual põe o nível {level} na faixa de {sugestao.label} — usar esse posto?
+              </button>
+            )}
+          </div>
+          <Input
+            placeholder="Título/Apelido"
+            value={description.title}
+            onChange={(e) => setDescription((d) => ({ ...d, title: e.target.value }))}
+          />
           <Textarea
             rows={2}
             placeholder="Aparência"
@@ -362,7 +518,7 @@ export function CharacterCreate({
         </Card>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <Card className="flex flex-col gap-3 p-4">
           <div className="flex items-center justify-between">
             <SectionTitle>Equipamento Inicial</SectionTitle>
@@ -399,7 +555,7 @@ export function CharacterCreate({
         </Card>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <Card className="flex flex-col gap-3 p-4">
           <SectionTitle>Jutsus</SectionTitle>
           <p className="text-xs leading-relaxed text-orange-300/60">
@@ -459,7 +615,7 @@ export function CharacterCreate({
         </Card>
       )}
 
-      {step === 6 && (
+      {step === 7 && (
         <Card className="flex flex-col gap-4 p-4">
           <SectionTitle>Imagem e Resumo</SectionTitle>
           <div className="flex items-center gap-3">

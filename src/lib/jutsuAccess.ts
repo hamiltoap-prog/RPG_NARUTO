@@ -1,5 +1,5 @@
 import { JUTSU_CATALOG } from '../data/jutsus'
-import type { CharClass, JutsuCatalogEntry } from '../types'
+import type { CharClass, Clan, JutsuCatalogEntry } from '../types'
 
 /**
  * Quem pode aprender o quê.
@@ -33,10 +33,19 @@ export function rankIndex(rank: Rank): number {
 export const ELEMENTS = ['Fogo', 'Água', 'Terra', 'Vento', 'Relâmpago'] as const
 export type Element = (typeof ELEMENTS)[number]
 
-/** Afinidades que o clã já dá de graça (02-clas.md, "Afinidade Passiva"). */
-export const CLAN_ELEMENTS: Record<string, Element[]> = {
-  uchiha: ['Fogo'],
-  hatake: ['Relâmpago'],
+/**
+ * Afinidades que o clã já dá de graça.
+ *
+ * Lida do próprio texto de traços do clã ("Afinidade Passiva: Liberação de
+ * Fogo."), e não de uma lista fixa aqui — assim um clã que o mestre inventou
+ * concede afinidade exatamente como um do manual, sem o app precisar conhecer
+ * o nome dele.
+ */
+export function clanElements(clan: Pick<Clan, 'featuresText'> | undefined): Element[] {
+  if (!clan?.featuresText) return []
+  const m = clan.featuresText.match(/Afinidade Passiva:\s*([^.\n]+)/i)
+  if (!m) return []
+  return ELEMENTS.filter((el) => new RegExp(el, 'i').test(m[1]))
 }
 
 /** O elemento exigido por um jutsu, ou nulo se ele não exige nenhum. */
@@ -80,10 +89,9 @@ export interface LearnerContext {
   maxRank: Rank
 }
 
-/** As afinidades que valem: as do clã somadas às concedidas pelo mestre. */
-export function effectiveElements(clanId: string, granted: string[] | undefined): Element[] {
-  const doClan = CLAN_ELEMENTS[clanId] ?? []
-  const todas = new Set<Element>(doClan)
+/** As afinidades que valem: as do clã somadas às do próprio personagem. */
+export function effectiveElements(clan: Pick<Clan, 'featuresText'> | undefined, granted: string[] | undefined): Element[] {
+  const todas = new Set<Element>(clanElements(clan))
   for (const e of granted ?? []) {
     const casa = ELEMENTS.find((x) => x.toLowerCase() === e.toLowerCase())
     if (casa) todas.add(casa)
