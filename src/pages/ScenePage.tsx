@@ -4,7 +4,7 @@ import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from '../co
 import { DiceOverlay } from '../components/DiceOverlay'
 import { firebaseConfigured } from '../firebase'
 import { useAuthUid } from '../hooks/useAuth'
-import { drawFog, emptyFog, fogRows, isRevealed, paintFog, resampleFog, setAll } from '../lib/fog'
+import { drawFog, emptyFog, fogRows, isRevealed, paintFog, remapFog, resampleFog, setAll } from '../lib/fog'
 import { newId } from '../lib/id'
 import {
   EMPTY_MAP,
@@ -17,6 +17,7 @@ import {
   fitStage,
   gridColumns,
   mapTransform,
+  remapTokens,
   snapToGrid,
   stageAspect,
   tokenWidth,
@@ -38,7 +39,18 @@ import {
   updateTable,
 } from '../lib/store'
 import { CREATURE_SIZES, DEFAULT_STAGE_ASPECT, PING_LIFETIME_MS, SCENE_TOKEN_LABELS } from '../types'
-import type { Character, GameTable, NPC, Scene, SceneLibraryItem, ScenePing, SceneToken, SceneTokenKind } from '../types'
+import type {
+  Character,
+  GameTable,
+  NPC,
+  Scene,
+  SceneFog,
+  SceneLibraryItem,
+  SceneMap,
+  ScenePing,
+  SceneToken,
+  SceneTokenKind,
+} from '../types'
 
 /** Escuridão do local sem luz, para os jogadores. */
 const DARKNESS_ALPHA = 0.82
@@ -699,6 +711,7 @@ function GMPanel({
   const [libLabel, setLibLabel] = useState('')
 
   const map = scene.map ?? EMPTY_MAP
+  const aspect = stageAspect(scene)
 
   // O input acompanha o que a cena tem de fato (ex: mapa escolhido na
   // biblioteca), desde que o mestre não esteja no meio de uma digitação.
@@ -706,6 +719,37 @@ function GMPanel({
   useEffect(() => {
     if (!touchedUrl) setMapUrl(scene.backgroundUrl)
   }, [scene.backgroundUrl, touchedUrl])
+
+  /**
+   * Enquadrar o mapa move o terreno — então a névoa pintada e as peças
+   * precisam ir junto, senão o que foi revelado deixa de bater com o que está
+   * embaixo.
+   *
+   * O remapeamento parte sempre do estado de quando o mestre PEGOU o controle,
+   * não do passo anterior: arrastando um slider seriam dezenas de mudanças
+   * seguidas, e refazer a malha da névoa em cima de si mesma a cada passo
+   * borraria as bordas até virar mingau.
+   */
+  const baseAjuste = useRef<{ map: SceneMap | undefined; fog?: SceneFog; tokens: SceneToken[] } | null>(null)
+
+  function comecarAjuste() {
+    baseAjuste.current = { map: scene.map, fog: scene.fog, tokens: scene.tokens }
+  }
+
+  function ajustarMapa(patch: Partial<SceneMap>) {
+    const base = baseAjuste.current ?? { map: scene.map, fog: scene.fog, tokens: scene.tokens }
+    const proximo = { ...(base.map ?? EMPTY_MAP), ...patch }
+    persist({
+      ...scene,
+      map: proximo,
+      tokens: remapTokens(base.tokens, base.map, proximo, aspect),
+      fog: base.fog ? remapFog(base.fog, base.map, proximo, aspect) : scene.fog,
+    })
+  }
+
+  function terminarAjuste() {
+    baseAjuste.current = null
+  }
 
   /**
    * Usar um mapa é também decidir o formato do palco: lemos o tamanho natural
@@ -758,19 +802,32 @@ function GMPanel({
             {scene.backgroundUrl && (
               <Button
                 variant="secondary"
-                onClick={() =>
+                onClick={() => {
                   addSceneLibraryItem(tableId, {
                     kind: 'map',
-                    label: libLabel.trim() || 'Mapa sem nome',
+                    label: libLabel.trim() || 'Cena sem nome',
                     imageUrl: scene.backgroundUrl,
                     createdAt: Date.now(),
+                    // A cena inteira, não só a imagem: enquadramento, grade,
+                    // luz, névoa e as peças em jogo.
+                    snapshot: {
+                      backgroundUrl: scene.backgroundUrl,
+                      map: scene.map,
+                      gridColumns: scene.gridColumns,
+                      showGrid: scene.showGrid,
+                      timeOfDay: scene.timeOfDay,
+                      locationLit: scene.locationLit,
+                      fog: scene.fog,
+                      tokens: scene.tokens,
+                    },
                   })
-                }
+                  setLibLabel('')
+                }}
               >
-                Guardar na biblioteca
+                Guardar cena na biblioteca
               </Button>
             )}
-            <Input placeholder="nome na biblioteca" value={libLabel} onChange={(e) => setLibLabel(e.target.value)} className="w-48" />
+            <Input placeholder="nome da cena guardada" value={libLabel} onChange={(e) => setLibLabel(e.target.value)} className="w-48" />
           </div>
 
           <div className="flex flex-wrap items-center gap-4 text-xs text-orange-200">
@@ -782,7 +839,11 @@ function GMPanel({
                 max={MAX_MAP_ZOOM}
                 step={0.05}
                 value={map.zoom ?? 1}
-                onChange={(e) => persist({ ...scene, map: { ...map, zoom: Number(e.target.value) } })}
+                onPointerDown={comecarAjuste}
+                onPointerUp={terminarAjuste}
+                onKeyDown={comecarAjuste}
+                onKeyUp={terminarAjuste}
+                onChange={(e) => ajustarMapa({ zoom: Number(e.target.value) })}
               />
             </label>
             <label className="flex items-center gap-1">
@@ -792,7 +853,11 @@ function GMPanel({
                 min={0}
                 max={360}
                 value={map.rotation ?? 0}
-                onChange={(e) => persist({ ...scene, map: { ...map, rotation: Number(e.target.value) } })}
+                onPointerDown={comecarAjuste}
+                onPointerUp={terminarAjuste}
+                onKeyDown={comecarAjuste}
+                onKeyUp={terminarAjuste}
+                onChange={(e) => ajustarMapa({ rotation: Number(e.target.value) })}
               />
             </label>
             <label className="flex items-center gap-1">
@@ -803,7 +868,11 @@ function GMPanel({
                 max={0.5}
                 step={0.01}
                 value={map.offsetX ?? 0}
-                onChange={(e) => persist({ ...scene, map: { ...map, offsetX: Number(e.target.value) } })}
+                onPointerDown={comecarAjuste}
+                onPointerUp={terminarAjuste}
+                onKeyDown={comecarAjuste}
+                onKeyUp={terminarAjuste}
+                onChange={(e) => ajustarMapa({ offsetX: Number(e.target.value) })}
               />
             </label>
             <label className="flex items-center gap-1">
@@ -814,7 +883,11 @@ function GMPanel({
                 max={0.5}
                 step={0.01}
                 value={map.offsetY ?? 0}
-                onChange={(e) => persist({ ...scene, map: { ...map, offsetY: Number(e.target.value) } })}
+                onPointerDown={comecarAjuste}
+                onPointerUp={terminarAjuste}
+                onKeyDown={comecarAjuste}
+                onKeyUp={terminarAjuste}
+                onChange={(e) => ajustarMapa({ offsetY: Number(e.target.value) })}
               />
             </label>
             <label className="flex items-center gap-1">
@@ -860,7 +933,14 @@ function GMPanel({
               ))}
               <option value="custom">sob medida</option>
             </Select>
-            <Button variant="ghost" onClick={() => persist({ ...scene, map: EMPTY_MAP })}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                comecarAjuste()
+                ajustarMapa(EMPTY_MAP)
+                terminarAjuste()
+              }}
+            >
               reiniciar enquadramento
             </Button>
           </div>
@@ -998,9 +1078,28 @@ function GMPanel({
                   <Button
                     variant="secondary"
                     className="px-2 py-0.5 text-[11px]"
-                    onClick={() => persist({ ...scene, backgroundUrl: item.imageUrl ?? '' })}
+                    onClick={() => {
+                      const s = item.snapshot
+                      if (!s) {
+                        // Item antigo, guardado quando a biblioteca só tinha a
+                        // imagem: troca só o mapa e deixa o resto como está.
+                        persist({ ...scene, backgroundUrl: item.imageUrl ?? '' })
+                        return
+                      }
+                      persist({
+                        ...scene,
+                        backgroundUrl: s.backgroundUrl,
+                        map: s.map,
+                        gridColumns: s.gridColumns,
+                        showGrid: s.showGrid,
+                        timeOfDay: s.timeOfDay,
+                        locationLit: s.locationLit,
+                        fog: s.fog,
+                        tokens: s.tokens,
+                      })
+                    }}
                   >
-                    usar
+                    {item.snapshot ? 'abrir cena' : 'usar mapa'}
                   </Button>
                 ) : (
                   <Button
@@ -1016,7 +1115,7 @@ function GMPanel({
                 </button>
               </div>
             ))}
-            {library.length === 0 && <p className="text-xs text-orange-300/50">A biblioteca está vazia. Guarde mapas pela aba "Mapa".</p>}
+            {library.length === 0 && <p className="text-xs text-orange-300/50">A biblioteca está vazia. Monte um encontro e guarde pela aba "Mapa" — volta inteiro depois.</p>}
           </div>
         </div>
       )}

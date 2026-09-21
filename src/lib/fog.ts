@@ -1,5 +1,6 @@
 import { FOG_COLS } from '../types'
-import type { SceneFog } from '../types'
+import type { SceneFog, SceneMap } from '../types'
+import { remapPoint } from './sceneGeometry'
 
 /**
  * Névoa de guerra.
@@ -108,4 +109,32 @@ export function drawFog(canvas: HTMLCanvasElement, fog: SceneFog, opts: { alpha:
 
   ctx.filter = 'none'
   ctx.globalCompositeOperation = 'source-over'
+}
+
+/**
+ * Leva a névoa junto quando o mestre mexe no mapa (gira, desloca, dá zoom).
+ *
+ * Cada célula da malha nova pergunta: "o terreno que agora está aqui, onde
+ * estava antes?" — e copia o que a névoa dizia naquele ponto. O que vem de
+ * fora do mapa antigo entra como inexplorado, que é a resposta honesta: o
+ * grupo nunca esteve lá.
+ */
+export function remapFog(
+  fog: SceneFog,
+  from: SceneMap | undefined,
+  to: SceneMap | undefined,
+  aspect: number,
+): SceneFog {
+  const out: string[] = []
+  for (let row = 0; row < fog.rows; row++) {
+    for (let col = 0; col < fog.cols; col++) {
+      const antes = remapPoint({ x: (col + 0.5) / fog.cols, y: (row + 0.5) / fog.rows }, to, from, aspect)
+      if (antes.x < 0 || antes.x > 1 || antes.y < 0 || antes.y > 1) {
+        out.push('0')
+        continue
+      }
+      out.push(isRevealed(fog, antes.x, antes.y) ? '1' : '0')
+    }
+  }
+  return { ...fog, cells: out.join('') }
 }

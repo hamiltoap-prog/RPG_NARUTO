@@ -95,3 +95,73 @@ export function mapTransform(map?: SceneMap): string {
 }
 
 export const EMPTY_MAP: SceneMap = { rotation: 0, zoom: 1, offsetX: 0, offsetY: 0, fit: 'contain' }
+
+/* ---------------------------------------------------------------------------
+ * Mexer no mapa sem descolar a névoa e as peças.
+ *
+ * O `transform` do CSS move só a imagem: a névoa pintada e as peças ficam
+ * onde estavam, e o cenário escorrega por baixo delas. Para o terreno
+ * continuar colado ao que foi revelado, aplicamos a MESMA mudança na névoa e
+ * nas peças — um ponto que estava em `p` com o mapa em `from` passa a estar
+ * em `to(from⁻¹(p))`.
+ *
+ * As contas acontecem num espaço quadrado (Y dividido pela proporção do
+ * palco), senão o giro sairia oval: 0..1 em Y cobre menos pixels que em X.
+ * ------------------------------------------------------------------------- */
+
+type Pt = { x: number; y: number }
+
+/** Onde um ponto do palco vai parar depois do transform do mapa. */
+export function applyMapTransform(map: SceneMap | undefined, p: Pt, aspect: number): Pt {
+  const { rotation = 0, zoom = 1, offsetX = 0, offsetY = 0 } = map ?? {}
+  const cx = 0.5
+  const cy = 0.5 / aspect
+  const dx = p.x - cx
+  const dy = p.y / aspect - cy
+  const th = (rotation * Math.PI) / 180
+  const cos = Math.cos(th)
+  const sin = Math.sin(th)
+  // A ordem do CSS (translate rotate scale) chega no ponto de trás para a
+  // frente: escala, depois gira, depois desloca.
+  const sx = dx * zoom
+  const sy = dy * zoom
+  return {
+    x: cx + (sx * cos - sy * sin) + offsetX,
+    y: (cy + (sx * sin + sy * cos) + offsetY / aspect) * aspect,
+  }
+}
+
+/** O caminho de volta: de onde o ponto veio, antes do transform. */
+export function invertMapTransform(map: SceneMap | undefined, p: Pt, aspect: number): Pt {
+  const { rotation = 0, zoom = 1, offsetX = 0, offsetY = 0 } = map ?? {}
+  const cx = 0.5
+  const cy = 0.5 / aspect
+  const safeZoom = Math.abs(zoom) < 1e-6 ? 1 : zoom
+  const dx = p.x - cx - offsetX
+  const dy = p.y / aspect - cy - offsetY / aspect
+  const th = (-rotation * Math.PI) / 180
+  const cos = Math.cos(th)
+  const sin = Math.sin(th)
+  const rx = dx * cos - dy * sin
+  const ry = dx * sin + dy * cos
+  return { x: cx + rx / safeZoom, y: (cy + ry / safeZoom) * aspect }
+}
+
+/** Para onde o terreno que estava em `p` foi, ao mapa sair de `from` para `to`. */
+export function remapPoint(p: Pt, from: SceneMap | undefined, to: SceneMap | undefined, aspect: number): Pt {
+  return applyMapTransform(to, invertMapTransform(from, p, aspect), aspect)
+}
+
+/** As peças acompanham o terreno em que estavam. */
+export function remapTokens(
+  tokens: SceneToken[],
+  from: SceneMap | undefined,
+  to: SceneMap | undefined,
+  aspect: number,
+): SceneToken[] {
+  return tokens.map((t) => {
+    if (t.onBoard === false) return t
+    const q = remapPoint({ x: t.x, y: t.y }, from, to, aspect)
+    return { ...t, x: clamp01(q.x), y: clamp01(q.y) }
+  })
+}

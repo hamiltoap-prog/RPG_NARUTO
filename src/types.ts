@@ -446,7 +446,14 @@ export interface Scene {
   fog?: SceneFog
 }
 
-/** Item guardado na biblioteca da mesa: um mapa ou uma peça pronta. */
+/**
+ * Item guardado na biblioteca da mesa: uma peça pronta ou uma CENA inteira.
+ *
+ * Guardar só a imagem do mapa não servia: o mestre monta o encontro — enquadra
+ * o mapa, posiciona as peças, revela parte da névoa — e ao voltar naquele
+ * mapa na semana seguinte encontrava tudo em branco. Agora o item leva a cena
+ * junto, e reabrir devolve o encontro como ele estava.
+ */
 export interface SceneLibraryItem {
   id: string
   kind: 'map' | 'token'
@@ -455,6 +462,21 @@ export interface SceneLibraryItem {
   tokenKind?: SceneTokenKind
   folder?: string
   createdAt: number
+  /** Retrato da cena no momento de guardar (só em itens de mapa). */
+  snapshot?: SceneSnapshot
+}
+
+/** O que é preciso para remontar um encontro: enquadramento, grade, luz,
+ * névoa e as peças que estavam em jogo. */
+export interface SceneSnapshot {
+  backgroundUrl: string
+  map?: SceneMap
+  gridColumns?: number
+  showGrid?: boolean
+  timeOfDay?: TimeOfDay
+  locationLit?: boolean
+  fog?: SceneFog
+  tokens: SceneToken[]
 }
 
 export interface Mission {
