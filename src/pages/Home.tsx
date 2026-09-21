@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GMAccount } from '../components/GMAccount'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { Button, Card, Input, SectionTitle } from '../components/ui'
 import { useAuthUser } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
@@ -18,6 +19,9 @@ export function Home() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+      <div className="flex justify-end">
+        <ThemeToggle />
+      </div>
       <header className="mt-10 text-center">
         <p className="font-display text-[11px] font-medium uppercase tracking-[0.5em] text-[color:var(--orange)]">
           RPG de Naruto

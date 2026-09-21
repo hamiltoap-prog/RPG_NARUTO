@@ -246,6 +246,9 @@ export interface Character {
    * não ficam gravadas aqui — ver lib/jutsuAccess. */
   elements?: string[]
 
+  /** Último dia em que comeu e bebeu — ver TableSurvival. */
+  survival?: CharacterSurvival
+
   /** Ficha conduzida pelo mestre, e não por um jogador. Some da lista do
    * grupo; aparece na mesa quando o mestre a torna visível. */
   isNPC?: boolean
@@ -337,6 +340,8 @@ export interface GameTable {
   /** Quando ligado, cada jogador arrasta a peça do próprio personagem na tela
    * de jogo. As peças de NPCs, inimigos e chefes continuam só com o mestre. */
   playersMoveTokens?: boolean
+  /** Fome e sede do grupo — regra da casa, desligada por padrão. */
+  survival?: TableSurvival
   /** Faixa no ar para a mesa inteira. */
   audio?: TableAudio
   /** Loja aberta ao grupo. Fechada, some da ficha. */
@@ -765,6 +770,35 @@ export interface TableAudio {
   loop: boolean
   /** 0 a 100. */
   volume: number
+}
+
+/* ---------------------------------------------------------------------------
+ * Fome e sede (regra da casa)
+ *
+ * O manual não traz regra de alimentação. O que ele traz é o gancho: um
+ * descanso longo COM COMIDA E ÁGUA reduz um nível de Exaustão. Então este
+ * sistema não inventa uma condição nova — ele conta os dias e, quando passa
+ * do limite, sugere a Exaustão que o manual já tem.
+ *
+ * Os limites são da mesa, não do manual, e ficam configuráveis por isso.
+ * ------------------------------------------------------------------------- */
+
+export interface TableSurvival {
+  enabled: boolean
+  /** Dia corrente da campanha; o mestre avança quando a ficção avança. */
+  day: number
+  /** Quantos dias sem comer até a fome pesar. */
+  foodDays: number
+  /** Quantos dias sem beber até a sede pesar. */
+  waterDays: number
+}
+
+export const DEFAULT_SURVIVAL: TableSurvival = { enabled: false, day: 1, foodDays: 3, waterDays: 1 }
+
+/** Último dia em que o personagem comeu e bebeu. */
+export interface CharacterSurvival {
+  lastMeal: number
+  lastDrink: number
 }
 
 export interface Mission {

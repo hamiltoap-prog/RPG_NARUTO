@@ -10,6 +10,9 @@ import { BestiaryPanel } from '../components/BestiaryPanel'
 import { ClanManager } from '../components/ClanManager'
 import { ItemForge } from '../components/ItemForge'
 import { SoundBoard } from '../components/TableSound'
+import { SurvivalPanel } from '../components/SurvivalPanel'
+import { ThemeToggle } from '../components/ThemeToggle'
+import { Help } from '../components/Help'
 import { ChakraGiftPanel } from '../components/ChakraGiftPanel'
 import { JutsuCastQueue } from '../components/JutsuCastPanel'
 import { GMRoller } from '../components/GMRoller'
@@ -31,7 +34,7 @@ import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
 import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 'som' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 'som' | 'sobrevivencia' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
@@ -94,6 +97,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
           <Link to="/regras" target="_blank">
             <Button variant="secondary">📖 Manual</Button>
           </Link>
+          <ThemeToggle />
           <button onClick={copyCode} className="rounded-lg border border-orange-700/50 bg-orange-950/40 px-3 py-1.5 text-sm text-orange-100">
             Código da mesa: <b className="tracking-widest">{table.code}</b> {copied ? '✓ copiado' : '⧉'}
           </button>
@@ -110,6 +114,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['clas', 'Clãs'],
             ['loja', 'Loja'],
             ['som', 'Som'],
+            ['sobrevivencia', 'Fome e sede'],
             ['missoes', `Missões (${missions.length})`],
             ['rolagens', 'Rolagens'],
             ['pedidos', `Pedidos Pendentes (${pendingCount + pendingRolls + pendingGifts + pendingCasts})`],
@@ -225,6 +230,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'som' && <SoundBoard table={table} />}
 
+      {tab === 'sobrevivencia' && <SurvivalPanel table={table} characters={characters} />}
+
       {tab === 'rolagens' && <GMRoller table={table} gmName={table.gmName} npcs={npcs} />}
 
       {tab === 'pedidos' && (
@@ -265,7 +272,13 @@ export function GMDashboard({ table }: { table: GameTable }) {
           </Card>
 
           <Card className="flex flex-col gap-2 p-4">
-            <SectionTitle>Liberação de rolagens</SectionTitle>
+            <div className="flex items-center gap-2">
+              <SectionTitle>Liberação de rolagens</SectionTitle>
+              <Help title="Liberação de rolagens">
+                Ligado, toda rolagem de jogador vira pedido e o dado só rola quando você libera. Desligado, o jogador
+                rola na hora e o resultado aparece no registro da mesa.
+              </Help>
+            </div>
             <label className="flex items-start gap-2 text-sm text-orange-100">
               <input
                 type="checkbox"
@@ -283,7 +296,13 @@ export function GMDashboard({ table }: { table: GameTable }) {
           </Card>
 
           <Card className="flex flex-col gap-2 p-4">
-            <SectionTitle>Auto-aprovação</SectionTitle>
+            <div className="flex items-center gap-2">
+              <SectionTitle>Auto-aprovação</SectionTitle>
+              <Help title="Auto-aprovação">
+                Campos marcados aqui o jogador muda sozinho, sem entrar na sua fila. Anotações já são sempre livres.
+                Bom para PV e chakra, que mudam o tempo todo durante a luta.
+              </Help>
+            </div>
             <p className="text-sm text-orange-300/60">
               Marque os campos que os jogadores podem alterar direto na ficha, sem esperar sua aprovação. Tudo que não estiver
               marcado aqui vira um pedido pendente na aba "Pedidos Pendentes".

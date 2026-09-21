@@ -593,7 +593,7 @@ export function ScenePage() {
                 >
                   <div
                     className={`relative aspect-square overflow-hidden rounded-full border-2 ${
-                      isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-white/70'
+                      isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-[#ffffff]/70'
                     } ${t.kind === 'boss' || naLuta?.boss ? 'ring-2 ring-red-500/80' : ''}`}
                     style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
                   >

@@ -7,6 +7,9 @@ import { MissionBoard } from '../components/MissionBoard'
 import { PartyPanel } from '../components/PartyPanel'
 import { ChakraGiftCard } from '../components/ChakraGiftPanel'
 import { JutsuCastCard } from '../components/JutsuCastPanel'
+import { SurvivalHud } from '../components/SurvivalPanel'
+import { ThemeToggle } from '../components/ThemeToggle'
+import { Help } from '../components/Help'
 import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
@@ -104,6 +107,7 @@ export function PlayerView({
       <div className="flex flex-col gap-4">
         <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} tableCode={table.code} onSubmit={submit} pendingFields={pendingFields} />
         <VitalsCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <SurvivalHud table={table} character={character} />
         <ActionRoller
           table={table}
           character={character}
@@ -232,6 +236,7 @@ function HeaderCard({
           <Link to="/regras" target="_blank">
             <Button variant="secondary">📖 Manual</Button>
           </Link>
+          <ThemeToggle />
           {!character.isAlive && <Badge tone="bad">Caído</Badge>}
           <PendingNote fields={['imageUrl']} pending={pendingFields} />
         </div>
@@ -714,7 +719,13 @@ function ElementsCard({
 
   return (
     <Card className="p-4">
-      <SectionTitle className="mb-2">Afinidades elementais</SectionTitle>
+      <span className="mb-2 flex items-center gap-2">
+        <SectionTitle>Afinidades elementais</SectionTitle>
+        <Help title="Afinidade elemental">
+          É o que destrava os jutsus de Liberação (Terra, Vento, Fogo, Água, Relâmpago). Vem do clã, da classe ou do
+          talento "Liberação de Natureza". Sem ela, esses jutsus não aparecem na sua lista.
+        </Help>
+      </span>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {ELEMENTS.map((el) => {
           const doCla = doClan.includes(el)
@@ -951,7 +962,13 @@ function XpCard({
 
   return (
     <Card className="p-4">
-      <SectionTitle className="mb-2">Experiência</SectionTitle>
+      <span className="mb-2 flex items-center gap-2">
+        <SectionTitle>Experiência</SectionTitle>
+        <Help title="Pontos de Resistência">
+          O PR é o número que você precisa alcançar nos seus próprios testes e resistências — e ele CAI conforme o nível
+          sobe, então resistir fica mais fácil com o tempo. Condições somam +5 e empurram para o outro lado.
+        </Help>
+      </span>
       <div className="mt-2 flex items-baseline gap-3">
         <p className="font-display text-2xl text-white">Nível {character.level}</p>
         <p className="text-sm text-orange-300/60">

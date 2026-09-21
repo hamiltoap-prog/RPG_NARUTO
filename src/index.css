@@ -88,6 +88,79 @@
   --color-orange-950: #141414;
 }
 
+/* ---------------------------------------------------------------------------
+ * Tema claro
+ *
+ * Mesmo desenho, tinta trocada: papel claro, fio cinza, texto quase preto — e
+ * o mesmo laranja, que continua sendo o sinal. Como a interface inteira é
+ * feita das variáveis acima e da rampa "orange", trocar os valores aqui vira
+ * o app todo sem mexer em nenhum componente.
+ * ------------------------------------------------------------------------- */
+:root[data-tema='claro'] {
+  color-scheme: light;
+
+  --orange: #d94f00;
+  --orange-hot: #ff6a1a;
+  --orange-deep: #a33b00;
+  --orange-ink: #ffffff;
+
+  --surface-page: #f4f2ef;
+  --surface-card: #ffffff;
+  --surface-card-hover: #f0ece7;
+  --surface-well: #f7f5f2;
+  --surface-raised: #ebe7e1;
+  --surface-tab: #efece8;
+  --surface-board: #e8e4df;
+  --die-face: #ffffff;
+
+  --line: #dcd7d0;
+  --line-strong: #b8b1a8;
+
+  --body-text: #1b1917;
+  --scrollbar-track: #eceae6;
+  --scrollbar-thumb: #c9c3ba;
+
+  --gold-bright: #1b1917;
+  --gold-deep: var(--line-strong);
+  --gold-dark: var(--line);
+  --surface-page-glow: #ffe8d8;
+
+  /* 50..400 é a escala do texto (do mais forte ao mais apagado); no claro ela
+   * inverte de direção. 500..700 seguem sendo o laranja. */
+  --color-orange-50: #000000;
+  --color-orange-100: #1b1917;
+  --color-orange-200: #3a3733;
+  --color-orange-300: #4a4640;
+  --color-orange-400: #55504a;
+  --color-orange-500: #d94f00;
+  --color-orange-600: #b84200;
+  --color-orange-700: #a33b00;
+  --color-orange-800: #8a8378;
+  --color-orange-900: #7d766c;
+  --color-orange-950: #ece8e3;
+
+  /* `text-white` aparece em 40 lugares como "o texto mais forte da tela".
+   * No papel claro ele sumiria, então o próprio token vira tinta escura — e a
+   * troca alcança tudo de uma vez. Objetos que são brancos de verdade (a face
+   * do dado, o anel da peça no mapa) usam #ffffff literal e não mudam. */
+  --color-white: #1b1917;
+}
+
+/* O texto do manual e o título de herói usam branco direto no CSS; no papel
+ * claro precisam da mesma tinta. */
+:root[data-tema='claro'] .hero-title,
+:root[data-tema='claro'] .regras h1,
+:root[data-tema='claro'] .regras h2,
+:root[data-tema='claro'] .regras h4,
+:root[data-tema='claro'] .regras strong,
+:root[data-tema='claro'] .regras th {
+  color: #1b1917;
+}
+/* Sobre a chapa laranja, o texto volta a ser claro. */
+:root[data-tema='claro'] .tab-chip[data-active='true'] {
+  color: #ffffff;
+}
+
 html,
 body,
 #root {

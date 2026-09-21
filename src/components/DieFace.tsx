@@ -85,7 +85,7 @@ export function DieFace({
           return (
             <span
               key={i}
-              className={`h-full w-full rounded-full ${on ? (rolling ? 'bg-[color:var(--orange)]' : 'bg-black') : ''}`}
+              className={`h-full w-full rounded-full ${on ? (rolling ? 'bg-[color:var(--orange)]' : 'bg-[#000000]') : ''}`}
             />
           )
         })}
