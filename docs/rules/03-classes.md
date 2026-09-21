@@ -408,6 +408,7 @@ Cada Tradição concede: acesso à palavra-chave elemental + bônus de dano +2 (
 - **Movimento Aprimorado (2º):** +3m deslocamento sem armadura/escudo (escala pela tabela).
 - **Postura de Taijutsu (3º):** escolhe um Estilo (recursos no 3º/6º/10º/14º/17º).
 - **Ataque Extra (5º).**
+- **Ataque Supremo Extra (11º):** um terceiro ataque na ação de Ataque (Ataque Extra (2)). A característica é listada na tabela de progressão do manual-fonte mas nunca descrita no texto; esta é a leitura decidida para a mesa — ver 00-observacoes.md.
 - **Vontade Inabalável (7º):** ação encerra Atordoado/Amedrontado em si mesmo.
 - **Mestre da Evasão (13º):** sem dano em sucesso de Destreza/metade em falha; 2 PC rerola teste de Destreza 1x/turno.
 - **Corpo Perfeito, Mente Perfeita (15º):** proficiência em todos os testes de resistência; 1 PC rerola falha.

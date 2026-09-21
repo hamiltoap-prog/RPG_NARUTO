@@ -9,6 +9,11 @@ Cada item abaixo traz o **estado atual**:
 - ⏳ **Aberto** — depende de uma decisão de regra do dono da mesa; enquanto
   isso o app segue a leitura literal do manual, marcada em cada item.
 
+Dos 18 pontos, **16 estão fechados**. Seguem abertos só o item 8
+(Discernimento × Intuição) e o item 12 (a fórmula "1d4 + atributo bruto" das
+invocações) — nenhum dos dois trava nada: o app já joga com a leitura descrita
+em cada um.
+
 ---
 
 ## ✅ 1. Clãs citados mas sem ficha completa
@@ -56,16 +61,16 @@ numeração invertida na tabela. O app e `03-classes.md` seguem o texto
 descritivo (17º: Xeque-Mate; 20º: Xeque-Mate (2)), com a versão da tabela-fonte
 anotada ao lado.
 
-## ⏳ 5. Especialista em Taijutsu — "Ataque Supremo Extra" (11º nível)
+## ✅ 5. Especialista em Taijutsu — "Ataque Supremo Extra" (11º nível)
 
 A tabela de progressão lista a característica **"Ataque Supremo Extra"** no
 11º nível, mas ela **não é descrita em lugar nenhum** do texto da classe (só
 "Ataque Extra", do 5º nível, é descrito).
 
-**Enquanto não houver decisão:** o app mostra a linha da tabela como está, com
-a observação de que a característica não tem efeito descrito. A leitura mais
-provável é que seja "Ataque Extra (2)" — um terceiro ataque —, mas isso muda o
-poder da classe e não é uma escolha do app.
+**Decisão:** é um **terceiro ataque** na ação de Ataque — ou seja, "Ataque
+Extra (2)", que é o que a progressão da classe faz esperar. Descrito assim em
+`03-classes.md` e em `src/data/classes.ts`, marcado como leitura da mesa e não
+do texto-fonte.
 
 ## ✅ 6. Vontade do Fogo — linha duplicada
 
@@ -95,7 +100,7 @@ leitura que mantém as 18 perícias fechadas), e diz isso no texto do clã. Se
 forem perícias diferentes, a lista do Capítulo 6 passa a ter 19 entradas e é
 só acrescentar.
 
-## ⏳ 9. Nenhuma seção "Descansando", apesar de referenciada
+## ✅ 9. Nenhuma seção "Descansando", apesar de referenciada
 
 O Capítulo 1 diz *"você pode gastar esses dados para recuperar os respectivos
 pontos durante um descanso (veja a seção 'Descansando' para as regras
@@ -103,7 +108,8 @@ completas)"*, mas **não existe essa seção** no documento — não há duraç�
 horas, nem limite de descansos por dia, nem a mecânica de gastar Dados de
 Vida/Chakra.
 
-**O que o manual traz de fato, e que o app já segue:**
+**Decisão: vale só o que o manual define de fato**, sem inventar um sistema de
+dados gastáveis. Ou seja:
 
 - Chakra: descanso curto recupera **metade do PC máximo**; descanso longo
   recupera **tudo**.
@@ -112,22 +118,28 @@ Vida/Chakra.
   cura PV.
 
 O botão "Longo" da ficha aplica exatamente isso, com um seletor de quem
-auxiliou. **Continua aberto** só o "gastar Dados de Vida/Chakra" do Capítulo 1,
-que nunca recebe uma regra numérica.
+auxiliou. A frase do Capítulo 1 sobre gastar Dados de Vida/Chakra fica como
+referência cruzada a uma seção que não veio no documento.
 
-## ⏳ 10. Ciclo de Vantagem Elemental diverge do canônico de Naruto
+## ✅ 10. Ciclo de Vantagem Elemental
 
-O ciclo definido é **Fogo > Vento > Raio > Terra > Água > Fogo**, que dá
-Vantagem na jogada de ataque ou na Disputa a quem usa o elemento superior.
-Diverge da relação mais comum no Naruto original (onde Vento *fortalece* Fogo
-em vez de vencê-lo).
+O ciclo definido é **Fogo > Vento > Raio > Terra > Água > Fogo**, e dá Vantagem
+na jogada de ataque ou na Disputa a quem usa o elemento superior.
 
-**Enquanto não houver decisão:** o app implementa o ciclo **como está escrito
-no manual** (`ELEMENT_CYCLE` em `src/lib/jutsuAccess.ts`). Ao escolher um
-jutsu elemental contra um alvo com afinidade declarada, a vantagem é sugerida
-sozinha e fica visível como caixa marcável — quem lança pode desmarcar, e o
-registro da mesa mostra os dois d20 e o motivo ("Fogo supera Vento"). Trocar o
-ciclo depois é mexer em uma linha só.
+Uma versão anterior desta lista dizia que o ciclo divergia do Naruto original.
+**Isso estava errado, e a nota foi corrigida:** o ciclo do manual é exatamente
+o canônico. No anime, Fogo é fraco contra Água, Água contra Terra, Terra contra
+Raio, Raio contra Vento e Vento contra Fogo — que lido no outro sentido é
+Fogo > Vento > Raio > Terra > Água > Fogo, o mesmo ciclo, só escrito a partir
+de outro elemento. Escrever "Vento > Raio > Terra > Água > Fogo > Vento" é
+descrever as mesmas cinco relações começando em outro ponto da roda.
+
+**Decisão: fica como está.** O app implementa o ciclo em `ELEMENT_CYCLE`
+(`src/lib/jutsuAccess.ts`). Ao escolher um jutsu elemental contra um alvo com
+afinidade declarada, a Vantagem é sugerida sozinha e fica visível como caixa
+marcável — quem lança pode desmarcar, e o registro da mesa mostra os dois d20
+e o motivo ("Fogo supera Vento"). A Vantagem só vale em **jogada de ataque**;
+em jutsu de resistência quem rola é o alvo, e a caixa nem aparece.
 
 ## ✅ 11. Terminologia "Turno" vs "Rodada" invertida
 
@@ -163,7 +175,7 @@ normal, que é o que o mestre usa no combate.
 - Invocação (Kuchiyose) copiada literalmente e por completo em
   `04b-invocacoes.md`.
 
-## ⏳ 13b. Contradição nos Dados de Vida da invocação
+## ✅ 13b. Contradição nos Dados de Vida da invocação
 
 A tabela de Rank e a nota de rodapé logo abaixo dela discordam:
 
@@ -173,10 +185,10 @@ A tabela de Rank e a nota de rodapé logo abaixo dela discordam:
 - a **nota de rodapé** diz "*Cada nível concede **2** Dados de Vida (DV) e 2
   Dados de Chakra (DC) à invocação*" — o que daria 4 DV no Rank D, não 2.
 
-**Enquanto não houver decisão:** o app segue a **coluna da tabela**
-(2/4/6/8/10 DV por Rank D/C/B/A/S), por ser o dado concreto, e porque a nota
-fecha se "nível" ali for lido como "degrau de Rank". Se a intenção for a nota,
-basta dobrar os valores em `SUMMON_RANKS` (`src/types.ts`).
+**Decisão: vale a coluna da tabela** — 2/4/6/8/10 DV por Rank D/C/B/A/S, que é
+o dado concreto do manual e o que o app já usa (`SUMMON_RANKS`, em
+`src/types.ts`). A nota de rodapé fecha com isso se "nível" ali for lido como
+"degrau de Rank".
 
 ## ✅ 13c. "16 criaturas" vs 17 stat-blocks
 

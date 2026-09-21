@@ -313,7 +313,7 @@ export const CLASSES: CharClass[] = [
     ]),
     subclassesText:
       '(PC = Pontos de Combo acumulados na coluna de progressão; o dado entre parênteses no final de cada linha é o dado de dano desarmado daquele nível. ' +
-      'Nota: a característica "Ataque Supremo Extra" listada no 11º nível aparece na tabela do manual-fonte mas nunca é descrita no texto — verificar com o autor original antes de usar em mesa.)\n\n' +
+      'Ataque Supremo Extra (11º): um terceiro ataque na ação de Ataque — ou seja, Ataque Extra (2). A característica aparece na tabela do manual-fonte sem texto descritivo; esta é a leitura decidida para a mesa.)\n\n' +
       'Postura de Taijutsu (3º nível) — escolhe um estilo:\n' +
       'Juventude Apaixonada: Punhos de Ferro (3º), Rajada Aprimorada (3º), 8 Portões Internos (6º — tabela própria de 8 estágios com benefícios crescentes e Exaustão como penalidade).\n' +
       'Talento e Foco: Foco Sobrenatural (3º), Talento Indomável (3º), Paciência Aprimorada (6º).\n' +

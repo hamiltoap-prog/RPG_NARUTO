@@ -47,8 +47,15 @@ pela mesa, com o mestre liberando cada mudança de ficha).
 
 ## Pontos ainda em aberto no manual-fonte (ver `docs/rules/00-observacoes.md`)
 
+Dos 18 pontos daquela lista, 16 estão fechados. Seguem abertos:
+
 - A perícia "Discernimento" citada como proficiência de clã (Hyūga,
   Kurama) não existe na lista oficial de 18 perícias — foi mapeada para
   "Intuição" em `clans.ts` como aproximação.
-- "Ataque Supremo Extra" (Especialista em Taijutsu, 11º nível) aparece na
-  tabela de progressão mas nunca é descrito no texto-fonte.
+- A fórmula "1d4 + o valor bruto do Atributo" dos testes de invocação, que
+  não segue o 1d20 + modificador do resto do sistema. Documentada em
+  `04b-invocacoes.md`; o app não a automatiza.
+
+Decidido depois e já aplicado: "Ataque Supremo Extra" (Especialista em
+Taijutsu, 11º nível) é um terceiro ataque na ação de Ataque; os Dados de Vida
+da invocação seguem a coluna da tabela (2/4/6/8/10), não a nota de rodapé.
