@@ -58,6 +58,47 @@ export function jutsuElement(entry: Pick<JutsuCatalogEntry, 'category' | 'keywor
   return null
 }
 
+/**
+ * Ciclo de Vantagem Elemental (05-combate.md e 04-jutsus.md):
+ * **Fogo > Vento > Raio > Terra > Água > Fogo** — quem usa o elemento
+ * superior rola a jogada de ataque (ou a Disputa) com Vantagem.
+ *
+ * O manual escreve "Raio", e o catálogo de jutsus escreve "Relâmpago" na
+ * palavra-chave; é o mesmo elemento, então o ciclo abaixo usa o nome do
+ * catálogo para não precisar traduzir em cada comparação.
+ */
+export const ELEMENT_CYCLE: Element[] = ['Fogo', 'Vento', 'Relâmpago', 'Terra', 'Água']
+
+/** `a` vence `b` no ciclo? (cada elemento vence só o seguinte). */
+export function beatsElement(a: Element | null | undefined, b: Element | null | undefined): boolean {
+  if (!a || !b) return false
+  const i = ELEMENT_CYCLE.indexOf(a)
+  const j = ELEMENT_CYCLE.indexOf(b)
+  if (i < 0 || j < 0) return false
+  return j === (i + 1) % ELEMENT_CYCLE.length
+}
+
+/** Normaliza o que veio da ficha (texto livre) para os elementos do ciclo. */
+export function parseElements(raw: readonly string[] | undefined): Element[] {
+  if (!raw) return []
+  return ELEMENTS.filter((el) =>
+    raw.some((r) => new RegExp(el, 'i').test(r) || (el === 'Relâmpago' && /raio/i.test(r))),
+  )
+}
+
+/**
+ * Qual elemento do alvo o jutsu supera — nulo quando não há vantagem.
+ * Devolver o elemento perdedor (em vez de só `true`) deixa o app explicar a
+ * vantagem na tela: "Fogo supera Vento".
+ */
+export function elementAdvantage(
+  jutsu: Element | null | undefined,
+  targetElements: readonly string[] | undefined,
+): Element | null {
+  if (!jutsu) return null
+  return parseElements(targetElements).find((el) => beatsElement(jutsu, el)) ?? null
+}
+
 /** Maior rank que a classe libera naquele nível. */
 export function maxRankForLevel(charClass: CharClass | undefined, level: number): Rank {
   const entrada = charClass?.progression

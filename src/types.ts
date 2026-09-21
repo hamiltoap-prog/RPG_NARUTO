@@ -309,6 +309,9 @@ export interface NPC {
   attacks?: NpcAttack[]
   /** Sim, alguns bichos usam jutsu — invocações de Rank C ou mais, sobretudo. */
   jutsus?: Jutsu[]
+  /** Afinidades elementais da criatura, para a Vantagem Elemental valer nos
+   * dois sentidos (o bicho atacando e o bicho sendo atacado). */
+  elements?: string[]
 }
 
 /** Condição pegando em alguém durante o combate. */
@@ -749,6 +752,10 @@ export interface JutsuCast {
   /** "character:<id>" ou "npc:<id>". Sem alvo, o jutsu só é narrado. */
   targetRef?: string
   targetName?: string
+
+  /** Vantagem elemental (ou outra combinada na mesa) na jogada de ataque. */
+  edge?: 'none' | 'advantage' | 'disadvantage'
+  edgeReason?: string
 
   status: 'pending' | 'resolved' | 'denied'
   createdAt: number

@@ -32,8 +32,18 @@ pela mesa, com o mestre liberando cada mudança de ficha).
   manual-fonte não traz esse material para eles) — confirmado pelo
   usuário.
 - Fórmula de dano em crítico ("dados de dano × Bônus de Proficiência") é
-  proposital, não erro de redação — confirmado pelo usuário. Mantida como
-  está no texto-fonte; o app não automatiza cálculo de dano.
+  proposital, não erro de redação — confirmado pelo usuário. Aplicada em
+  `applyCriticalMultiplier` (`src/lib/dice.ts`): multiplica só os dados
+  rolados, não o modificador plano do dano.
+- "Xeque-Mate" (Mestre Estrategista): a tabela-fonte inverte a numeração
+  entre o 17º e o 20º nível; a progressão em `classes.ts` segue o texto
+  descritivo do próprio manual (17º: 1 uso; 20º: 2 usos).
+- Vantagem Elemental (Fogo > Vento > Raio > Terra > Água > Fogo) virou
+  regra no app: `ELEMENT_CYCLE`/`elementAdvantage` em `jutsuAccess.ts`
+  sugerem a Vantagem quando o elemento do jutsu supera uma afinidade
+  declarada do alvo; `resolveCast` rola os dois d20 e registra o motivo.
+- Descanso longo segue 05-combate.md: Chakra cheio, mas PV só +1 por nível
+  (ou 1d4+1 por nível de quem auxiliar) — não enche a barra de vida.
 
 ## Pontos ainda em aberto no manual-fonte (ver `docs/rules/00-observacoes.md`)
 

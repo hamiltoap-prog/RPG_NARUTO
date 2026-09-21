@@ -31,14 +31,28 @@ export interface D20RollResult {
   total: number
   isCritical: boolean
   isFumble: boolean
+  /** Os dois d20 quando houve vantagem/desvantagem; `roll` é o que valeu. */
+  bothRolls?: [number, number]
+  edge?: Edge
 }
+
+/** Vantagem: rola dois d20 e fica com o melhor; desvantagem, com o pior. */
+export type Edge = 'none' | 'advantage' | 'disadvantage'
 
 /** 1d20 + Modificador de Atributo + Bônus de Proficiência (se treinado) —
  * a fórmula única de teste/ataque do sistema (ver docs/rules/05-combate.md
  * e 09-outras-mecanicas.md). O app não sabe contra o que comparar (CA ou
  * PR do alvo) — isso fica a critério da mesa, lendo o total no log. */
-export function rollD20(modifier: number, proficient: boolean, proficiencyBonus: number): D20RollResult {
-  const roll = 1 + Math.floor(Math.random() * 20)
+export function rollD20(
+  modifier: number,
+  proficient: boolean,
+  proficiencyBonus: number,
+  edge: Edge = 'none',
+): D20RollResult {
+  const d20 = () => 1 + Math.floor(Math.random() * 20)
+  const a = d20()
+  const b = edge === 'none' ? a : d20()
+  const roll = edge === 'advantage' ? Math.max(a, b) : edge === 'disadvantage' ? Math.min(a, b) : a
   const bonus = proficient ? proficiencyBonus : 0
   return {
     roll,
@@ -47,6 +61,8 @@ export function rollD20(modifier: number, proficient: boolean, proficiencyBonus:
     total: roll + modifier + bonus,
     isCritical: roll === 20,
     isFumble: roll === 1,
+    bothRolls: edge === 'none' ? undefined : [a, b],
+    edge,
   }
 }
 

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from './ui'
 import { rollAsGM } from '../lib/rollFlow'
 import { attackAttribute, findCatalogEntry, npcAsCaster, readJutsu, resolveCast } from '../lib/jutsuCast'
-import { addGMRoll, addLogEntry, listenGMRolls, updateCharacterDirect, updateNPC } from '../lib/store'
+import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
+import { allClans } from '../lib/clans'
+import { addGMRoll, addLogEntry, listenCustomClans, listenGMRolls, updateCharacterDirect, updateNPC } from '../lib/store'
 import { FREE_DICE } from '../types'
-import type { Character, GMRoll, GameTable, NPC } from '../types'
+import type { Character, Clan, GMRoll, GameTable, NPC } from '../types'
 
 type Aba = 'livre' | 'teste' | 'npc'
 
@@ -198,6 +200,10 @@ function CriaturaAge({
   const [alvoRef, setAlvoRef] = useState('')
   const [danoAvulso, setDanoAvulso] = useState('1d6')
   const [bonusAvulso, setBonusAvulso] = useState(4)
+  const [comVantagem, setComVantagem] = useState(false)
+  const [customClans, setCustomClans] = useState<Clan[]>([])
+
+  useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
 
   const npc = npcs.find((n) => n.id === npcId)
   const ataques = npc?.attacks ?? []
@@ -211,10 +217,28 @@ function CriaturaAge({
   const ataqueEscolhido = ataques.find((a) => a.id === acaoId)
   const jutsuEscolhido = jutsus.find((j) => j.id === acaoId)
 
+  // Vantagem Elemental do manual, do lado da criatura: o app confere o
+  // elemento do jutsu contra as afinidades do alvo (ficha + clã) e sugere.
+  const catalogo = jutsuEscolhido ? findCatalogEntry(jutsuEscolhido.name) : undefined
+  const afinidadesDoAlvo = alvo
+    ? [
+        ...(alvo.elements ?? []),
+        ...('clanId' in alvo ? clanElements(allClans(customClans).find((c) => c.id === alvo.clanId)) : []),
+      ]
+    : []
+  const elementoDoJutsu = catalogo ? jutsuElement(catalogo) : null
+  // A Vantagem Elemental do manual vale "na jogada de ataque ou na Disputa" —
+  // não em resistência, onde quem rola é o alvo. Então a caixa só aparece
+  // quando esta ação de fato resolve com uma jogada de ataque.
+  const resolveComAtaque = jutsuEscolhido ? (catalogo ? readJutsu(catalogo).mode === 'attack' : true) : true
+  const superado = resolveComAtaque ? elementAdvantage(elementoDoJutsu, afinidadesDoAlvo) : null
+  const motivoVantagem = superado ? `${elementoDoJutsu} supera ${superado}` : ''
+  useEffect(() => setComVantagem(Boolean(superado)), [superado])
+
   async function agir() {
     if (!npc) return
     const caster = npcAsCaster(npc)
-    const cat = jutsuEscolhido ? findCatalogEntry(jutsuEscolhido.name) : undefined
+    const cat = catalogo
     const lido = cat ? readJutsu(cat) : undefined
 
     const entrada = jutsuEscolhido
@@ -249,7 +273,12 @@ function CriaturaAge({
         ? caster
         : { ...caster, proficiencyBonus: 0, modifiers: { ...caster.modifiers, strength: bonus } }
 
-    const fora = resolveCast({ ...entrada, caster: casterAjustado })
+    const fora = resolveCast({
+      ...entrada,
+      caster: casterAjustado,
+      edge: resolveComAtaque && comVantagem ? 'advantage' : 'none',
+      edgeReason: resolveComAtaque && comVantagem ? motivoVantagem || 'vantagem da mesa' : undefined,
+    })
     const custo = Number((jutsuEscolhido?.chakraCost ?? '').match(/\d+/)?.[0] ?? 0)
 
     // Aplica o dano no alvo e o chakra na criatura.
@@ -368,6 +397,16 @@ function CriaturaAge({
         <p className="text-xs text-orange-400/60">
           {alvo.name}: CA {alvo.armorClass} · PR {alvo.resistancePoints} · PV {alvo.hp.current}/{alvo.hp.max}
         </p>
+      )}
+
+      {npc && (
+        <label
+          className="flex items-center gap-1.5 text-xs text-orange-200"
+          title="Ciclo Fogo > Vento > Raio > Terra > Água > Fogo: quem usa o elemento superior rola com Vantagem (dois d20, vale o melhor)."
+        >
+          <input type="checkbox" checked={comVantagem} onChange={(e) => setComVantagem(e.target.checked)} />
+          vantagem {motivoVantagem ? `(${motivoVantagem})` : 'na rolagem'}
+        </label>
       )}
 
       <Button variant="primary" className="self-start" disabled={!npc} onClick={agir}>

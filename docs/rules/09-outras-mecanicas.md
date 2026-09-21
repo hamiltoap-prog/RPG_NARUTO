@@ -65,7 +65,7 @@ Nome, Sexo (sem bônus/penalidade mecânica — livre escolha, incluindo não-bi
 Mecânica de recompensa por boa interpretação (fiel a traços/ideais/vínculos/falhas). O Mestre decide quando concede e qual o benefício exato (sem regra fixa de bonificação):
 
 - Vantagem ou +5 em uma jogada de ataque.
-- Vantagem ou +5 em um teste de atributo (citado duas vezes no texto original — possível redundância/erro de digitação, ver 00-observacoes.md).
+- Vantagem ou +5 em um teste de atributo (o texto-fonte repete esta linha duas vezes seguidas, sem trazer um segundo benefício distinto — duplicação de cópia; mantida uma só vez. Ver 00-observacoes.md).
 - Alterar levemente a cena a seu favor.
 - Ganhar uma Reação imediata, mesmo usando habilidade/jutsu que normalmente exigiria ação padrão.
 - Obter uma percepção/pista imediata.
@@ -214,7 +214,7 @@ Podem ser **Ordeiros** (efeito de tabela 1d10) ou **Caóticos** (tabela 1d6 com 
 | 31–40 | Armadura Aprimorada com Chakra — Ordeira |
 | 41–50 | Armadura Aprimorada com Chakra — Caótica |
 | 51–55 | Ferramenta Médica |
-| 56–60 | Ferramentas Explosivas *(a tabela original mostra "66-60", provável erro de digitação — ver 00-observacoes.md)* |
+| 56–60 | Ferramentas Explosivas *(a tabela-fonte mostra "66-60", faixa impossível; a anterior termina em 55 e a seguinte começa em 61, então a única faixa que fecha o 1d100 sem buraco é 56–60 — ver 00-observacoes.md)* |
 | 61–65 | Ferramentas Utilitárias |
 | 66–75 | Pílulas de Chakra |
 | 76–85 | Pílulas de Sangue |
@@ -290,4 +290,4 @@ Distância típica: 3–9m. *Nota do Mestre: evitar "golpes baixos" que movam jo
 
 ## Sistema de Invocação (Kuchiyose)
 
-Ver **04b-invocacoes.md** para a doutrina completa e as 16 criaturas detalhadas (o sistema de invocação é tecnicamente parte do capítulo de Ninjutsu, mas está separado aqui por ser um subsistema extenso e autocontido).
+Ver **04b-invocacoes.md** para a doutrina completa e as 17 criaturas detalhadas (o sistema de invocação é tecnicamente parte do capítulo de Ninjutsu, mas está separado aqui por ser um subsistema extenso e autocontido).

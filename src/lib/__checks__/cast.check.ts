@@ -1,5 +1,6 @@
 import { JUTSU_CATALOG } from '../../data/jutsus'
 import { attackAttribute, effectiveResistance, findCatalogEntry, readJutsu, resolveCast } from '../jutsuCast'
+import { beatsElement, elementAdvantage } from '../jutsuAccess'
 import type { Character, NPC } from '../../types'
 
 const ok = (c: boolean, m: string) => { if (!c) throw new Error('FALHOU: ' + m) }
@@ -109,4 +110,69 @@ console.log('OK: todas as checagens de lançamento de jutsu passaram')
   console.log(`cobertura da leitura: ${ataque} ataque, ${resistencia} resistência, ${semRolagem} sem rolagem; ${comDano} com dano (de ${t})`)
   ok(ataque + resistencia > t * 0.55, 'devia ler a mecânica de mais da metade do catálogo')
   ok(comDano > t * 0.5, 'devia achar dano em mais da metade')
+}
+
+// --- Vantagem Elemental (ciclo Fogo > Vento > Raio > Terra > Água > Fogo)
+ok(beatsElement('Fogo', 'Vento'), 'Fogo vence Vento')
+ok(beatsElement('Vento', 'Relâmpago'), 'Vento vence Raio')
+ok(beatsElement('Relâmpago', 'Terra'), 'Raio vence Terra')
+ok(beatsElement('Terra', 'Água'), 'Terra vence Água')
+ok(beatsElement('Água', 'Fogo'), 'Água fecha o ciclo vencendo Fogo')
+ok(!beatsElement('Vento', 'Fogo'), 'o ciclo não vale ao contrário')
+ok(!beatsElement('Fogo', 'Terra'), 'cada elemento vence só o seguinte, não o de dois à frente')
+ok(!beatsElement('Fogo', 'Fogo'), 'elemento não vence a si mesmo')
+ok(!beatsElement(null, 'Fogo') && !beatsElement('Fogo', null), 'sem elemento, sem vantagem')
+
+ok(elementAdvantage('Fogo', ['Vento']) === 'Vento', 'aponta qual afinidade do alvo foi superada')
+ok(elementAdvantage('Fogo', ['Raio']) === null, 'Fogo não supera Raio')
+ok(elementAdvantage('Vento', ['Raio']) === 'Relâmpago', '"Raio" na ficha é o mesmo que Relâmpago')
+ok(elementAdvantage('Terra', ['fogo', 'água']) === 'Água', 'acha a afinidade superada mesmo em caixa baixa')
+ok(elementAdvantage('Fogo', undefined) === null, 'alvo sem afinidade declarada não dá vantagem')
+
+// Com vantagem, a mesma conta devia acertar mais vezes.
+function mede(edge: 'none' | 'advantage') {
+  let n = 0
+  for (let i = 0; i < 2000; i++) {
+    const o = resolveCast({
+      caster, jutsuName: 'T', classification: 'Ninjutsu', mode: 'attack',
+      attackAttribute: 'intelligence', proficient: false, damage: '1d4',
+      target: { ...alvo, armorClass: 20 } as unknown as NPC, edge,
+    })
+    if (o.hit) n++
+  }
+  return n
+}
+const semVantagem = mede('none')
+const comVantagem = mede('advantage')
+console.log(`contra CA 20 (mod +4): ${semVantagem}/2000 sem vantagem, ${comVantagem}/2000 com vantagem`)
+ok(comVantagem > semVantagem * 1.2, 'a vantagem precisa acertar bem mais que a rolagem seca')
+
+const comEdge = resolveCast({
+  caster, jutsuName: 'Bola de Fogo', classification: 'Ninjutsu', mode: 'attack',
+  attackAttribute: 'intelligence', proficient: true, damage: '2d6',
+  target: alvo, edge: 'advantage', edgeReason: 'Fogo supera Vento',
+})
+ok(comEdge.summary.includes('Fogo supera Vento'), 'o registro explica de onde veio a vantagem')
+ok(/\[\d+ e \d+, vantagem/.test(comEdge.summary), 'o registro mostra os dois d20')
+
+console.log('OK: checagens de vantagem elemental passaram')
+
+// --- Tipo de dano: só tipos de verdade, nunca preposição
+{
+  const conectores = ['de', 'do', 'da', 'ao', 'aos', 'e', 'em', 'por', 'que', 'se', 'ou', 'como', 'adicional', 'normal', 'inicial']
+  let comTipo = 0
+  for (const j of JUTSU_CATALOG) {
+    const t = readJutsu(j).damageType
+    if (!t) continue
+    comTipo++
+    ok(!conectores.includes(t), `"${t}" não é tipo de dano (em ${j.name})`)
+  }
+  console.log(`tipo de dano lido em ${comTipo} jutsus, nenhum conector`)
+  ok(comTipo > 200, 'devia reconhecer o tipo em boa parte do catálogo')
+  ok(readJutsu({ description: 'causa 2d10 de dano de fogo', cost: '4', classification: 'Ninjutsu' }).damageType === 'fogo',
+     '"dano de fogo" lê fogo, não a preposição')
+  ok(readJutsu({ description: 'causa 3d6 de dano cortante', cost: '4', classification: 'Bukijutsu' }).damageType === 'cortante',
+     '"dano cortante" lê cortante')
+  ok(readJutsu({ description: 'causa 3d6 de dano', cost: '4', classification: 'Ninjutsu' }).damageType === undefined,
+     'sem tipo escrito, não inventa um')
 }

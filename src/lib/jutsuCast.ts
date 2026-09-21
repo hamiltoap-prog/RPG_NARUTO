@@ -1,6 +1,7 @@
 import { CONDITIONS } from '../data/conditions'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { applyCriticalMultiplier, rollD20, rollDice } from './dice'
+import type { Edge } from './dice'
 import type { AttributeKey, Character, JutsuCatalogEntry, Modifiers, NPC } from '../types'
 
 /**
@@ -52,6 +53,25 @@ const ATRIBUTO_POR_NOME: Record<string, AttributeKey> = {
   carisma: 'charisma',
 }
 
+/** Os tipos de dano que aparecem no texto dos jutsus do manual. */
+const TIPOS_DE_DANO = [
+  'cortante',
+  'perfurante',
+  'contundente',
+  'concuss[ãa]o',
+  'el[ée]trico',
+  'ps[íi]quico',
+  'necr[óo]tico',
+  'radiante',
+  'for[çc]a',
+  'veneno',
+  'fogo',
+  'frio',
+  'terra',
+  'vento',
+  '[áa]cido',
+] as const
+
 function semAcento(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
@@ -70,7 +90,13 @@ export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
   const resist = d.match(
     /(?:resist[êe]ncia|teste|jogada)\s+de\s+(For[çc]a|Destreza|Constitui[çc][ãa]o|Intelig[êe]ncia|Sabedoria|Carisma)/i,
   )
-  const dano = d.match(/(\d+d\d+)\s*(?:de\s*)?dano\s*([A-Za-zÀ-ú]+)?/i) ?? d.match(/(\d+d\d+)/)
+  const dano = d.match(/(\d+d\d+)/)
+  // O tipo do dano vem logo depois de "dano", mas nem sempre: o texto do
+  // manual escreve "3d6 de dano", "3d6 de dano cortante" e "3d6 de dano de
+  // fogo". Pegar a primeira palavra depois de "dano" trazia preposição
+  // ("de", "ao", "do") em quase metade do catálogo, então só valem os tipos
+  // que o manual de fato usa.
+  const tipo = d.match(new RegExp(`dano\\s+(?:de\\s+)?(${TIPOS_DE_DANO.join('|')})`, 'i'))
 
   return {
     // Quando a descrição traz os dois, o ataque é o que começa a ação — a
@@ -79,7 +105,7 @@ export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
     mode: pedeAtaque ? 'attack' : resist ? 'save' : 'none',
     saveAttribute: resist ? ATRIBUTO_POR_NOME[semAcento(resist[1])] : undefined,
     damage: dano?.[1],
-    damageType: dano?.[2],
+    damageType: tipo?.[1]?.toLowerCase(),
     cost: Number((entry.cost ?? '').match(/\d+/)?.[0] ?? 0),
   }
 }
@@ -149,6 +175,14 @@ export interface CastInput {
   onSaveSuccess?: 'none' | 'half'
   target?: CastTarget
   targetConditions?: string[]
+  /**
+   * Vantagem/desvantagem na jogada de ataque. Quem chama decide: a fonte mais
+   * comum é a Vantagem Elemental (ciclo Fogo > Vento > Raio > Terra > Água),
+   * mas o mestre pode ligar por qualquer outro motivo de mesa.
+   */
+  edge?: Edge
+  /** Só para o registro: "Fogo supera Vento". */
+  edgeReason?: string
 }
 
 export interface CastOutcome {
@@ -212,7 +246,7 @@ export function resolveCast(input: CastInput): CastOutcome {
   }
 
   // ---- Ataque: quem rola é o conjurador, contra a CA do alvo.
-  const rolagem = rollD20(mod, input.proficient, caster.proficiencyBonus)
+  const rolagem = rollD20(mod, input.proficient, caster.proficiencyBonus, input.edge ?? 'none')
   const ca = target?.armorClass ?? 0
   // 20 natural sempre acerta e 1 natural sempre erra, seja qual for a conta
   // (05-combate.md, "Acertos e falhas críticas").
@@ -228,7 +262,10 @@ export function resolveCast(input: CastInput): CastOutcome {
     }
     dano = r.total
   }
-  const conta = `d20(${rolagem.roll})${mod ? ` + ${mod}` : ''}${prof ? ` + ${prof} (prof.)` : ''} = ${rolagem.total}`
+  const doisDados = rolagem.bothRolls
+    ? ` [${rolagem.bothRolls.join(' e ')}, ${rolagem.edge === 'advantage' ? 'vantagem' : 'desvantagem'}${input.edgeReason ? `: ${input.edgeReason}` : ''}]`
+    : ''
+  const conta = `d20(${rolagem.roll})${doisDados}${mod ? ` + ${mod}` : ''}${prof ? ` + ${prof} (prof.)` : ''} = ${rolagem.total}`
   return {
     summary:
       `${input.jutsuName}${target ? ` em ${target.name}` : ''}: ${conta}` +

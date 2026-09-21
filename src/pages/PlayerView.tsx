@@ -17,6 +17,7 @@ import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
+import { rollDice } from '../lib/dice'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
 import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter, listenShop } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CHAKRA_DONOR_CLASS_ID, REQUESTABLE_FIELD_LABELS } from '../types'
@@ -91,7 +92,8 @@ export function PlayerView({
     return <p className="p-6 text-center text-red-300">Personagem não encontrado.</p>
   }
 
-  const clan = allClans(customClans).find((c) => c.id === character.clanId)
+  const clans = allClans(customClans)
+  const clan = clans.find((c) => c.id === character.clanId)
   const charClass = CLASSES.find((c) => c.id === character.classId)
 
   const actorName = asGM ? table.gmName : character.name
@@ -106,7 +108,7 @@ export function PlayerView({
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 pb-16 lg:grid lg:grid-cols-[1fr_340px] lg:items-start">
       <div className="flex flex-col gap-4">
         <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} tableCode={table.code} onSubmit={submit} pendingFields={pendingFields} />
-        <VitalsCard character={character} onSubmit={submit} pendingFields={pendingFields} />
+        <VitalsCard character={character} party={allCharacters} onSubmit={submit} pendingFields={pendingFields} />
         <SurvivalHud table={table} character={character} />
         <ActionRoller
           table={table}
@@ -120,6 +122,7 @@ export function PlayerView({
           character={character}
           characters={allCharacters}
           npcs={npcs}
+          clans={clans}
           requesterUid={actorUid}
           asGM={asGM}
         />
@@ -249,15 +252,19 @@ function HeaderCard({
 
 function VitalsCard({
   character,
+  party,
   onSubmit,
   pendingFields,
 }: {
   character: Character
+  party: Character[]
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
 }) {
   const [hpDelta, setHpDelta] = useState(1)
   const [chakraDelta, setChakraDelta] = useState(1)
+  /** Quem cuidou das feridas no descanso longo — vazio = ninguém. */
+  const [auxiliarId, setAuxiliarId] = useState('')
   const hpBlocked = pendingFields.has('hp')
   const chakraBlocked = pendingFields.has('chakra')
   const conditionBlocked = pendingFields.has('condition')
@@ -283,10 +290,24 @@ function VitalsCard({
     await onSubmit({ chakra: { current: newChakra, max: character.chakra.max } }, 'Descanso curto: recuperou metade do Chakra máximo')
   }
 
+  /**
+   * Descanso longo pelas regras do manual (05-combate.md, "Cura"):
+   * Chakra volta ao máximo, mas o PV NÃO — cura só **1 PV por nível** do
+   * personagem, ou **1d4+1 PV por nível do auxiliador** quando alguém cuida
+   * das feridas. Antes o app enchia a barra de vida, o que tornava qualquer
+   * ferimento irrelevante entre uma cena e outra.
+   */
   async function longRest() {
+    const auxiliar = party.find((c) => c.id === auxiliarId)
+    const cura = auxiliar
+      ? rollDice(`${auxiliar.level}d4+${auxiliar.level}`).total
+      : character.level
+    const novoPv = Math.min(character.hp.max, character.hp.current + cura)
     await onSubmit(
-      { hp: { current: character.hp.max, max: character.hp.max }, chakra: { current: character.chakra.max, max: character.chakra.max } },
-      'Descanso longo: recuperou todo o PV e Chakra',
+      { hp: { current: novoPv, max: character.hp.max }, chakra: { current: character.chakra.max, max: character.chakra.max } },
+      auxiliar
+        ? `Descanso longo assistido por ${auxiliar.name}: +${cura} PV (1d4+1 por nível do auxiliador) e Chakra cheio`
+        : `Descanso longo: +${cura} PV (1 por nível) e Chakra cheio`,
     )
   }
 
@@ -350,13 +371,28 @@ function VitalsCard({
         </div>
         <div>
           <p className="text-xs uppercase text-orange-400/60">Descanso</p>
-          <div className="mt-1 flex gap-1">
-            <Button variant="secondary" disabled={restBlocked} onClick={shortRest}>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <Button variant="secondary" disabled={restBlocked} onClick={shortRest} title="Recupera metade do Chakra máximo. O manual não dá cura de PV em descanso curto.">
               Curto
             </Button>
-            <Button variant="secondary" disabled={restBlocked} onClick={longRest}>
+            <Button
+              variant="secondary"
+              disabled={restBlocked}
+              onClick={longRest}
+              title="Chakra cheio e cura de 1 PV por nível — ou 1d4+1 por nível de quem auxiliar."
+            >
               Longo
             </Button>
+            <Select value={auxiliarId} onChange={(e) => setAuxiliarId(e.target.value)} className="w-36" disabled={restBlocked}>
+              <option value="">sem auxílio</option>
+              {party
+                .filter((c) => c.id !== character.id)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    tratado por {c.name}
+                  </option>
+                ))}
+            </Select>
           </div>
         </div>
       </div>

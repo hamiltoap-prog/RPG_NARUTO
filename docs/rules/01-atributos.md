@@ -48,7 +48,7 @@ Depois de atribuir os valores, aplique os bônus do Clã escolhido.
 | 12–13 | +1 | 28–29 | +9 |
 | 14–15 | +2 | 30 | 10 |
 
-(A tabela de origem lista o valor 30 com modificador literal "10" — provavelmente um erro de digitação, deveria ser "+10". Ver 00-observacoes.md.)
+(A tabela de origem lista o valor 30 com modificador literal "10", sem o sinal, enquanto todas as outras linhas usam "+N" — erro de digitação. O app calcula pela fórmula `(pontuação − 10) ÷ 2` arredondada para baixo, que dá **+10** para 30, igual às demais linhas. Ver 00-observacoes.md.)
 
 Você não pode aumentar um atributo acima de **20** através de melhorias normais (Aumento de Atributo / Melhoria de Valor de Atributo de classe), exceto por certas características especiais de clã/classe que citam um teto de 22 (ex.: "Eu Perfeito" do Especialista em Taijutsu, "Inigualável" do Especialista em Armas etc., que elevam o teto especificamente para aqueles atributos).
 

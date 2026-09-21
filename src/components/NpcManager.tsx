@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from './ui'
 import { JUTSU_CATALOG } from '../data/jutsus'
+import { ELEMENTS } from '../lib/jutsuAccess'
 import { newId } from '../lib/id'
 import { createNPC, deleteNPC, updateNPC } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
@@ -335,6 +336,33 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
             className="w-20 px-2 py-0.5 text-xs"
           />
         </label>
+      </div>
+
+      <p className="mt-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">
+        Afinidade elemental
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {ELEMENTS.map((el) => {
+          const tem = (npc.elements ?? []).includes(el)
+          return (
+            <label key={el} className="flex items-center gap-1 text-[11px] text-orange-200">
+              <input
+                type="checkbox"
+                checked={tem}
+                onChange={() => {
+                  const atuais = npc.elements ?? []
+                  updateNPC(tableId, npc.id, {
+                    elements: tem ? atuais.filter((x) => x !== el) : [...atuais, el],
+                  })
+                }}
+              />
+              {el}
+            </label>
+          )
+        })}
+        <span className="text-[10px] text-orange-400/50">
+          usada na Vantagem Elemental (Fogo &gt; Vento &gt; Raio &gt; Terra &gt; Água &gt; Fogo)
+        </span>
       </div>
     </div>
   )

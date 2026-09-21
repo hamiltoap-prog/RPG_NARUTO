@@ -1,13 +1,13 @@
 # Jutsu de Invocação (Kuchiyose) — Sistema de Aliados Invocados
 
-Fonte: fim do Capítulo 10 ("Ninjutsu"), seção "Jutsu de Invocação". Cópia fiel do texto original (doutrina + 16 criaturas com stat-blocks e tabelas de progressão por Rank). Isto complementa 04-jutsus.md — a Técnica de Invocação em si (Rank-D) está listada lá, dentro de "Jutsus de Rank-D" do Ninjutsu Não-Elemental.
+Fonte: fim do Capítulo 10 ("Ninjutsu"), seção "Jutsu de Invocação". Cópia fiel do texto original (doutrina + 17 criaturas com stat-blocks e tabelas de progressão por Rank). Isto complementa 04-jutsus.md — a Técnica de Invocação em si (Rank-D) está listada lá, dentro de "Jutsus de Rank-D" do Ninjutsu Não-Elemental.
 
 Resumo rápido:
 - Ranks de invocação: D (Soldado) < C (Protetor) < B (Guardião) < A (Nobre) < S (Campeão).
 - Cada nível de invocação concede 2 Dados de Vida e 2 Dados de Chakra.
 - Tipos de Invocação (temperamento): Bestial, Leal, Soberano, Astuto, Incessante.
 - CA da criatura = 6 + Bônus de CA de Tamanho + Destreza + Bônus de Proficiência do Invocador.
-- 16 criaturas detalhadas abaixo: Urso, Javali, Cachorro/Lobo, Lebre/Coelho, Falcão/Aves Predadoras, Enxame de Insetos, Lagarto, Macaco/Primata, Boi/Carneiro, Rato, Tubarão, Lesma, Cobra, Aranha, Tigre/Leão, Sapo, Tartaruga.
+- 17 criaturas detalhadas abaixo (o resumo do documento-fonte diz "16", mas há 17 stat-blocks — ver 00-observacoes.md): Urso, Javali, Cachorro/Lobo, Lebre/Coelho, Falcão/Aves Predadoras, Enxame de Insetos, Lagarto, Macaco/Primata, Boi/Carneiro, Rato, Tubarão, Lesma, Cobra, Aranha, Tigre/Leão, Sapo, Tartaruga.
 
 ---
 

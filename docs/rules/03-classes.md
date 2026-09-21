@@ -168,12 +168,12 @@ Pensamentos Agonizantes (soma bônus de proficiência ao dano de Genjutsu de ata
 | 14º | 11 | 7 | — | 12 | Rank A |
 | 15º | 11 | 7 | Foco Tático (3) | 13 | Rank A |
 | 16º | 10 | 8 | Aumento de Atributo / Talento | 13 | Rank A |
-| 17º | 10 | 8 | Xeque-Mate (2) | 14 | Rank S |
+| 17º | 10 | 8 | Xeque-Mate | 14 | Rank S |
 | 18º | 10 | 8 | Declaração de Guerra (2) | 14 | Rank S |
 | 19º | 9 | 9 | Aumento de Atributo / Talento | 15 | Rank S |
-| 20º | 9 | 9 | Xeque-Mate | 15 | Rank S |
+| 20º | 9 | 9 | Xeque-Mate (2) | 15 | Rank S |
 
-(Nota: a tabela original lista "Xeque-Mate (2)" no 17º e "Xeque-Mate" no 20º — provável inversão de ordem/numeração no documento original; ver 00-observacoes.md.)
+(Nota: a tabela do documento-fonte lista "Xeque-Mate (2)" no 17º e "Xeque-Mate" no 20º. A numeração acima foi corrigida para seguir o texto descritivo do próprio manual — Xeque-Mate no 17º com 1 uso, 2 usos no 20º. Ver 00-observacoes.md.)
 
 ### Primordiais
 - **PV:** d8/nível; 1º = 8 + Mod. CON.

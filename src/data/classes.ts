@@ -132,13 +132,13 @@ export const CLASSES: CharClass[] = [
       [14, 11, 7, '—', 12, 'Rank A'],
       [15, 11, 7, 'Foco Tático (3)', 13, 'Rank A'],
       [16, 10, 8, 'Aumento de Atributo / Talento', 13, 'Rank A'],
-      [17, 10, 8, 'Xeque-Mate (2)', 14, 'Rank S'],
+      [17, 10, 8, 'Xeque-Mate', 14, 'Rank S'],
       [18, 10, 8, 'Declaração de Guerra (2)', 14, 'Rank S'],
       [19, 9, 9, 'Aumento de Atributo / Talento', 15, 'Rank S'],
-      [20, 9, 9, 'Xeque-Mate', 15, 'Rank S'],
+      [20, 9, 9, 'Xeque-Mate (2)', 15, 'Rank S'],
     ]),
     subclassesText:
-      '(Nota: a tabela original lista "Xeque-Mate (2)" no 17º e "Xeque-Mate" no 20º — provável inversão de numeração no documento-fonte; o texto descritivo diz que Xeque-Mate é obtido no 17º e melhora no 20º.)\n\n' +
+      '(Nota: a tabela do documento-fonte lista "Xeque-Mate (2)" no 17º e "Xeque-Mate" no 20º — numeração invertida. A tabela acima segue o texto descritivo do próprio manual, que diz que Xeque-Mate é obtido no 17º com 1 uso e passa a 2 usos no 20º.)\n\n' +
       'Arquétipo (3º nível) — escolhe um caminho:\n' +
       'Estrategista Tático: Preparador de Armadilhas (3º), Táticas de Esquadrão (6º), Armadilhas Avançadas (13º).\n' +
       'Estrategista Mentor: Estratégia Central (3º), Abusar da Fraqueza (3º), Centro das Atenções (6º), Controlar o Fluxo (9º).\n' +

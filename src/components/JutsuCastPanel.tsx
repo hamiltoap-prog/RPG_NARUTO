@@ -9,14 +9,24 @@ import {
   listenPendingJutsuCasts,
 } from '../lib/store'
 import { attackAlternatives, attackAttribute, findCatalogEntry, readJutsu, resolveCast } from '../lib/jutsuCast'
+import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
 import { ATTRIBUTE_LABELS } from '../types'
-import type { AttributeKey, Character, GameTable, JutsuCast, NPC } from '../types'
+import type { AttributeKey, Character, Clan, GameTable, JutsuCast, NPC } from '../types'
 
 /** Acha o alvo pela referência "character:id" / "npc:id". */
 function acharAlvo(ref: string | undefined, characters: Character[], npcs: NPC[]) {
   if (!ref) return undefined
   const [kind, id] = ref.split(':')
   return kind === 'character' ? characters.find((c) => c.id === id) : npcs.find((n) => n.id === id)
+}
+
+/** Afinidades de quem vai levar o golpe: as da ficha mais as do clã. */
+function afinidadesDoAlvo(alvo: Character | NPC | undefined, clans: Clan[]): string[] {
+  if (!alvo) return []
+  const proprias = alvo.elements ?? []
+  if (!('clanId' in alvo)) return proprias
+  const clan = clans.find((c) => c.id === alvo.clanId)
+  return [...proprias, ...clanElements(clan)]
 }
 
 /**
@@ -36,6 +46,7 @@ export function JutsuCastCard({
   character,
   characters,
   npcs,
+  clans,
   requesterUid,
   asGM,
 }: {
@@ -43,6 +54,7 @@ export function JutsuCastCard({
   character: Character
   characters: Character[]
   npcs: NPC[]
+  clans: Clan[]
   requesterUid: string
   asGM: boolean
 }) {
@@ -57,6 +69,8 @@ export function JutsuCastCard({
   const [naResistencia, setNaResistencia] = useState<'none' | 'half'>('none')
   const [aviso, setAviso] = useState('')
   const [meus, setMeus] = useState<JutsuCast[]>([])
+  /** Vantagem elemental: o app sugere, a mesa confirma. */
+  const [comVantagem, setComVantagem] = useState(false)
 
   useEffect(() => listenMyJutsuCasts(table.id, character.id, setMeus), [table.id, character.id])
 
@@ -78,6 +92,16 @@ export function JutsuCastCard({
     ...npcs.filter((n) => n.visible || asGM).map((n) => ({ ref: `npc:${n.id}`, name: n.name })),
   ]
   const alvo = acharAlvo(alvoRef, characters, npcs)
+
+  // Vantagem Elemental (05-combate.md): ciclo Fogo > Vento > Raio > Terra >
+  // Água > Fogo — quem usa o elemento superior ataca com Vantagem. O app só
+  // consegue ver isso quando o alvo tem afinidade declarada na ficha; quando
+  // vê, já marca a caixa, e quem lança pode desmarcar.
+  const elementoDoJutsu = entrada ? jutsuElement(entrada) : null
+  const superado = elementAdvantage(elementoDoJutsu, afinidadesDoAlvo(alvo, clans))
+  const motivoVantagem = superado ? `${elementoDoJutsu} supera ${superado}` : ''
+  useEffect(() => setComVantagem(Boolean(superado)), [superado])
+
   const semChakra = character.chakra.current < custo
   const pendente = meus.find((c) => c.status === 'pending')
   const ultimo = meus.find((c) => c.status !== 'pending')
@@ -100,6 +124,8 @@ export function JutsuCastCard({
       onSaveSuccess: naResistencia,
       targetRef: alvoRef || undefined,
       targetName: alvo?.name,
+      edge: modo === 'attack' && comVantagem ? ('advantage' as const) : ('none' as const),
+      edgeReason: modo === 'attack' && comVantagem ? motivoVantagem || 'vantagem da mesa' : undefined,
     }
 
     // O mestre resolve na hora; o jogador entra na fila.
@@ -183,6 +209,10 @@ export function JutsuCastCard({
                 <label className="flex items-center gap-1.5 pb-1.5 text-xs text-orange-200">
                   <input type="checkbox" checked={proficiente} onChange={(e) => setProficiente(e.target.checked)} />
                   proficiente (+{character.proficiencyBonus})
+                </label>
+                <label className="flex items-center gap-1.5 pb-1.5 text-xs text-orange-200" title="Ciclo Fogo > Vento > Raio > Terra > Água > Fogo: quem usa o elemento superior rola com Vantagem (dois d20, vale o melhor).">
+                  <input type="checkbox" checked={comVantagem} onChange={(e) => setComVantagem(e.target.checked)} />
+                  vantagem {motivoVantagem ? `(${motivoVantagem})` : 'na rolagem'}
                 </label>
               </>
             )}
@@ -277,6 +307,8 @@ async function resolverCast(
     onSaveSuccess: cast.onSaveSuccess,
     target: alvo,
     targetConditions: condicoesDoAlvo,
+    edge: cast.edge ?? 'none',
+    edgeReason: cast.edgeReason,
   })
 
   const [kind, id] = (cast.targetRef ?? ':').split(':')

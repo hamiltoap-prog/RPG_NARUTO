@@ -2,7 +2,7 @@
 
 Fonte: Capítulo 9 ("Conjuração de Jutsu"), Capítulo 10 ("Ninjutsu"), Capítulo 11 ("Genjutsu"), Capítulo 12 ("Taijutsu"), Capítulo 13 ("Bukijutsu"), mais listas de Jutsus exclusivos de cada Clã (Capítulo 2) e a seção de Invocação (fim do Capítulo 10).
 
-**Total de 631 jutsus/técnicas com stat-block completo extraídos e listados abaixo**, mais o sistema de Invocação (Kuchiyose) com 16 criaturas detalhadas (arquivo `04b-invocacoes.md`).
+**Total de 631 jutsus/técnicas com stat-block completo extraídos e listados abaixo**, mais o sistema de Invocação (Kuchiyose) com 17 criaturas detalhadas (arquivo `04b-invocacoes.md`).
 
 Um arquivo `jutsus_parsed.json` (todos os 631 registros já estruturados: nome, capítulo, seção, campos e descrição) acompanha esta pasta para facilitar a conversão direta para código.
 
