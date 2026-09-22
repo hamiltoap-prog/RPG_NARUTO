@@ -42,15 +42,77 @@ export function ItemForge({ table }: { table: GameTable }) {
 
   const aberta = table.shopOpen ?? true
   const usaManual = table.shopUsesManual ?? true
+  const marionetes = itens.filter((i) => i.kind === 'puppet')
+  const outrosItens = itens.filter((i) => i.kind !== 'puppet')
+
+  /** O mesmo cartão serve à prateleira das marionetes e à da forja. */
+  function cartaoDoItem(i: ShopItem) {
+    const esgotado = i.stock === 0
+    return (
+      <Card key={i.id} className="flex flex-col gap-1.5 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 break-words font-display text-sm uppercase tracking-[0.06em] text-white">{i.name}</p>
+          <Badge>{SHOP_ITEM_KIND_LABELS[i.kind]}</Badge>
+          {esgotado && <Badge tone="bad">esgotado</Badge>}
+          {!i.available && <Badge tone="warn">fora do ar</Badge>}
+          <span className="ml-auto font-display text-sm text-[color:var(--orange)]">{i.cost} ryo</span>
+        </div>
+        <p className="text-xs text-orange-300/60">
+          {i.kind === 'weapon' && `${i.damage ?? '—'} ${i.damageType ?? ''} ${i.properties ?? ''}`}
+          {i.kind === 'armor' && `+${i.armorBonus ?? 0} de CA`}
+          {i.kind === 'puppet' &&
+            i.puppet &&
+            `${i.puppet.hp} PV · CA ${i.puppet.armorClass} · PR ${i.puppet.resistancePoints} · ${i.puppet.attacks.length} golpe(s) · ${i.puppet.jutsus.length} jutsu(s)` +
+              (i.puppet.activationCost ? ` · ${i.puppet.activationCost} de chakra para ativar` : '')}
+          {i.description && <span className="block">{i.description}</span>}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-orange-400/60">
+            estoque: <b className="text-orange-200">{i.stock ?? '∞'}</b>
+          </span>
+          {i.stock !== undefined && (
+            <>
+              <button className="text-orange-400/60 hover:text-white" onClick={() => mexerEstoque(i, -1)}>
+                −1
+              </button>
+              <button className="text-orange-400/60 hover:text-white" onClick={() => mexerEstoque(i, 1)}>
+                +1
+              </button>
+            </>
+          )}
+          <Button
+            variant="secondary"
+            className="ml-auto px-2 py-0.5 text-[11px]"
+            onClick={() => saveShopItem(table.id, { ...i, available: !i.available })}
+          >
+            {i.available ? 'tirar do ar' : 'pôr no ar'}
+          </Button>
+          <Button variant="secondary" className="px-2 py-0.5 text-[11px]" onClick={() => setD(i)}>
+            editar
+          </Button>
+          <button className="text-[11px] text-red-400 hover:text-red-200" onClick={() => deleteShopItem(table.id, i.id)}>
+            remover
+          </button>
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <Card className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <SectionTitle>Loja da mesa</SectionTitle>
-          <Button variant="primary" onClick={() => setD(novo())}>
-            + Forjar item
-          </Button>
+          {/* A marionete tem botão próprio: escondida atrás do seletor "tipo"
+              do formulário de item, ninguém achava que ela existia. */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setD({ ...novo(), kind: 'puppet', puppet: novaMarionete() })}>
+              + Forjar marionete
+            </Button>
+            <Button variant="primary" onClick={() => setD(novo())}>
+              + Forjar item
+            </Button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -85,7 +147,9 @@ export function ItemForge({ table }: { table: GameTable }) {
 
       {d && (
         <Card className="flex flex-col gap-3 p-4">
-          <SectionTitle>{d.name ? `Editando ${d.name}` : 'Novo item'}</SectionTitle>
+          <SectionTitle>
+            {d.name ? `Editando ${d.name}` : d.kind === 'puppet' ? 'Nova marionete' : 'Novo item'}
+          </SectionTitle>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
               nome
@@ -93,7 +157,14 @@ export function ItemForge({ table }: { table: GameTable }) {
             </label>
             <label className="flex flex-col gap-1 text-xs text-orange-400/60">
               tipo
-              <Select value={d.kind} onChange={(e) => setD({ ...d, kind: e.target.value as ShopItemKind })} className="w-32">
+              <Select
+                value={d.kind}
+                onChange={(e) => {
+                  const kind = e.target.value as ShopItemKind
+                  setD({ ...d, kind, puppet: kind === 'puppet' ? (d.puppet ?? novaMarionete()) : d.puppet })
+                }}
+                className="w-32"
+              >
                 {(Object.keys(SHOP_ITEM_KIND_LABELS) as ShopItemKind[]).map((k) => (
                   <option key={k} value={k}>
                     {SHOP_ITEM_KIND_LABELS[k]}
@@ -160,7 +231,7 @@ export function ItemForge({ table }: { table: GameTable }) {
                 setD(null)
               }}
             >
-              Pôr à venda
+              {d.kind === 'puppet' ? 'Guardar marionete' : 'Pôr à venda'}
             </Button>
             <Button variant="ghost" onClick={() => setD(null)}>
               Cancelar
@@ -169,63 +240,18 @@ export function ItemForge({ table }: { table: GameTable }) {
         </Card>
       )}
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {itens.map((i) => {
-          const esgotado = i.stock === 0
-          return (
-            <Card key={i.id} className="flex flex-col gap-1.5 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-display text-sm uppercase tracking-[0.06em] text-white">{i.name}</p>
-                <Badge>{SHOP_ITEM_KIND_LABELS[i.kind]}</Badge>
-                {esgotado && <Badge tone="bad">esgotado</Badge>}
-                {!i.available && <Badge tone="warn">fora do ar</Badge>}
-                <span className="ml-auto font-display text-sm text-[color:var(--orange)]">{i.cost} ryo</span>
-              </div>
-              <p className="text-xs text-orange-300/60">
-                {i.kind === 'weapon' && `${i.damage ?? '—'} ${i.damageType ?? ''} ${i.properties ?? ''}`}
-                {i.kind === 'armor' && `+${i.armorBonus ?? 0} de CA`}
-                {i.kind === 'puppet' &&
-                  i.puppet &&
-                  `${i.puppet.hp} PV · CA ${i.puppet.armorClass} · ${i.puppet.attacks.length} golpe(s) · ${i.puppet.jutsus.length} jutsu(s)`}
-                {i.description && <span className="block">{i.description}</span>}
-              </p>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-orange-400/60">
-                  estoque: <b className="text-orange-200">{i.stock ?? '∞'}</b>
-                </span>
-                {i.stock !== undefined && (
-                  <>
-                    <button className="text-orange-400/60 hover:text-white" onClick={() => mexerEstoque(i, -1)}>
-                      −1
-                    </button>
-                    <button className="text-orange-400/60 hover:text-white" onClick={() => mexerEstoque(i, 1)}>
-                      +1
-                    </button>
-                  </>
-                )}
-                <Button
-                  variant="secondary"
-                  className="ml-auto px-2 py-0.5 text-[11px]"
-                  onClick={() => saveShopItem(table.id, { ...i, available: !i.available })}
-                >
-                  {i.available ? 'tirar do ar' : 'pôr no ar'}
-                </Button>
-                <Button variant="secondary" className="px-2 py-0.5 text-[11px]" onClick={() => setD(i)}>
-                  editar
-                </Button>
-                <button className="text-[11px] text-red-400 hover:text-red-200" onClick={() => deleteShopItem(table.id, i.id)}>
-                  remover
-                </button>
-              </div>
-            </Card>
-          )
-        })}
-        {itens.length === 0 && !d && (
-          <p className="text-sm text-orange-300/50">
-            Nenhum item forjado ainda. A loja mostra {usaManual ? 'o equipamento do manual' : 'nada — o catálogo do manual está desligado'}.
-          </p>
-        )}
-      </div>
+      {/* As marionetes ficam em prateleira própria: são fichas, não bugigangas,
+          e o mestre precisa achá-las sem caçar na vitrine. */}
+      {marionetes.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <SectionTitle>Marionetes forjadas ({marionetes.length})</SectionTitle>
+          <div className="grid gap-2 sm:grid-cols-2">{marionetes.map(cartaoDoItem)}</div>
+        </div>
+      )}
+
+      {outrosItens.length > 0 && marionetes.length > 0 && <SectionTitle>Itens da forja ({outrosItens.length})</SectionTitle>}
+
+      <div className="grid gap-2 sm:grid-cols-2">{outrosItens.map(cartaoDoItem)}</div>
     </div>
   )
 }
