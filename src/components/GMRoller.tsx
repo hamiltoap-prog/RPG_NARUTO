@@ -3,12 +3,13 @@ import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from './ui'
 import { rollAsGM } from '../lib/rollFlow'
 import { attackAttribute, findCatalogEntry, npcAsCaster, readJutsu, resolveCast } from '../lib/jutsuCast'
 import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
+import { resolveSummonTest, summonSize } from '../lib/summon'
 import { allClans } from '../lib/clans'
 import { addGMRoll, addLogEntry, listenCustomClans, listenGMRolls, updateCharacterDirect, updateNPC } from '../lib/store'
-import { FREE_DICE } from '../types'
-import type { Character, Clan, GMRoll, GameTable, NPC } from '../types'
+import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, FREE_DICE } from '../types'
+import type { AttributeKey, Character, Clan, GMRoll, GameTable, NPC } from '../types'
 
-type Aba = 'livre' | 'teste' | 'npc'
+type Aba = 'livre' | 'teste' | 'npc' | 'invocacao'
 
 /**
  * Rolagens do mestre.
@@ -73,6 +74,7 @@ export function GMRoller({
             ['livre', 'Dados livres'],
             ['teste', 'Teste avulso'],
             ['npc', 'Ataque de NPC'],
+            ['invocacao', 'Teste de invocação'],
           ] as [Aba, string][]
         ).map(([k, label]) => (
           <TabChip key={k} active={aba === k} className="px-2.5 py-1 text-xs" onClick={() => setAba(k)}>
@@ -143,6 +145,7 @@ export function GMRoller({
       )}
 
       {aba === 'npc' && <CriaturaAge table={table} npcs={npcs} characters={characters} secreta={secreta} onFeito={setUltima} />}
+      {aba === 'invocacao' && <TesteDeInvocacao table={table} npcs={npcs} secreta={secreta} onFeito={setUltima} />}
 
       {ultima && (
         <div className="well rounded-sm p-2 text-sm text-white">
@@ -420,4 +423,127 @@ function CriaturaAge({
 function acharAlvo(ref: string, characters: Character[], npcs: NPC[]) {
   const [kind, id] = ref.split(':')
   return kind === 'character' ? characters.find((c) => c.id === id) : npcs.find((n) => n.id === id)
+}
+
+/**
+ * Teste de atributo ou resistência de criatura invocada.
+ *
+ * O Kuchiyose tem conta própria, e é o único lugar do manual que funciona
+ * assim: **1d4 + o valor bruto do atributo** (a pontuação, não o modificador)
+ * contra **o PR da própria criatura**, que vem da tabela de tamanho. Dá para
+ * fazer na mão, mas é justamente a conta que ninguém lembra na hora — então
+ * fica aqui, com a explicação à vista.
+ */
+function TesteDeInvocacao({
+  table,
+  npcs,
+  secreta,
+  onFeito,
+}: {
+  table: GameTable
+  npcs: NPC[]
+  secreta: boolean
+  onFeito: (s: string) => void
+}) {
+  const [npcId, setNpcId] = useState('')
+  const [atributo, setAtributo] = useState<AttributeKey>('strength')
+  const [vantagem, setVantagem] = useState(false)
+
+  const npc = npcs.find((n) => n.id === npcId)
+  const tamanho = summonSize(npc?.summonSize)
+  const bruto = npc?.attributes?.[atributo]
+  // O PR vale o da ficha; se a criatura não veio do bestiário, o do tamanho.
+  const pr = npc?.resistancePoints ?? tamanho.resistancePoints
+
+  async function rolar() {
+    if (!npc) return
+    const resultado = resolveSummonTest({
+      creatureName: npc.name,
+      attributeLabel: ATTRIBUTE_LABELS[atributo],
+      score: bruto ?? 10,
+      resistancePoints: pr,
+      edge: vantagem ? 'advantage' : 'none',
+    })
+    onFeito(resultado.summary)
+    if (secreta) {
+      await addGMRoll(table.id, {
+        label: npc.name,
+        summary: resultado.summary,
+        dice: [resultado.roll],
+        diceSides: 4,
+        total: resultado.total,
+      })
+      return
+    }
+    await addLogEntry(table.id, {
+      actorName: npc.name,
+      actorType: 'gm',
+      kind: 'combat',
+      summary: resultado.summary,
+      dice: [resultado.roll],
+      diceSides: 4,
+      diceLabel: npc.name,
+    })
+  }
+
+  if (npcs.length === 0) return <p className="text-xs text-orange-300/50">Nenhuma criatura na mesa — use a aba Bestiário.</p>
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs leading-relaxed text-orange-300/60">
+        Conta própria do Kuchiyose: <b className="text-orange-200">1d4 + o valor bruto do atributo</b> (Força 15, e não
+        o modificador +2) contra o <b className="text-orange-200">PR da própria criatura</b>. Criatura grande resiste
+        pior de propósito — o PR sobe com o tamanho.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
+          criatura
+          <Select value={npcId} onChange={(e) => setNpcId(e.target.value)}>
+            <option value="">Escolha...</option>
+            {npcs.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name} (PR {n.resistancePoints})
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+          atributo
+          <Select value={atributo} onChange={(e) => setAtributo(e.target.value as AttributeKey)} className="w-44">
+            {ATTRIBUTE_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {ATTRIBUTE_LABELS[k]}
+                {npc?.attributes?.[k] !== undefined ? ` (${npc.attributes[k]})` : ''}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex items-center gap-1.5 pb-1.5 text-xs text-orange-200" title="Vantagem Natural da criatura para aquele tipo de teste: rola dois d4 e vale o melhor.">
+          <input type="checkbox" checked={vantagem} onChange={(e) => setVantagem(e.target.checked)} />
+          vantagem natural
+        </label>
+      </div>
+
+      {npc && (
+        <p className="text-xs text-orange-400/60">
+          {npc.name} · tamanho {tamanho.name} · PR {pr} ·{' '}
+          {bruto === undefined ? (
+            <span className="text-amber-300">
+              sem pontuações de atributo na ficha — o app usa 10; preencha na aba Bestiário para a conta ficar certa
+            </span>
+          ) : (
+            <>
+              {ATTRIBUTE_LABELS[atributo]} {bruto} · precisa de {Math.max(1, pr - bruto)} ou mais no d4
+              {pr - bruto <= 1 ? ' (passa sempre)' : pr - bruto > 4 ? ' (não passa nunca)' : ''}
+            </>
+          )}
+        </p>
+      )}
+
+      <Button variant="primary" className="self-start" disabled={!npc} onClick={rolar}>
+        Rolar teste
+      </Button>
+    </div>
+  )
 }

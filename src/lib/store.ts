@@ -34,6 +34,7 @@ import type {
   ScenePing,
   SheetChangeRequest,
 } from '../types'
+import { spendWeapon } from './equipment'
 import { newId, newTableCode } from './id'
 
 function requireDb() {
@@ -759,10 +760,16 @@ export async function applyJutsuCast(
 ) {
   const database = requireDb()
   const batch = writeBatch(database)
-  batch.update(doc(charactersCol(tableId), caster.id), {
+  const patchConjurador: Record<string, unknown> = {
     chakra: { ...caster.chakra, current: Math.max(0, caster.chakra.current - cast.chakraCost) },
     updatedAt: Date.now(),
-  })
+  }
+  // Arma de arremesso sai da mão: a unidade é descontada na mesma escrita do
+  // chakra, para não existir estado em que o ataque saiu mas a shuriken não.
+  if (cast.consumesWeapon && cast.weaponId) {
+    patchConjurador.weapons = spendWeapon(caster.weapons, cast.weaponId)
+  }
+  batch.update(doc(charactersCol(tableId), caster.id), patchConjurador)
   if (target) {
     const ref = target.kind === 'character' ? doc(charactersCol(tableId), target.id) : doc(npcsCol(tableId), target.id)
     const patch: Record<string, unknown> = { hp: { ...target.hp, current: target.hpAfter } }

@@ -9,10 +9,9 @@ Cada item abaixo traz o **estado atual**:
 - ⏳ **Aberto** — depende de uma decisão de regra do dono da mesa; enquanto
   isso o app segue a leitura literal do manual, marcada em cada item.
 
-Dos 18 pontos, **16 estão fechados**. Seguem abertos só o item 8
-(Discernimento × Intuição) e o item 12 (a fórmula "1d4 + atributo bruto" das
-invocações) — nenhum dos dois trava nada: o app já joga com a leitura descrita
-em cada um.
+Dos 19 pontos, **18 estão fechados**. Segue aberto só o item 13d (nomes de
+equipamento inicial que o capítulo de Equipamento não lista) — e ele não trava
+nada: esses itens entram na ficha como avulsos.
 
 ---
 
@@ -89,16 +88,14 @@ mostra a faixa **"66-60"**, impossível (limite inferior maior que o superior).
 começa em 61, então **56–60** é a única faixa que fecha o 1d100 sem buraco nem
 sobreposição. É o valor usado, com o literal anotado.
 
-## ⏳ 8. Perícia "Discernimento" fora da lista oficial
+## ✅ 8. Perícia "Discernimento" fora da lista oficial
 
 Hyūga e Kurama concedem proficiência em **"Discernimento"**, que não está na
 lista de 18 perícias do Capítulo 6 — a mais próxima é **"Intuição"**
 (Sabedoria).
 
-**Enquanto não houver decisão:** o app mapeia Discernimento → Intuição (é a
-leitura que mantém as 18 perícias fechadas), e diz isso no texto do clã. Se
-forem perícias diferentes, a lista do Capítulo 6 passa a ter 19 entradas e é
-só acrescentar.
+**Decisão: são a mesma perícia.** O app mapeia Discernimento → Intuição e diz
+isso no texto do clã. A lista segue com 18 perícias.
 
 ## ✅ 9. Nenhuma seção "Descansando", apesar de referenciada
 
@@ -151,16 +148,31 @@ parecidos, mas consistente do começo ao fim do texto.
 usa esses significados: a rodada avança quando todo mundo já agiu, e as
 condições contam as rodadas restantes.
 
-## ⏳ 12. Fórmula "1d4 + o valor bruto do Atributo" nas invocações
+## ✅ 12. Fórmula "1d4 + o valor bruto do Atributo" nas invocações
 
 Na seção de Invocação (Kuchiyose), testes de atributo e de resistência de
 criaturas invocadas usam **"1d4 + o valor bruto do Atributo Relevante da
 criatura"** (a pontuação, não o modificador) contra o PR da própria criatura —
 diferente do 1d20 + modificador usado em todo o resto do sistema.
 
-**Enquanto não houver decisão:** documentado fielmente em `04b-invocacoes.md`.
-O app não automatiza esse subsistema; as criaturas na mesa rolam pelo sistema
-normal, que é o que o mestre usa no combate.
+**Decisão: é intencional, e agora está automatizado.** O Kuchiyose é um
+subsistema separado, e o app o trata como tal (`src/lib/summon.ts`):
+
+- **Teste de atributo ou resistência:** 1d4 + a pontuação bruta contra o PR da
+  própria criatura, com Vantagem Natural rolando dois d4. Fica na aba
+  "Teste de invocação" das rolagens do mestre, que mostra a conta e avisa
+  quando o teste passa sempre ou não passa nunca.
+- **Ataque de arma natural:** 1d20 + Modificador de Ataque da criatura +
+  Bônus de Ataque do tamanho, contra a CA do alvo.
+- **Tabela de Modificadores de Tamanho:** é dela que saem o bônus na CA, os
+  Pontos de Resistência, o Bônus de Ataque e o Dado de Dano — o manual é
+  explícito quanto a isso, e antes o app usava o Dado de Vida da tribo como
+  dado de dano. O tamanho é escolhido junto com o rank ao puxar uma tribo do
+  manual para o bestiário.
+
+Como o PR sobe com o tamanho (10 no Minúsculo, 20 no Gigantesco), criatura
+grande acerta mais e resiste pior — que é exatamente o que a "Nota 2" do
+manual diz em palavras.
 
 ## ✅ 13. Escopo do que foi e não foi transcrito por extenso
 
@@ -200,6 +212,23 @@ Tartaruga.
 
 **Decisão:** a contagem do resumo é que está errada. As **17** estão em
 `src/data/summons.ts` e no bestiário do app.
+
+## ⏳ 13d. Equipamento inicial cita itens que o Capítulo de Equipamento não lista
+
+O equipamento inicial das classes nomeia itens que **não existem** no catálogo
+do Capítulo 5: *bombas de fumaça*, *bomba de papel*, *Lâminas de Soco*,
+*Tecido de Contenção*, *Kit de Medicina*, *Pergaminhos em Branco*, *Papéis
+Bomba*, *Pergaminho de Ninjutsu (Rank-D)* e *Jaqueta de Combate*.
+
+Das 60 alternativas de equipamento inicial das 8 classes, 38 casam com um item
+do catálogo, 10 são escolhas abertas por categoria ("1 arma simples") e 12
+caem nesses nomes soltos.
+
+**Enquanto não houver decisão:** o app põe esses nomes na ficha como itens
+avulsos, com o nome que o manual usa e uma nota dizendo que não constam do
+capítulo de Equipamento. Não inventa preço, dano nem efeito para eles. Se você
+quiser transformá-los em itens de verdade, dá para criá-los na forja da mesa
+com o preço e o efeito que a sua mesa decidir.
 
 ## ✅ 14. Itens com o mesmo nome em lugares diferentes
 

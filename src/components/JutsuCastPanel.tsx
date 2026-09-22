@@ -58,7 +58,8 @@ export function JutsuCastCard({
   requesterUid: string
   asGM: boolean
 }) {
-  const [jutsuName, setJutsuName] = useState('')
+  /** O que vai ser usado: "arma:<id>" de uma arma da ficha, ou o nome do jutsu. */
+  const [acao, setAcao] = useState('')
   const [alvoRef, setAlvoRef] = useState('')
   const [modo, setModo] = useState<'attack' | 'save' | 'none'>('attack')
   const [atributo, setAtributo] = useState<AttributeKey>('intelligence')
@@ -74,10 +75,28 @@ export function JutsuCastCard({
 
   useEffect(() => listenMyJutsuCasts(table.id, character.id, setMeus), [table.id, character.id])
 
+  /** Armas que dão para usar: equipadas e com unidade sobrando. */
+  const armasProntas = character.weapons.filter((w) => w.equipped && (w.quantity ?? 1) > 0)
+  const arma = acao.startsWith('arma:') ? armasProntas.find((w) => `arma:${w.id}` === acao) : undefined
+  const jutsuName = arma ? '' : acao
+
   const entrada = useMemo(() => (jutsuName ? findCatalogEntry(jutsuName) : undefined), [jutsuName])
 
-  // Ao escolher o jutsu, o app lê a descrição e preenche o que conseguiu.
+  // Ao escolher, o app preenche o que consegue ler. Arma é direto — o manual
+  // diz "1d20 + atributo + proficiência contra a CA" e o dano é o dado da
+  // arma, sem somar modificador (05-combate.md). Jutsu vem do texto.
   useEffect(() => {
+    if (arma) {
+      setModo('attack')
+      // "Acuidade" é o que libera Destreza em arma corpo a corpo; arma de
+      // arremesso/alcance é Destreza direto (tabela de Mecânica de ataque).
+      const distancia = /Arremesso|Alcance/i.test(arma.properties ?? '')
+      const acuidade = /Acuidade/i.test(arma.properties ?? '')
+      setAtributo(distancia || acuidade ? 'dexterity' : 'strength')
+      setDano(arma.damage || '1d4')
+      setCusto(0)
+      return
+    }
     if (!entrada) return
     const lido = readJutsu(entrada)
     setModo(lido.mode)
@@ -85,7 +104,7 @@ export function JutsuCastCard({
     setSaveAttr(lido.saveAttribute ?? 'constitution')
     setDano(lido.damage ?? '')
     setCusto(lido.cost)
-  }, [entrada])
+  }, [arma, entrada])
 
   const alvos = [
     ...characters.filter((c) => c.id !== character.id && (!c.isNPC || c.visible || asGM)).map((c) => ({ ref: `character:${c.id}`, name: c.name })),
@@ -97,7 +116,7 @@ export function JutsuCastCard({
   // Água > Fogo — quem usa o elemento superior ataca com Vantagem. O app só
   // consegue ver isso quando o alvo tem afinidade declarada na ficha; quando
   // vê, já marca a caixa, e quem lança pode desmarcar.
-  const elementoDoJutsu = entrada ? jutsuElement(entrada) : null
+  const elementoDoJutsu = entrada && !arma ? jutsuElement(entrada) : null
   const superado = elementAdvantage(elementoDoJutsu, afinidadesDoAlvo(alvo, clans))
   const motivoVantagem = superado ? `${elementoDoJutsu} supera ${superado}` : ''
   useEffect(() => setComVantagem(Boolean(superado)), [superado])
@@ -107,20 +126,23 @@ export function JutsuCastCard({
   const ultimo = meus.find((c) => c.status !== 'pending')
 
   async function lancar() {
-    if (!jutsuName) return
+    if (!acao) return
     const base = {
       casterId: character.id,
       casterName: character.name,
       requesterUid,
-      jutsuName,
-      classification: entrada?.classification ?? 'Ninjutsu',
+      jutsuName: arma ? arma.name : jutsuName,
+      classification: arma ? 'Bukijutsu' : (entrada?.classification ?? 'Ninjutsu'),
       chakraCost: custo,
+      // Arma de arremesso sai da mão: a resolução desconta a unidade da ficha.
+      weaponId: arma?.id,
+      consumesWeapon: arma?.consumable === true,
       mode: modo,
       attackAttribute: atributo,
       proficient: proficiente,
       saveAttribute: modo === 'save' ? saveAttr : undefined,
       damage: dano.trim() || undefined,
-      damageType: entrada ? readJutsu(entrada).damageType : undefined,
+      damageType: arma ? arma.damageType : entrada ? readJutsu(entrada).damageType : undefined,
       onSaveSuccess: naResistencia,
       targetRef: alvoRef || undefined,
       targetName: alvo?.name,
@@ -139,12 +161,12 @@ export function JutsuCastCard({
     setAviso('Pedido enviado — aguardando o mestre liberar.')
   }
 
-  if (character.jutsus.length === 0) return null
+  if (character.jutsus.length === 0 && armasProntas.length === 0) return null
 
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <SectionTitle>Lançar jutsu</SectionTitle>
+        <SectionTitle>Atacar ou lançar jutsu</SectionTitle>
         {custo > 0 && (
           <Badge tone={semChakra ? 'bad' : 'default'}>
             {custo} de chakra · você tem {character.chakra.current}
@@ -154,14 +176,29 @@ export function JutsuCastCard({
 
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
-          jutsu
-          <Select value={jutsuName} onChange={(e) => setJutsuName(e.target.value)}>
-            <option value="">Escolha um dos seus jutsus...</option>
-            {character.jutsus.map((j) => (
-              <option key={j.id} value={j.name}>
-                {j.name}
-              </option>
-            ))}
+          o que você faz
+          <Select value={acao} onChange={(e) => setAcao(e.target.value)}>
+            <option value="">Escolha uma arma ou um jutsu...</option>
+            {armasProntas.length > 0 && (
+              <optgroup label="Armas equipadas">
+                {armasProntas.map((w) => (
+                  <option key={w.id} value={`arma:${w.id}`}>
+                    {w.name} · {w.damage}
+                    {(w.quantity ?? 1) > 1 ? ` (${w.quantity})` : ''}
+                    {w.consumable ? ' · gasta 1' : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {character.jutsus.length > 0 && (
+              <optgroup label="Jutsus">
+                {character.jutsus.map((j) => (
+                  <option key={j.id} value={j.name}>
+                    {j.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Select>
         </label>
         <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
@@ -177,11 +214,18 @@ export function JutsuCastCard({
         </label>
       </div>
 
-      {jutsuName && (
+      {acao && (
         <div className="well flex flex-col gap-2 rounded-sm p-3">
           <p className="font-display text-xs uppercase tracking-[0.12em] text-orange-400/60">
-            O que o app leu da descrição — ajuste se o jutsu pedir outra coisa
+            {arma
+              ? `Ataque com ${arma.name}${arma.properties ? ` — ${arma.properties}` : ''}`
+              : 'O que o app leu da descrição — ajuste se o jutsu pedir outra coisa'}
           </p>
+          {arma?.consumable && (
+            <p className="text-xs text-orange-300/60">
+              Arremessada: o ataque desconta 1 das {arma.quantity ?? 1} unidades da ficha.
+            </p>
+          )}
 
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-xs text-orange-400/60">
@@ -198,7 +242,7 @@ export function JutsuCastCard({
                 <label className="flex flex-col gap-1 text-xs text-orange-400/60">
                   atributo
                   <Select value={atributo} onChange={(e) => setAtributo(e.target.value as AttributeKey)} className="w-36">
-                    {attackAlternatives(entrada?.classification ?? 'Ninjutsu').map((a) => (
+                    {attackAlternatives(arma ? 'Bukijutsu' : (entrada?.classification ?? 'Ninjutsu')).map((a) => (
                       <option key={a} value={a}>
                         {ATTRIBUTE_LABELS[a]} ({character.modifiers[a] >= 0 ? '+' : ''}
                         {character.modifiers[a]})
@@ -263,8 +307,16 @@ export function JutsuCastCard({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" disabled={!jutsuName || semChakra || Boolean(pendente)} onClick={lancar}>
-          {pendente ? 'Já há um jutsu na fila' : asGM ? 'Lançar agora' : 'Pedir para lançar'}
+        <Button variant="primary" disabled={!acao || semChakra || Boolean(pendente)} onClick={lancar}>
+          {pendente
+            ? 'Já há uma ação na fila'
+            : asGM
+              ? arma
+                ? 'Atacar agora'
+                : 'Lançar agora'
+              : arma
+                ? 'Pedir para atacar'
+                : 'Pedir para lançar'}
         </Button>
         {semChakra && custo > 0 && <span className="text-xs text-red-300">Chakra insuficiente.</span>}
       </div>
@@ -361,7 +413,8 @@ export function JutsuCastQueue({
         return (
           <div key={c.id} className="well flex flex-wrap items-center gap-2 rounded-sm p-2 text-sm">
             <span className="text-orange-100">
-              <b className="text-white">{c.casterName}</b> lança <b className="text-[color:var(--orange)]">{c.jutsuName}</b>
+              <b className="text-white">{c.casterName}</b> {c.weaponId ? 'ataca com' : 'lança'}{' '}
+              <b className="text-[color:var(--orange)]">{c.jutsuName}</b>
               {alvo ? (
                 <>
                   {' '}

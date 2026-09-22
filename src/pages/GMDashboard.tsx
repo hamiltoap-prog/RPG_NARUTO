@@ -9,6 +9,7 @@ import { CharacterCreate } from './CharacterCreate'
 import { BestiaryPanel } from '../components/BestiaryPanel'
 import { ClanManager } from '../components/ClanManager'
 import { ItemForge } from '../components/ItemForge'
+import { GiftPanel } from '../components/GiftPanel'
 import { SoundBoard } from '../components/TableSound'
 import { SurvivalPanel } from '../components/SurvivalPanel'
 import { ThemeToggle } from '../components/ThemeToggle'
@@ -234,7 +235,12 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'clas' && <ClanManager table={table} />}
 
-      {tab === 'loja' && <ItemForge table={table} />}
+      {tab === 'loja' && (
+        <div className="flex flex-col gap-4">
+          <GiftPanel table={table} characters={characters} />
+          <ItemForge table={table} />
+        </div>
+      )}
 
       {tab === 'som' && <SoundBoard table={table} />}
 

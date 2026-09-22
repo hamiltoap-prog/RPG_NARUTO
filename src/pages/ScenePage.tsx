@@ -372,6 +372,13 @@ export function ScenePage() {
   const boardTokens = scene.tokens.filter((t) => t.onBoard !== false)
   const stagedTokens = scene.tokens.filter((t) => t.onBoard === false)
 
+  /** A peça guarda o nome de quando foi criada; se a ficha foi renomeada
+   * depois, quem manda é o nome de agora. */
+  function rotuloDe(t: SceneToken) {
+    const ficha = t.refType === 'character' ? characters.find((c) => c.id === t.refId) : npcs.find((n) => n.id === t.refId)
+    return ficha?.name ?? t.label
+  }
+
   const litTokens = boardTokens.filter((t) => {
     if (t.refType !== 'character') return false
     const c = characters.find((x) => x.id === t.refId)
@@ -589,7 +596,7 @@ export function ScenePage() {
                   onPointerDown={(e) => onTokenPointerDown(e, t)}
                   className={`absolute z-[3] -translate-x-1/2 -translate-y-1/2 select-none ${canDrag(t) ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, width: `${width * 100}%` }}
-                  title={t.label}
+                  title={rotuloDe(t)}
                 >
                   <div
                     className={`relative aspect-square overflow-hidden rounded-full border-2 ${
@@ -598,10 +605,10 @@ export function ScenePage() {
                     style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
                   >
                     {t.imageUrl ? (
-                      <img src={t.imageUrl} alt={t.label} draggable={false} className="h-full w-full object-cover" />
+                      <img src={t.imageUrl} alt={rotuloDe(t)} draggable={false} className="h-full w-full object-cover" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-raised)] font-display text-white">
-                        <span style={{ fontSize: `${Math.max(10, width * stage.width * 0.35)}px` }}>{t.label.slice(0, 2).toUpperCase()}</span>
+                        <span style={{ fontSize: `${Math.max(10, width * stage.width * 0.35)}px` }}>{rotuloDe(t).slice(0, 2).toUpperCase()}</span>
                       </div>
                     )}
                   </div>
@@ -730,6 +737,12 @@ function GMPanel({
 
   const map = scene.map ?? EMPTY_MAP
   const aspect = stageAspect(scene)
+
+  /** Mesma regra do palco: ficha renomeada manda no rótulo da peça. */
+  function rotuloDe(t: SceneToken) {
+    const ficha = t.refType === 'character' ? characters.find((c) => c.id === t.refId) : npcs.find((n) => n.id === t.refId)
+    return ficha?.name ?? t.label
+  }
 
   // O input acompanha o que a cena tem de fato (ex: mapa escolhido na
   // biblioteca), desde que o mestre não esteja no meio de uma digitação.
@@ -1039,7 +1052,7 @@ function GMPanel({
             <div className="flex flex-wrap gap-2">
               {stagedTokens.map((t) => (
                 <div key={t.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
-                  <span className="text-orange-100">{t.label}</span>
+                  <span className="text-orange-100">{rotuloDe(t)}</span>
                   <Button variant="good" className="px-2 py-0.5 text-[11px]" onClick={() => putOnBoard(t.id)}>
                     pôr no mapa
                   </Button>
@@ -1059,7 +1072,7 @@ function GMPanel({
                 .filter((t) => t.onBoard !== false)
                 .map((t) => (
                   <div key={t.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
-                    <span className="text-orange-100">{t.label}</span>
+                    <span className="text-orange-100">{rotuloDe(t)}</span>
                     <Select
                       value={t.squares ?? 1}
                       onChange={(e) => updateToken(t.id, { squares: Number(e.target.value) })}

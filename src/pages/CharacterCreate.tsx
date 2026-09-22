@@ -1,13 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from '../components/ui'
+import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Textarea } from '../components/ui'
 
 import { CLASSES } from '../data/classes'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { averageStartingWealth, calculateDerivedStats, totalAttributes } from '../lib/characterMath'
+import {
+  applyStartingPicks,
+  armorClassFor,
+  bundleSize,
+  categoryOptions,
+  readStartingEquipment,
+  unitName,
+} from '../lib/equipment'
+import type { StartingPick } from '../lib/equipment'
 import { createCharacter } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
-import type { Attributes, Character, CharacterDescription, Clan, GameTable, InventoryItem, Jutsu } from '../types'
+import type {
+  Attributes,
+  Character,
+  CharacterDescription,
+  Clan,
+  GameTable,
+  InventoryItem,
+  Jutsu,
+} from '../types'
 import { newId } from '../lib/id'
 import { allClans, clanIdFromName, emptyClan } from '../lib/clans'
 import { listenCustomClans, saveCustomClan } from '../lib/store'
@@ -67,8 +84,13 @@ export function CharacterCreate({
   const [classId, setClassId] = useState('')
   const [assigned, setAssigned] = useState<Partial<Record<(typeof ATTRIBUTE_KEYS)[number], number>>>({})
   const [description, setDescription] = useState<CharacterDescription>(emptyDescription)
+  /** Itens escritos à mão, que somam ao que o equipamento inicial já dá. */
   const [equipment, setEquipment] = useState<InventoryItem[]>([])
   const [newItemName, setNewItemName] = useState('')
+  /** Por linha do equipamento inicial: qual alternativa foi marcada. */
+  const [escolhaPorLinha, setEscolhaPorLinha] = useState<Record<number, number>>({})
+  /** Para as alternativas abertas ("1 arma simples"): o item escolhido em cada vaga. */
+  const [itensDaCategoria, setItensDaCategoria] = useState<Record<string, string>>({})
   const [jutsus, setJutsus] = useState<Jutsu[]>([])
   const [jutsuToAdd, setJutsuToAdd] = useState('')
   const [imageUrl, setImageUrl] = useState('')
@@ -134,10 +156,60 @@ export function CharacterCreate({
     return new Set(Object.values(assigned))
   }
 
-  function loadClassEquipment() {
-    if (!charClass) return
-    setEquipment(charClass.startingEquipment.map((name) => ({ id: newId(), name, quantity: 1 })))
-  }
+  /**
+   * Equipamento inicial: o manual escreve em texto ("10 kunais ou 20
+   * shurikens"), e aqui isso vira escolha de verdade com os itens do mesmo
+   * catálogo da loja — dano, propriedades e bônus de CA vêm junto.
+   */
+  const linhasIniciais = useMemo(
+    () => (charClass ? readStartingEquipment(charClass.startingEquipment) : []),
+    [charClass],
+  )
+
+  /** Primeira alternativa de cada linha marcada por padrão. */
+  useEffect(() => {
+    const inicial: Record<number, number> = {}
+    linhasIniciais.forEach((_, i) => (inicial[i] = 0))
+    setEscolhaPorLinha(inicial)
+    setItensDaCategoria({})
+  }, [linhasIniciais])
+
+  /** O que as escolhas somam nas três listas da ficha. */
+  const doEquipamentoInicial = useMemo(() => {
+    const picks: StartingPick[] = []
+    const avulsos: { name: string; quantity: number }[] = []
+    linhasIniciais.forEach((linha, i) => {
+      const op = linha.options[escolhaPorLinha[i] ?? 0]
+      if (!op) return
+      if (op.type === 'items') picks.push(...op.picks)
+      else if (op.type === 'choose') {
+        for (let vaga = 0; vaga < op.count; vaga++) {
+          const nome = itensDaCategoria[`${i}:${vaga}`]
+          if (nome) picks.push({ kind: op.kind, name: nome, quantity: bundleSize(nome) })
+        }
+      } else avulsos.push({ name: unitName(op.label.replace(/^\d+\s*/, '')), quantity: op.count })
+    })
+    return applyStartingPicks(picks, avulsos)
+  }, [linhasIniciais, escolhaPorLinha, itensDaCategoria])
+
+  /** Vagas em aberto travam o avanço: melhor barrar do que criar sem a arma. */
+  /**
+   * CA já contando a armadura escolhida: 10 + bônus da peça vestida + Mod.
+   * Destreza (dentro do teto da armadura) + metade do Bônus de Proficiência.
+   * Antes a ficha nascia com a CA de quem está sem armadura nenhuma.
+   */
+  const caComEquipamento = derived
+    ? armorClassFor({ modifiers: derived.modifiers, proficiencyBonus: derived.proficiencyBonus }, doEquipamentoInicial.armor)
+    : 0
+
+  const vagasEmAberto = linhasIniciais.reduce((falta, linha, i) => {
+    const op = linha.options[escolhaPorLinha[i] ?? 0]
+    if (op?.type !== 'choose') return falta
+    let n = 0
+    for (let vaga = 0; vaga < op.count; vaga++) if (!itensDaCategoria[`${i}:${vaga}`]) n++
+    return falta + n
+  }, 0)
+
 
   function addEquipmentItem() {
     if (!newItemName.trim()) return
@@ -176,15 +248,17 @@ export function CharacterCreate({
     setJutsus((prev) => prev.filter((j) => j.id !== id))
   }
 
-  // Um item por passo, na ordem de STEPS. Afinidade em diante não travam:
-  // dá para seguir sem escolher elemento, equipamento ou jutsu.
+  // Um item por passo, na ordem de STEPS. Afinidade e jutsu não travam: dá
+  // para seguir sem escolher. O equipamento trava só quando a classe deixou
+  // uma escolha em aberto ("1 arma simples") — seguir dali criaria um ninja
+  // sem arma nenhuma, sem ninguém ter decidido isso.
   const canNext = [
     Boolean(clanId),
     Boolean(classId),
     Object.keys(assigned).length === ATTRIBUTE_KEYS.length,
     true,
     true,
-    true,
+    vagasEmAberto === 0,
     true,
     true,
   ]
@@ -209,13 +283,13 @@ export function CharacterCreate({
         modifiers: derived.modifiers,
         hp: { current: derived.hp, max: derived.hp },
         chakra: { current: derived.chakra, max: derived.chakra },
-        armorClass: derived.armorClass,
+        armorClass: caComEquipamento,
         proficiencyBonus: derived.proficiencyBonus,
         resistancePoints: derived.resistancePoints,
         description,
-        equipment,
-        weapons: [],
-        armor: [],
+        equipment: [...doEquipamentoInicial.equipment, ...equipment],
+        weapons: doEquipamentoInicial.weapons,
+        armor: doEquipamentoInicial.armor,
         jutsus,
         proficiencies: [...clan.skillProficiencies],
         condition: 'Normal',
@@ -448,7 +522,7 @@ export function CharacterCreate({
             <div className="mt-2 flex flex-wrap gap-4 rounded-lg border border-orange-900/30 bg-black/20 p-3 text-sm text-orange-200">
               <span>PV: {derived.hp}</span>
               <span>Chakra: {derived.chakra}</span>
-              <span>CA: {derived.armorClass}</span>
+              <span>CA: {caComEquipamento}</span>
               <span>Bônus de Proficiência: +{derived.proficiencyBonus}</span>
             </div>
           )}
@@ -625,37 +699,132 @@ export function CharacterCreate({
 
       {step === 5 && (
         <Card className="flex flex-col gap-3 p-4">
-          <div className="flex items-center justify-between">
-            <SectionTitle>Equipamento Inicial</SectionTitle>
-            {charClass && equipment.length === 0 && (
-              <Button variant="secondary" onClick={loadClassEquipment}>
-                Carregar equipamento da classe
-              </Button>
+          <SectionTitle>Equipamento Inicial</SectionTitle>
+          <p className="text-xs leading-relaxed text-orange-300/60">
+            O que a classe dá, item por item, ligado ao mesmo catálogo da loja — dano, propriedades e bônus de Classe de
+            Armadura vêm junto. Marque uma alternativa em cada linha.
+            {charClass && <> Dinheiro inicial: <b className="text-white">{charClass.startingWealth}</b>.</>}
+          </p>
+
+          {linhasIniciais.map((linha, i) => {
+            const marcada = escolhaPorLinha[i] ?? 0
+            const op = linha.options[marcada]
+            return (
+              <div key={linha.label} className="well flex flex-col gap-2 rounded-sm p-3">
+                <p className="font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">{linha.label}</p>
+                {linha.options.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {linha.options.map((o, j) => (
+                      <TabChip
+                        key={o.label}
+                        active={marcada === j}
+                        className="px-3 py-1 text-xs"
+                        onClick={() => setEscolhaPorLinha((prev) => ({ ...prev, [i]: j }))}
+                      >
+                        {o.label}
+                      </TabChip>
+                    ))}
+                  </div>
+                )}
+
+                {op?.type === 'items' && (
+                  <p className="text-xs text-orange-200">
+                    {op.picks.map((p) => `${p.name}${p.quantity > 1 ? ` x${p.quantity}` : ''}`).join(' + ')}
+                  </p>
+                )}
+
+                {op?.type === 'choose' && (
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: op.count }, (_, vaga) => (
+                      <Select
+                        key={vaga}
+                        value={itensDaCategoria[`${i}:${vaga}`] ?? ''}
+                        onChange={(e) => setItensDaCategoria((prev) => ({ ...prev, [`${i}:${vaga}`]: e.target.value }))}
+                        className="w-60"
+                      >
+                        <option value="">Escolha {op.count > 1 ? `a ${vaga + 1}ª ` : ''}no catálogo...</option>
+                        {categoryOptions(op.kind, op.category).map((nome) => (
+                          <option key={nome} value={nome}>
+                            {nome}
+                          </option>
+                        ))}
+                      </Select>
+                    ))}
+                  </div>
+                )}
+
+                {op?.type === 'free' && (
+                  <p className="text-xs text-orange-300/50">
+                    Entra como item avulso ({op.count}x) — este nome é citado pela classe, mas não consta no capítulo de
+                    Equipamento do manual, então o app não inventa preço nem efeito para ele.
+                  </p>
+                )}
+              </div>
+            )
+          })}
+
+          <div className="well flex flex-col gap-1.5 rounded-sm p-3">
+            <p className="font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">
+              Vai para a ficha
+            </p>
+            {doEquipamentoInicial.weapons.length > 0 && (
+              <p className="text-xs text-orange-200">
+                <span className="text-orange-400/60">Armas:</span>{' '}
+                {doEquipamentoInicial.weapons
+                  .map((w) => `${w.name}${(w.quantity ?? 1) > 1 ? ` x${w.quantity}` : ''} (${w.damage}${w.consumable ? ', gasta ao arremessar' : ''})`)
+                  .join(' · ')}
+              </p>
+            )}
+            {doEquipamentoInicial.armor.length > 0 && (
+              <p className="text-xs text-orange-200">
+                <span className="text-orange-400/60">Armadura:</span>{' '}
+                {doEquipamentoInicial.armor.map((a) => `${a.name} (+${a.defenseBonus} CA)`).join(' · ')}
+              </p>
+            )}
+            {[...doEquipamentoInicial.equipment, ...equipment].length > 0 && (
+              <p className="text-xs text-orange-200">
+                <span className="text-orange-400/60">Itens:</span>{' '}
+                {[...doEquipamentoInicial.equipment, ...equipment]
+                  .map((i) => `${i.name}${i.quantity > 1 ? ` x${i.quantity}` : ''}`)
+                  .join(' · ')}
+              </p>
+            )}
+            <p className="text-xs text-orange-300/60">
+              Classe de Armadura com esse equipamento: <b className="text-white">{caComEquipamento}</b>
+              {doEquipamentoInicial.armor.length === 0 && ' (sem armadura vestida)'}
+            </p>
+            {vagasEmAberto > 0 && (
+              <p className="text-xs text-amber-300">
+                Falta escolher {vagasEmAberto} {vagasEmAberto === 1 ? 'item' : 'itens'} nas linhas em aberto.
+              </p>
             )}
           </div>
-          <p className="text-xs text-orange-300/60">
-            {charClass ? `Sugestão da classe (${charClass.name}): ${charClass.startingEquipment.join(', ')} · ${charClass.startingWealth}` : ''}
-          </p>
-          {equipment.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-orange-900/30 bg-black/20 px-3 py-1.5 text-sm">
-              <span className="text-orange-100">{item.name}</span>
-              <span className="flex items-center gap-2">
-                <button className="text-orange-400 hover:text-orange-200" onClick={() => changeQty(item.id, -1)}>
-                  −
-                </button>
-                <span>{item.quantity}</span>
-                <button className="text-orange-400 hover:text-orange-200" onClick={() => changeQty(item.id, 1)}>
-                  +
-                </button>
-                <button className="text-red-400 hover:text-red-200" onClick={() => removeEquipmentItem(item.id)}>
-                  remover
-                </button>
-              </span>
+
+          <div>
+            <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">
+              Algo mais que você combinou com o mestre
+            </p>
+            {equipment.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-2 py-0.5 text-sm">
+                <span className="text-orange-100">{item.name}</span>
+                <span className="flex items-center gap-2">
+                  <button className="text-orange-400 hover:text-orange-200" onClick={() => changeQty(item.id, -1)}>
+                    −
+                  </button>
+                  <span>{item.quantity}</span>
+                  <button className="text-orange-400 hover:text-orange-200" onClick={() => changeQty(item.id, 1)}>
+                    +
+                  </button>
+                  <button className="text-red-400 hover:text-red-200" onClick={() => removeEquipmentItem(item.id)}>
+                    remover
+                  </button>
+                </span>
+              </div>
+            ))}
+            <div className="mt-1 flex gap-2">
+              <Input placeholder="Item personalizado" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
+              <Button onClick={addEquipmentItem}>Adicionar</Button>
             </div>
-          ))}
-          <div className="flex gap-2">
-            <Input placeholder="Item personalizado" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
-            <Button onClick={addEquipmentItem}>Adicionar</Button>
           </div>
         </Card>
       )}
@@ -744,7 +913,7 @@ export function CharacterCreate({
               <>
                 <p>
                   <span className="text-orange-400/60">PV:</span> {derived.hp} · <span className="text-orange-400/60">Chakra:</span> {derived.chakra} ·{' '}
-                  <span className="text-orange-400/60">CA:</span> {derived.armorClass} · <span className="text-orange-400/60">PR:</span>{' '}
+                  <span className="text-orange-400/60">CA:</span> {caComEquipamento} · <span className="text-orange-400/60">PR:</span>{' '}
                   {derived.resistancePoints}
                 </p>
               </>
@@ -763,7 +932,7 @@ export function CharacterCreate({
             Próximo
           </Button>
         ) : (
-          <Button variant="primary" disabled={saving} onClick={handleSubmit}>
+          <Button variant="primary" disabled={saving || vagasEmAberto > 0} onClick={handleSubmit}>
             {saving ? 'Criando...' : 'Criar Personagem'}
           </Button>
         )}

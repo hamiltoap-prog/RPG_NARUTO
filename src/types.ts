@@ -116,6 +116,15 @@ export interface Weapon {
   damage: string
   note?: string
   equipped: boolean
+  /** Quantas unidades da mesma arma (20 shurikens = uma linha, quantity 20).
+   * Ausente = 1, para as fichas criadas antes disso existir. */
+  quantity?: number
+  /** Gasta uma unidade ao atacar — arma de arremesso que não volta. */
+  consumable?: boolean
+  damageType?: string
+  properties?: string
+  /** Nome exato no catálogo do manual, quando veio de lá. */
+  catalogName?: string
 }
 
 export interface Armor {
@@ -124,6 +133,11 @@ export interface Armor {
   defenseBonus: number
   note?: string
   equipped: boolean
+  quantity?: number
+  /** Teto de Destreza que esta armadura deixa somar à CA. Ausente = sem teto
+   * ("Destreza Total" no catálogo); 0 = nenhuma Destreza. */
+  dexCap?: number
+  catalogName?: string
 }
 
 export interface Jutsu {
@@ -162,6 +176,7 @@ export interface JutsuCatalogEntry {
  * não há o que pedir, nem sequer uma fila.
  */
 export const REQUESTABLE_FIELDS = [
+  'name',
   'attributes',
   'clanId',
   'classId',
@@ -182,6 +197,7 @@ export const REQUESTABLE_FIELDS = [
 export type RequestableField = (typeof REQUESTABLE_FIELDS)[number]
 
 export const REQUESTABLE_FIELD_LABELS: Record<RequestableField, string> = {
+  name: 'Nome do personagem',
   attributes: 'Atributos',
   clanId: 'Clã',
   classId: 'Classe',
@@ -312,6 +328,10 @@ export interface NPC {
   /** Afinidades elementais da criatura, para a Vantagem Elemental valer nos
    * dois sentidos (o bicho atacando e o bicho sendo atacado). */
   elements?: string[]
+  /** Invocação: tamanho e pontuações brutas de atributo, para o subsistema de
+   * testes do Kuchiyose ("1d4 + atributo bruto contra o próprio PR"). */
+  summonSize?: SummonSizeKey
+  attributes?: Attributes
 }
 
 /** Condição pegando em alguém durante o combate. */
@@ -626,6 +646,29 @@ export const CREATURE_KIND_LABELS: Record<CreatureKind, string> = {
  * rodapé diz "cada nível concede 2 DV". Seguimos a COLUNA DA TABELA, que é o
  * dado concreto — ver docs/rules/00-observacoes.md.
  */
+/**
+ * Modificadores de Tamanho da invocação (04b-invocacoes.md).
+ *
+ * É desta tabela — e não da tribo — que saem o bônus na CA, os Pontos de
+ * Resistência, o Bônus de Ataque e o Dado de Dano da criatura. O manual é
+ * explícito: *"Os Pontos de Resistência da criatura invocada é encontrada da
+ * tabela Modificadores de Tamanho a seguir, assim como o Bônus na CA, Bônus
+ * de Ataque e Dado de Dano."*
+ *
+ * Criatura maior acerta mais e resiste menos: o PR sobe com o tamanho, e o
+ * teste da criatura é bem-sucedido ao **igualar ou superar o próprio PR**.
+ */
+export const SUMMON_SIZES = [
+  { key: 'MN', name: 'Minúsculo', acBonus: 2, resistancePoints: 10, attackBonus: 2, damageDie: '1d6' },
+  { key: 'P', name: 'Pequeno', acBonus: 1, resistancePoints: 12, attackBonus: 3, damageDie: '1d8' },
+  { key: 'M', name: 'Médio', acBonus: 0, resistancePoints: 14, attackBonus: 4, damageDie: '1d10' },
+  { key: 'G', name: 'Grande', acBonus: -1, resistancePoints: 16, attackBonus: 5, damageDie: '1d12' },
+  { key: 'E', name: 'Enorme', acBonus: -2, resistancePoints: 18, attackBonus: 6, damageDie: '2d6' },
+  { key: 'GG', name: 'Gigantesco', acBonus: -3, resistancePoints: 20, attackBonus: 7, damageDie: '2d8' },
+] as const
+
+export type SummonSizeKey = (typeof SUMMON_SIZES)[number]['key']
+
 export const SUMMON_RANKS = [
   { rank: 'D', title: 'Soldado', level: 2, dice: 2, cost: 5 },
   { rank: 'C', title: 'Protetor', level: 4, dice: 4, cost: 10 },
@@ -652,6 +695,14 @@ export interface BestiaryEntry {
   notes: string
   /** Quando nasceu de uma tribo do manual, qual foi. */
   sourceId?: string
+  /** Tamanho da invocação: define CA, PR, bônus de ataque e dado de dano. */
+  size?: SummonSizeKey
+  /**
+   * Pontuações brutas de atributo. A invocação as usa cruas (não o
+   * modificador) nos próprios testes — "1d4 + o valor bruto do Atributo
+   * Relevante" (04b-invocacoes.md).
+   */
+  attributes?: Attributes
   createdAt: number
 }
 
@@ -756,6 +807,11 @@ export interface JutsuCast {
   /** Vantagem elemental (ou outra combinada na mesa) na jogada de ataque. */
   edge?: 'none' | 'advantage' | 'disadvantage'
   edgeReason?: string
+
+  /** Ataque com arma da ficha, em vez de jutsu. */
+  weaponId?: string
+  /** Arma de arremesso: a resolução desconta uma unidade da ficha. */
+  consumesWeapon?: boolean
 
   status: 'pending' | 'resolved' | 'denied'
   createdAt: number

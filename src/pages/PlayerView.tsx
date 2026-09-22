@@ -17,6 +17,20 @@ import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
+import {
+  armorClassBreakdown,
+  armorClassFor,
+  armorFromCatalog,
+  armorFromShopItem,
+  bundleSize,
+  catalogEntries,
+  parseRyoCost,
+  stackArmor,
+  stackGear,
+  stackWeapon,
+  weaponFromCatalog,
+  weaponFromShopItem,
+} from '../lib/equipment'
 import { rollDice } from '../lib/dice'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
 import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter, listenShop } from '../lib/store'
@@ -188,7 +202,20 @@ function HeaderCard({
 }) {
   const [editingImage, setEditingImage] = useState(false)
   const [imageDraft, setImageDraft] = useState(character.imageUrl)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(character.name)
   const blocked = pendingFields.has('imageUrl')
+  const nameBlocked = pendingFields.has('name')
+
+  async function saveName() {
+    const novo = nameDraft.trim()
+    if (!novo || novo === character.name) {
+      setEditingName(false)
+      return
+    }
+    await onSubmit({ name: novo }, `Renomear personagem: ${character.name} -> ${novo}`)
+    setEditingName(false)
+  }
 
   return (
     <Card className="p-4">
@@ -221,10 +248,44 @@ function HeaderCard({
             )}
           </div>
           <div>
-            <h1 className="font-serif text-2xl text-orange-100">{character.name}</h1>
+            {!editingName ? (
+              <h1 className="group flex items-center gap-2 font-serif text-2xl text-orange-100">
+                {character.name}
+                <button
+                  className="text-[11px] font-sans text-orange-400 opacity-60 transition hover:text-orange-200 hover:opacity-100"
+                  disabled={nameBlocked}
+                  title="Mudar o nome do personagem"
+                  onClick={() => {
+                    setNameDraft(character.name)
+                    setEditingName(true)
+                  }}
+                >
+                  renomear
+                </button>
+              </h1>
+            ) : (
+              <div className="flex items-center gap-1">
+                <Input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void saveName()
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                  placeholder="Nome do personagem"
+                  className="w-48"
+                />
+                <Button onClick={saveName}>ok</Button>
+                <Button variant="ghost" onClick={() => setEditingName(false)}>
+                  x
+                </Button>
+              </div>
+            )}
             <p className="text-sm text-orange-300/60">
               {clanName} · {className} · Nível {character.level}
             </p>
+            <PendingNote fields={['name']} pending={pendingFields} />
             {character.description.rank && (
               <p className="text-xs text-orange-300/50">
                 {character.description.rank} {character.description.title && `· ${character.description.title}`}
@@ -509,6 +570,22 @@ function AttributesCard({
 
 // ---------- Inventário / Armas / Armaduras ----------
 
+/**
+ * Inventário.
+ *
+ * Três coisas mudaram em relação à primeira versão, e todas vinham do mesmo
+ * problema: o inventário era uma lista de nomes.
+ *
+ *  - **pilha**: o mesmo item nunca abre duas linhas, e 20 shurikens ficam em
+ *    uma linha com quantidade 20, com − e + do lado;
+ *  - **armadura conta**: vestir ou guardar uma peça recalcula a Classe de
+ *    Armadura na mesma alteração, pela regra do manual;
+ *  - **gasto**: o que é arremessado é marcado como consumível, e o ataque
+ *    desconta a unidade sozinho (ver o cartão de ataque).
+ *
+ * As mexidas ficam num rascunho e vão juntas em uma alteração só — para o
+ * jogador isso é um pedido único ao mestre em vez de um por clique.
+ */
 function InventoryCard({
   character,
   onSubmit,
@@ -518,208 +595,264 @@ function InventoryCard({
   onSubmit: (patch: Record<string, unknown>, summary: string) => Promise<void>
   pendingFields: Set<RequestableField>
 }) {
-  const [editing, setEditing] = useState(false)
-  const [equipment, setEquipment] = useState<InventoryItem[]>(character.equipment)
-  const [weapons, setWeapons] = useState<Weapon[]>(character.weapons)
-  const [armor, setArmor] = useState<Armor[]>(character.armor)
-  const [newItem, setNewItem] = useState('')
-  const [newWeapon, setNewWeapon] = useState({ name: '', damage: '' })
-  const [newArmor, setNewArmor] = useState({ name: '', defenseBonus: '' })
+  const [rascunho, setRascunho] = useState<{ equipment: InventoryItem[]; weapons: Weapon[]; armor: Armor[] } | null>(null)
+  const [novoItem, setNovoItem] = useState('')
+  const [novaArma, setNovaArma] = useState('')
+  const [novaArmadura, setNovaArmadura] = useState('')
 
   const blocked = pendingFields.has('equipment') || pendingFields.has('weapons') || pendingFields.has('armor')
 
-  function startEdit() {
-    setEquipment(character.equipment)
-    setWeapons(character.weapons)
-    setArmor(character.armor)
-    setEditing(true)
+  const equipment = rascunho?.equipment ?? character.equipment
+  const weapons = rascunho?.weapons ?? character.weapons
+  const armor = rascunho?.armor ?? character.armor
+  const mexendo = rascunho !== null
+
+  function mexer(patch: Partial<{ equipment: InventoryItem[]; weapons: Weapon[]; armor: Armor[] }>) {
+    setRascunho({ equipment, weapons, armor, ...patch })
   }
 
-  async function save() {
-    await onSubmit({ equipment, weapons, armor }, 'Alterou inventário/armas/armaduras')
-    setEditing(false)
+  const caAtual = armorClassFor(character, armor)
+  const caMuda = caAtual !== character.armorClass
+
+  async function enviar() {
+    if (!rascunho) return
+    const patch: Record<string, unknown> = { ...rascunho }
+    // Vestir armadura muda a CA: vai na mesma alteração, senão a ficha ficaria
+    // com a defesa de antes.
+    if (caMuda) patch.armorClass = caAtual
+    await onSubmit(patch, `Alterou o inventário${caMuda ? ` (CA ${character.armorClass} -> ${caAtual})` : ''}`)
+    setRascunho(null)
   }
+
+  const armasDoCatalogo = catalogEntries('weapon')
+  const armadurasDoCatalogo = catalogEntries('armor')
+  const itensDoCatalogo = catalogEntries('gear')
 
   return (
     <Card className="p-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <SectionTitle>Inventário</SectionTitle>
-        {!editing ? (
-          <Button variant="secondary" disabled={blocked} onClick={startEdit}>
-            Editar
-          </Button>
-        ) : (
+        {mexendo ? (
           <div className="flex gap-1">
-            <Button variant="good" onClick={save}>
-              Enviar
+            <Button variant="good" onClick={enviar}>
+              Enviar alterações
             </Button>
-            <Button variant="ghost" onClick={() => setEditing(false)}>
-              Cancelar
+            <Button variant="ghost" onClick={() => setRascunho(null)}>
+              Desfazer
             </Button>
           </div>
+        ) : (
+          <Badge>
+            CA {character.armorClass}
+            {armor.some((a) => a.equipped) ? ` · ${armor.filter((a) => a.equipped).map((a) => a.name).join(', ')}` : ' · sem armadura'}
+          </Badge>
         )}
       </div>
-      <PendingNote fields={['equipment', 'weapons', 'armor']} pending={pendingFields} />
+      <PendingNote fields={['equipment', 'weapons', 'armor', 'armorClass']} pending={pendingFields} />
+      {mexendo && caMuda && (
+        <p className="mb-2 text-xs text-emerald-300">
+          Classe de Armadura vai de {character.armorClass} para {caAtual} — {armorClassBreakdown(character, armor)}.
+        </p>
+      )}
 
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        {/* ---- Armas ---- */}
         <div>
-          <p className="mb-1 text-xs uppercase text-orange-400/60">Armas</p>
-          {(editing ? weapons : character.weapons).map((w) => (
-            <div key={w.id} className="flex items-center justify-between gap-2 py-0.5 text-sm">
+          <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Armas</p>
+          {weapons.length === 0 && <p className="text-xs text-orange-300/50">Nenhuma.</p>}
+          {weapons.map((w) => (
+            <div key={w.id} className="flex flex-wrap items-center justify-between gap-1 py-0.5 text-sm">
               <span className={w.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'}>
-                {w.name} {w.damage && `(${w.damage})`}
+                {w.name}
+                {w.damage && <span className="text-orange-400/60"> {w.damage}</span>}
+                {w.consumable && (
+                  <span className="ml-1 text-[10px] uppercase text-orange-400/50" title="Arremessada, sai da mão: o ataque desconta uma unidade.">
+                    consumível
+                  </span>
+                )}
               </span>
-              {editing && (
-                <span className="flex gap-1">
-                  <button
-                    className="text-xs text-orange-400 hover:text-orange-200"
-                    onClick={() => setWeapons((prev) => prev.map((x) => (x.id === w.id ? { ...x, equipped: !x.equipped } : x)))}
-                  >
-                    {w.equipped ? 'guardar' : 'equipar'}
-                  </button>
-                  <button className="text-xs text-red-400 hover:text-red-200" onClick={() => setWeapons((prev) => prev.filter((x) => x.id !== w.id))}>
-                    remover
-                  </button>
-                </span>
-              )}
-            </div>
-          ))}
-          {editing && (
-            <div className="mt-1 flex gap-1">
-              <datalist id="weapon-catalog-list">
-                {WEAPONS.map((w) => (
-                  <option key={w.name} value={w.name} />
-                ))}
-              </datalist>
-              <Input
-                placeholder="Nome"
-                list="weapon-catalog-list"
-                value={newWeapon.name}
-                onChange={(e) => {
-                  const value = e.target.value
-                  const match = WEAPONS.find((w) => w.name.toLowerCase() === value.toLowerCase())
-                  setNewWeapon({ name: value, damage: match ? match.damage : newWeapon.damage })
-                }}
-                className="w-24 text-xs"
-              />
-              <Input placeholder="Dano (2d6)" value={newWeapon.damage} onChange={(e) => setNewWeapon((v) => ({ ...v, damage: e.target.value }))} className="w-20 text-xs" />
-              <Button
-                onClick={() => {
-                  if (!newWeapon.name.trim()) return
-                  setWeapons((prev) => [...prev, { id: newId(), name: newWeapon.name.trim(), damage: newWeapon.damage.trim(), equipped: true }])
-                  setNewWeapon({ name: '', damage: '' })
-                }}
-              >
-                +
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <p className="mb-1 text-xs uppercase text-orange-400/60">Armaduras</p>
-          {(editing ? armor : character.armor).map((a) => (
-            <div key={a.id} className="flex items-center justify-between gap-2 py-0.5 text-sm">
-              <span className={a.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'}>
-                {a.name} (+{a.defenseBonus})
-              </span>
-              {editing && (
-                <span className="flex gap-1">
-                  <button
-                    className="text-xs text-orange-400 hover:text-orange-200"
-                    onClick={() => setArmor((prev) => prev.map((x) => (x.id === a.id ? { ...x, equipped: !x.equipped } : x)))}
-                  >
-                    {a.equipped ? 'guardar' : 'equipar'}
-                  </button>
-                  <button className="text-xs text-red-400 hover:text-red-200" onClick={() => setArmor((prev) => prev.filter((x) => x.id !== a.id))}>
-                    remover
-                  </button>
-                </span>
-              )}
-            </div>
-          ))}
-          {editing && (
-            <div className="mt-1 flex gap-1">
-              <datalist id="armor-catalog-list">
-                {ARMORS.map((a) => (
-                  <option key={a.name} value={a.name} />
-                ))}
-              </datalist>
-              <Input
-                placeholder="Nome"
-                list="armor-catalog-list"
-                value={newArmor.name}
-                onChange={(e) => {
-                  const value = e.target.value
-                  const match = ARMORS.find((a) => a.name.toLowerCase() === value.toLowerCase())
-                  setNewArmor({ name: value, defenseBonus: match ? String(match.armorBonus) : newArmor.defenseBonus })
-                }}
-                className="w-24 text-xs"
-              />
-              <Input
-                placeholder="Bônus"
-                type="number"
-                value={newArmor.defenseBonus}
-                onChange={(e) => setNewArmor((v) => ({ ...v, defenseBonus: e.target.value }))}
-                className="w-16 text-xs"
-              />
-              <Button
-                onClick={() => {
-                  if (!newArmor.name.trim()) return
-                  setArmor((prev) => [...prev, { id: newId(), name: newArmor.name.trim(), defenseBonus: Number(newArmor.defenseBonus) || 0, equipped: true }])
-                  setNewArmor({ name: '', defenseBonus: '' })
-                }}
-              >
-                +
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <p className="mb-1 text-xs uppercase text-orange-400/60">Equipamento</p>
-        {(editing ? equipment : character.equipment).map((i) => (
-          <div key={i.id} className="flex items-center justify-between gap-2 py-0.5 text-sm">
-            <span className="text-orange-100">{i.name}</span>
-            {editing ? (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5">
                 <button
-                  className="text-orange-400 hover:text-orange-200"
-                  onClick={() => setEquipment((prev) => prev.map((x) => (x.id === i.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}
+                  className="px-1 text-orange-400 hover:text-orange-200"
+                  disabled={blocked}
+                  onClick={() => mexer({ weapons: weapons.map((x) => (x.id === w.id ? { ...x, quantity: Math.max(1, (x.quantity ?? 1) - 1) } : x)) })}
                 >
                   −
                 </button>
-                <span>{i.quantity}</span>
+                <span className="min-w-4 text-center text-xs text-orange-200">{w.quantity ?? 1}</span>
                 <button
-                  className="text-orange-400 hover:text-orange-200"
-                  onClick={() => setEquipment((prev) => prev.map((x) => (x.id === i.id ? { ...x, quantity: x.quantity + 1 } : x)))}
+                  className="px-1 text-orange-400 hover:text-orange-200"
+                  disabled={blocked}
+                  onClick={() => mexer({ weapons: weapons.map((x) => (x.id === w.id ? { ...x, quantity: (x.quantity ?? 1) + 1 } : x)) })}
                 >
                   +
                 </button>
-                <button className="text-red-400 hover:text-red-200" onClick={() => setEquipment((prev) => prev.filter((x) => x.id !== i.id))}>
-                  remover
+                <button
+                  className="text-[11px] text-orange-400 hover:text-orange-200"
+                  disabled={blocked}
+                  onClick={() => mexer({ weapons: weapons.map((x) => (x.id === w.id ? { ...x, equipped: !x.equipped } : x)) })}
+                >
+                  {w.equipped ? 'guardar' : 'equipar'}
+                </button>
+                <button
+                  className="text-[11px] text-red-400 hover:text-red-200"
+                  disabled={blocked}
+                  onClick={() => mexer({ weapons: weapons.filter((x) => x.id !== w.id) })}
+                >
+                  x
                 </button>
               </span>
-            ) : (
-              <span className="text-orange-300/60">x{i.quantity}</span>
-            )}
-          </div>
-        ))}
-        {editing && (
-          <div className="mt-1 flex gap-2">
-            <Input placeholder="Item personalizado" value={newItem} onChange={(e) => setNewItem(e.target.value)} className="w-40" />
+            </div>
+          ))}
+          <div className="mt-1 flex gap-1">
+            <Select value={novaArma} onChange={(e) => setNovaArma(e.target.value)} className="flex-1 text-xs" disabled={blocked}>
+              <option value="">Arma do catálogo...</option>
+              {armasDoCatalogo.map((a) => (
+                <option key={a.name} value={a.name}>
+                  {a.name} — {a.detail}
+                </option>
+              ))}
+            </Select>
             <Button
+              disabled={blocked || !novaArma}
               onClick={() => {
-                if (!newItem.trim()) return
-                setEquipment((prev) => [...prev, { id: newId(), name: newItem.trim(), quantity: 1 }])
-                setNewItem('')
+                const entry = WEAPONS.find((w) => w.name === novaArma)
+                if (!entry) return
+                mexer({ weapons: stackWeapon(weapons, weaponFromCatalog(entry), bundleSize(entry.name)) })
+                setNovaArma('')
               }}
             >
-              Adicionar
+              +
             </Button>
           </div>
-        )}
+        </div>
+
+        {/* ---- Armaduras ---- */}
+        <div>
+          <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Armaduras</p>
+          {armor.length === 0 && <p className="text-xs text-orange-300/50">Nenhuma.</p>}
+          {armor.map((a) => (
+            <div key={a.id} className="flex flex-wrap items-center justify-between gap-1 py-0.5 text-sm">
+              <span className={a.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'} title={a.note}>
+                {a.name} <span className="text-orange-400/60">+{a.defenseBonus} CA</span>
+                {a.dexCap !== undefined && (
+                  <span className="ml-1 text-[10px] uppercase text-orange-400/50">
+                    {a.dexCap === 0 ? 'sem Destreza' : `Destreza máx. ${a.dexCap}`}
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <button
+                  className="text-[11px] text-orange-400 hover:text-orange-200"
+                  disabled={blocked}
+                  onClick={() => mexer({ armor: armor.map((x) => (x.id === a.id ? { ...x, equipped: !x.equipped } : x)) })}
+                >
+                  {a.equipped ? 'guardar' : 'vestir'}
+                </button>
+                <button
+                  className="text-[11px] text-red-400 hover:text-red-200"
+                  disabled={blocked}
+                  onClick={() => mexer({ armor: armor.filter((x) => x.id !== a.id) })}
+                >
+                  x
+                </button>
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 flex gap-1">
+            <Select value={novaArmadura} onChange={(e) => setNovaArmadura(e.target.value)} className="flex-1 text-xs" disabled={blocked}>
+              <option value="">Armadura do catálogo...</option>
+              {armadurasDoCatalogo.map((a) => (
+                <option key={a.name} value={a.name}>
+                  {a.name} — {a.detail}
+                </option>
+              ))}
+            </Select>
+            <Button
+              disabled={blocked || !novaArmadura}
+              onClick={() => {
+                const entry = ARMORS.find((a) => a.name === novaArmadura)
+                if (!entry) return
+                mexer({ armor: stackArmor(armor, armorFromCatalog(entry)) })
+                setNovaArmadura('')
+              }}
+            >
+              +
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ---- Itens ---- */}
+      <div className="mt-3">
+        <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Itens</p>
+        {equipment.length === 0 && <p className="text-xs text-orange-300/50">Nada na mochila.</p>}
+        {equipment.map((i) => (
+          <div key={i.id} className="flex flex-wrap items-center justify-between gap-1 py-0.5 text-sm">
+            <span className="text-orange-100" title={i.note}>
+              {i.name}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <button
+                className="px-1 text-orange-400 hover:text-orange-200"
+                disabled={blocked}
+                onClick={() => mexer({ equipment: equipment.map((x) => (x.id === i.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)) })}
+              >
+                −
+              </button>
+              <span className="min-w-4 text-center text-xs text-orange-200">{i.quantity}</span>
+              <button
+                className="px-1 text-orange-400 hover:text-orange-200"
+                disabled={blocked}
+                onClick={() => mexer({ equipment: equipment.map((x) => (x.id === i.id ? { ...x, quantity: x.quantity + 1 } : x)) })}
+              >
+                +
+              </button>
+              <button
+                className="text-[11px] text-red-400 hover:text-red-200"
+                disabled={blocked}
+                onClick={() => mexer({ equipment: equipment.filter((x) => x.id !== i.id) })}
+              >
+                x
+              </button>
+            </span>
+          </div>
+        ))}
+        <div className="mt-1 flex flex-wrap gap-1">
+          <Select
+            value=""
+            onChange={(e) => {
+              if (!e.target.value) return
+              const entry = GEAR.find((g) => g.name === e.target.value)
+              mexer({ equipment: stackGear(equipment, e.target.value, 1, entry?.effect) })
+            }}
+            className="flex-1 text-xs"
+            disabled={blocked}
+          >
+            <option value="">Item do catálogo...</option>
+            {itensDoCatalogo.map((g) => (
+              <option key={g.name} value={g.name}>
+                {g.name} — {g.detail}
+              </option>
+            ))}
+          </Select>
+          <Input
+            placeholder="Item da mesa"
+            value={novoItem}
+            onChange={(e) => setNovoItem(e.target.value)}
+            className="w-36 text-xs"
+            disabled={blocked}
+          />
+          <Button
+            disabled={blocked || !novoItem.trim()}
+            onClick={() => {
+              mexer({ equipment: stackGear(equipment, novoItem.trim(), 1) })
+              setNovoItem('')
+            }}
+          >
+            +
+          </Button>
+        </div>
       </div>
     </Card>
   )
@@ -1138,11 +1271,6 @@ function AdversariesPanel({ npcs }: { npcs: NPC[] }) {
 
 // ---------- Loja ----------
 
-function parseRyoCost(cost: string): number {
-  const cleaned = cost.replace(/\./g, '').match(/\d+/)
-  return cleaned ? Number(cleaned[0]) : 0
-}
-
 function ShopCard({
   character,
   table,
@@ -1159,24 +1287,30 @@ function ShopCard({
   const [tab, setTab] = useState<'weapons' | 'armor' | 'gear'>('weapons')
   const blocked = pendingFields.has('ryo') || pendingFields.has('weapons') || pendingFields.has('armor') || pendingFields.has('equipment')
 
+  /**
+   * Compra: o item entra na ficha pelo mesmo caminho do equipamento inicial e
+   * da entrega do mestre (`lib/equipment`), então dano, propriedades, consumo
+   * e limite de Destreza chegam iguais nos três. Repetido empilha — comprar
+   * "Shuriken (5)" quatro vezes dá uma linha com 20, não quatro linhas.
+   */
   async function buyWeapon(item: WeaponCatalogEntry) {
     const cost = parseRyoCost(item.cost)
     if (character.ryo < cost) return
-    const weapons: Weapon[] = [...character.weapons, { id: newId(), name: item.name, damage: item.damage, equipped: true }]
+    const weapons = stackWeapon(character.weapons, weaponFromCatalog(item), bundleSize(item.name))
     await onSubmit({ weapons, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
   }
 
   async function buyArmor(item: ArmorCatalogEntry) {
     const cost = parseRyoCost(item.cost)
     if (character.ryo < cost) return
-    const armor: Armor[] = [...character.armor, { id: newId(), name: item.name, defenseBonus: item.armorBonus, equipped: true }]
+    const armor = stackArmor(character.armor, armorFromCatalog(item))
     await onSubmit({ armor, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
   }
 
   async function buyGear(item: GearItem) {
     const cost = parseRyoCost(item.cost)
     if (character.ryo < cost) return
-    const equipment: InventoryItem[] = [...character.equipment, { id: newId(), name: item.name, quantity: 1 }]
+    const equipment = stackGear(character.equipment, item.name, 1, item.effect)
     await onSubmit({ equipment, ryo: character.ryo - cost }, `Comprou ${item.name} (${item.cost})`)
   }
 
@@ -1184,25 +1318,16 @@ function ShopCard({
   async function comprarDaMesa(item: ShopItem) {
     if (character.ryo < item.cost) return
     if (item.kind === 'weapon') {
-      const weapons: Weapon[] = [
-        ...character.weapons,
-        { id: newId(), name: item.name, damage: item.damage ?? '1d4', note: item.properties, equipped: true },
-      ]
+      const weapons = stackWeapon(character.weapons, weaponFromShopItem(item), bundleSize(item.name))
       await onSubmit({ weapons, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
       return
     }
     if (item.kind === 'armor') {
-      const armor: Armor[] = [
-        ...character.armor,
-        { id: newId(), name: item.name, defenseBonus: item.armorBonus ?? 0, note: item.description, equipped: true },
-      ]
+      const armor = stackArmor(character.armor, armorFromShopItem(item))
       await onSubmit({ armor, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
       return
     }
-    const equipment: InventoryItem[] = [
-      ...character.equipment,
-      { id: newId(), name: item.name, quantity: 1, note: item.description },
-    ]
+    const equipment = stackGear(character.equipment, item.name, 1, item.description)
     await onSubmit({ equipment, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
   }
 

@@ -44,6 +44,12 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
     return npcs.find((n) => n.id === id)
   }
 
+  /** O nome da ordem de combate foi gravado quando o combate começou; se a
+   * ficha tiver sido renomeada depois, vale o nome de agora. */
+  function nomeDe(p: { ref: string; name: string }) {
+    return entidadeDe(p.ref)?.name ?? p.name
+  }
+
   function rollFor(ref: string, entity: Character | NPC) {
     const value = 'classId' in entity ? rollInitiative(entity) : 1 + Math.floor(Math.random() * 20)
     setInitiatives((prev) => ({ ...prev, [ref]: value }))
@@ -173,7 +179,7 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-display text-xs text-orange-400/60">{p.initiative}</span>
-                  <span className={atual ? 'font-semibold text-white' : 'text-orange-100'}>{p.name}</span>
+                  <span className={atual ? 'font-semibold text-white' : 'text-orange-100'}>{nomeDe(p)}</span>
                   {p.boss && <Badge tone="bad">chefe</Badge>}
                   {p.surprised && <Badge tone="warn">surpreso</Badge>}
                   {atual && <Badge tone="good">é a vez</Badge>}
@@ -253,7 +259,7 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
                           mexerCondicao(
                             p.ref,
                             (p.conditions ?? []).filter((x) => x.name !== c.name),
-                            `${p.name} não está mais ${c.name}.`,
+                            `${nomeDe(p)} não está mais ${c.name}.`,
                           )
                         }
                         className="rounded-sm border border-[color:var(--orange)] px-2 py-0.5 font-display text-[11px] uppercase tracking-[0.08em] text-[color:var(--orange)] hover:line-through"
@@ -271,7 +277,7 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
                       mexerCondicao(
                         p.ref,
                         [...(p.conditions ?? []).filter((x) => x.name !== nome), { name: nome, ...(rodadas ? { rounds: rodadas } : {}) }],
-                        `${p.name} está ${nome}${rodadas ? ` por ${rodadas} rodada(s)` : ''}.`,
+                        `${nomeDe(p)} está ${nome}${rodadas ? ` por ${rodadas} rodada(s)` : ''}.`,
                       ).then(() => setCondRef(null))
                     }
                   />

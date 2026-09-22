@@ -3,8 +3,17 @@ import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Text
 import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from '../lib/id'
 import { createNPC, deleteBestiaryEntry, listenBestiary, saveBestiaryEntry } from '../lib/store'
-import { CREATURE_KIND_LABELS, SUMMON_RANKS } from '../types'
-import type { BestiaryEntry, CreatureKind, GameTable, NpcAttack, SummonCreature } from '../types'
+import { summonSize } from '../lib/summon'
+import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CREATURE_KIND_LABELS, SUMMON_RANKS, SUMMON_SIZES } from '../types'
+import type {
+  AttributeKey,
+  BestiaryEntry,
+  CreatureKind,
+  GameTable,
+  NpcAttack,
+  SummonCreature,
+  SummonSizeKey,
+} from '../types'
 
 type Aba = 'minhas' | 'manual'
 
@@ -53,21 +62,35 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
     }
   }
 
-  /** Puxa uma tribo do manual para uma ficha editável, já com o rank escolhido. */
-  function doManual(c: SummonCreature, rankIdx: number): BestiaryEntry {
+  /**
+   * Puxa uma tribo do manual para uma ficha editável, com o rank e o tamanho
+   * escolhidos.
+   *
+   * CA, PR, Bônus de Ataque e Dado de Dano saem da tabela de Modificadores de
+   * Tamanho, como o manual manda — antes o app usava o Dado de Vida da tribo
+   * como dado de dano e um PR genérico, o que não era o que está escrito.
+   */
+  function doManual(c: SummonCreature, rankIdx: number, size: SummonSizeKey): BestiaryEntry {
     const r = SUMMON_RANKS[rankIdx]
+    const t = summonSize(size)
     const pv = Math.round(r.dice * mediaDoDado(c.hitDie))
     return nova({
       kind: 'summon',
       sourceId: c.id,
+      size,
       name: `${c.name} (Rank ${r.rank} · ${r.title})`,
       description: c.description,
       hp: { current: pv, max: pv },
+      armorClass: 10 + t.acBonus,
+      resistancePoints: t.resistancePoints,
       attackModifier: Number(c.attackModifier.replace(/[^\d-]/g, '')) || 3,
       attacksText: c.naturalWeapons,
       skills: [c.skills, `Resistências: ${c.saves}`].filter(Boolean).join('\n'),
       specialFeatures: c.specialFeatures,
-      notes: `Tribo ${c.summonType} · ${r.dice} DV (${c.hitDie}) / ${r.dice} DC (${c.chakraDie}) · custo ${r.cost} de chakra.\nPV sugerido pela média dos dados — ajuste à vontade.`,
+      notes:
+        `Tribo ${c.summonType} · ${r.dice} DV (${c.hitDie}) / ${r.dice} DC (${c.chakraDie}) · custo ${r.cost} de chakra.\n` +
+        `Tamanho ${t.name}: CA ${t.acBonus >= 0 ? '+' : ''}${t.acBonus}, PR ${t.resistancePoints}, ataque +${t.attackBonus}, dano ${t.damageDie}.\n` +
+        'PV sugerido pela média dos dados — ajuste à vontade.',
     })
   }
 
@@ -93,12 +116,15 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
    * armas naturais; o mestre ajusta se a mesa entender diferente.
    */
   async function porNaMesa(e: BestiaryEntry) {
-    const fonte = e.sourceId ? SUMMON_BESTIARY.find((c) => c.id === e.sourceId) : undefined
-    const dadoDeDano = fonte?.hitDie?.replace(/^d/, '1d') ?? '1d6'
+    const t = summonSize(e.size)
+    // O Dado de Dano da arma natural vem do tamanho (04b-invocacoes.md), e o
+    // bônus de ataque soma o da tribo com o do tamanho.
+    const dadoDeDano = e.kind === 'summon' ? t.damageDie : '1d6'
+    const bonusDeAtaque = e.kind === 'summon' ? e.attackModifier + t.attackBonus : e.attackModifier
     const golpes: NpcAttack[] = armasDe(e.attacksText).map((nome) => ({
       id: newId(),
       name: nome,
-      bonus: e.attackModifier,
+      bonus: bonusDeAtaque,
       damage: dadoDeDano,
     }))
     await createNPC(table.id, {
@@ -112,8 +138,12 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
       visible: false,
       createdAt: Date.now(),
       imageUrl: e.imageUrl,
-      attacks: golpes.length > 0 ? golpes : [{ id: newId(), name: 'Ataque', bonus: e.attackModifier, damage: dadoDeDano }],
+      attacks: golpes.length > 0 ? golpes : [{ id: newId(), name: 'Ataque', bonus: bonusDeAtaque, damage: dadoDeDano }],
       proficiencyBonus: 3,
+      // Levam o tamanho e as pontuações brutas: é com elas que a invocação
+      // faz os próprios testes ("1d4 + atributo bruto contra o próprio PR").
+      summonSize: e.kind === 'summon' ? (e.size ?? 'M') : undefined,
+      attributes: e.attributes,
     })
     setAviso(
       `${e.name} entrou na mesa como NPC, oculto e com ${golpes.length || 1} golpe(s) pronto(s). ` +
@@ -200,10 +230,10 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
 
       {aba === 'manual' && (
         <ManualList
-          onUse={(c, r) => {
+          onUse={(c, r, t) => {
             // A ficha é editada na aba das criaturas do mestre — sem esta
             // troca, o botão abriria um formulário invisível na outra aba.
-            setEditando(doManual(c, r))
+            setEditando(doManual(c, r, t))
             setAba('minhas')
           }}
         />
@@ -212,9 +242,12 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
   )
 }
 
-function ManualList({ onUse }: { onUse: (c: SummonCreature, rankIdx: number) => void }) {
+function ManualList({ onUse }: { onUse: (c: SummonCreature, rankIdx: number, size: SummonSizeKey) => void }) {
   const [busca, setBusca] = useState('')
   const [rankIdx, setRankIdx] = useState(0)
+  /** O manual tira CA, PR, bônus de ataque e dado de dano do TAMANHO, não da
+   * tribo — então o tamanho é escolhido junto com o rank. */
+  const [size, setSize] = useState<SummonSizeKey>('M')
   const lista = useMemo(() => {
     const t = busca.trim().toLowerCase()
     return t ? SUMMON_BESTIARY.filter((c) => c.name.toLowerCase().includes(t) || c.summonType.toLowerCase().includes(t)) : SUMMON_BESTIARY
@@ -234,6 +267,20 @@ function ManualList({ onUse }: { onUse: (c: SummonCreature, rankIdx: number) => 
             ))}
           </Select>
         </label>
+        <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+          tamanho
+          <Select value={size} onChange={(e) => setSize(e.target.value as SummonSizeKey)} className="w-72">
+            {SUMMON_SIZES.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.name} · CA {t.acBonus >= 0 ? '+' : ''}{t.acBonus} · PR {t.resistancePoints} · atq +{t.attackBonus} · dano {t.damageDie}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <p className="basis-full text-[11px] text-orange-400/50">
+          A tabela de Modificadores de Tamanho do manual é que define CA, Pontos de Resistência, Bônus de Ataque e Dado
+          de Dano da invocação — por isso o tamanho vem antes da ficha.
+        </p>
       </Card>
       <div className="grid gap-2 sm:grid-cols-2">
         {lista.map((c) => (
@@ -254,7 +301,7 @@ function ManualList({ onUse }: { onUse: (c: SummonCreature, rankIdx: number) => 
                 {c.specialFeatures && <p><b className="text-orange-200">Características:</b>{'\n'}{c.specialFeatures}</p>}
               </div>
             </details>
-            <Button variant="secondary" className="self-start px-2 py-0.5 text-[11px]" onClick={() => onUse(c, rankIdx)}>
+            <Button variant="secondary" className="self-start px-2 py-0.5 text-[11px]" onClick={() => onUse(c, rankIdx, size)}>
               criar ficha desta tribo
             </Button>
           </Card>
@@ -328,6 +375,54 @@ function FichaCriatura({
             }}
           />
         </label>
+      </div>
+
+      <div className="well flex flex-col gap-2 rounded-sm p-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+            tamanho (define CA, PR, ataque e dado de dano)
+            <Select
+              value={d.size ?? 'M'}
+              onChange={(e) => {
+                const chave = e.target.value as SummonSizeKey
+                const t = summonSize(chave)
+                setD({ ...d, size: chave, armorClass: 10 + t.acBonus, resistancePoints: t.resistancePoints })
+              }}
+              className="w-72"
+            >
+              {SUMMON_SIZES.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.name} · CA {t.acBonus >= 0 ? '+' : ''}
+                  {t.acBonus} · PR {t.resistancePoints} · atq +{t.attackBonus} · dano {t.damageDie}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
+        <p className="font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">
+          Pontuações de atributo (valor bruto)
+        </p>
+        <p className="text-[11px] leading-relaxed text-orange-400/50">
+          A invocação testa atributo e resistência com <b className="text-orange-300/70">1d4 + o valor bruto</b> (ex.:
+          Força 15, e não o modificador +2) contra o <b className="text-orange-300/70">próprio PR</b> — é um subsistema
+          separado do resto do manual. Preencha aqui e o app resolve o teste na aba Rolagens.
+        </p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {ATTRIBUTE_KEYS.map((k) => (
+            <label key={k} className="flex flex-col gap-0.5 text-[10px] text-orange-400/60">
+              {ATTRIBUTE_LABELS[k].slice(0, 3).toUpperCase()}
+              <Input
+                type="number"
+                value={d.attributes?.[k] ?? 10}
+                onChange={(e) => {
+                  const base = d.attributes ?? (Object.fromEntries(ATTRIBUTE_KEYS.map((a) => [a, 10])) as Record<AttributeKey, number>)
+                  setD({ ...d, attributes: { ...base, [k]: Number(e.target.value) || 0 } })
+                }}
+                className="px-2 py-0.5 text-xs"
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
       {(
