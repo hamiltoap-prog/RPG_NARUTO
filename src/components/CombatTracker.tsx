@@ -8,8 +8,9 @@ import {
   endCombat,
   setCombatOrder,
   startCombat,
+  applyCompanionHp,
+  removeCompanionTokens,
   updateCharacterDirect,
-  updateCompanion,
   updateNPC,
 } from '../lib/store'
 import type { ActiveCondition, Character, CombatParticipant, Companion, GameTable, NPC } from '../types'
@@ -141,7 +142,13 @@ export function CombatTracker({
     if (kind === 'character') {
       await updateCharacterDirect(table.id, id, { hp: { ...alvo.hp, current: novo }, ...(novo === 0 ? { isAlive: false } : {}) })
     } else if (kind === 'companion') {
-      await updateCompanion(table.id, id, { hp: { ...alvo.hp, current: novo } })
+      // Ficha temporária a 0 PV sai de jogo (a marionete quebra), e a peça
+      // dela some do mapa junto.
+      const temporaria = companions.find((c) => c.id === id)
+      if (temporaria) {
+        await applyCompanionHp(table.id, temporaria, novo)
+        if (novo === 0) await removeCompanionTokens(table.id, [id]).catch(() => undefined)
+      }
     } else {
       await updateNPC(table.id, id, { hp: { ...alvo.hp, current: novo } })
     }
@@ -151,7 +158,9 @@ export function CombatTracker({
       kind: 'combat',
       summary:
         delta < 0
-          ? `${alvo.name} sofreu ${-delta} de dano (PV ${novo}/${alvo.hp.max})${novo === 0 ? ' — caiu!' : ''}`
+          ? `${alvo.name} sofreu ${-delta} de dano (PV ${novo}/${alvo.hp.max})${
+              novo === 0 ? (ref.startsWith('companion:') ? ' — saiu de jogo!' : ' — caiu!') : ''
+            }`
           : `${alvo.name} recuperou ${delta} PV (PV ${novo}/${alvo.hp.max})`,
     })
     setDano((p) => ({ ...p, [ref]: 0 }))

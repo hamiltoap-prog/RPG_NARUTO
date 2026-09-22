@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select, Textarea } from './ui'
 import { newId } from '../lib/id'
 import { deleteShopItem, listenShop, saveShopItem, updateTable } from '../lib/store'
+import { PuppetForge, novaMarionete } from './PuppetForge'
 import { SHOP_ITEM_KIND_LABELS } from '../types'
 import type { GameTable, ShopItem, ShopItemKind } from '../types'
 
@@ -141,6 +142,10 @@ export function ItemForge({ table }: { table: GameTable }) {
             </label>
           )}
 
+          {d.kind === 'puppet' && (
+            <PuppetForge spec={d.puppet ?? novaMarionete()} onChange={(puppet) => setD({ ...d, puppet })} />
+          )}
+
           <label className="flex flex-col gap-1 text-xs text-orange-400/60">
             descrição
             <Textarea rows={2} value={d.description ?? ''} onChange={(e) => setD({ ...d, description: e.target.value })} />
@@ -179,6 +184,9 @@ export function ItemForge({ table }: { table: GameTable }) {
               <p className="text-xs text-orange-300/60">
                 {i.kind === 'weapon' && `${i.damage ?? '—'} ${i.damageType ?? ''} ${i.properties ?? ''}`}
                 {i.kind === 'armor' && `+${i.armorBonus ?? 0} de CA`}
+                {i.kind === 'puppet' &&
+                  i.puppet &&
+                  `${i.puppet.hp} PV · CA ${i.puppet.armorClass} · ${i.puppet.attacks.length} golpe(s) · ${i.puppet.jutsus.length} jutsu(s)`}
                 {i.description && <span className="block">{i.description}</span>}
               </p>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">

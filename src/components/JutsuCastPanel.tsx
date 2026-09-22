@@ -9,25 +9,64 @@ import {
   denyJutsuCast,
   listenMyJutsuCasts,
   listenPendingJutsuCasts,
+  removeCompanionTokens,
 } from '../lib/store'
-import { buildClones, buildSummon, readClone } from '../lib/companions'
+import type { CastChakraSource } from '../lib/store'
+import { buildClones, buildPuppet, buildSummon, readClone } from '../lib/companions'
 import { CLASSES } from '../data/classes'
-import { attackAlternatives, attackAttribute, findCatalogEntry, readJutsu, resolveCast } from '../lib/jutsuCast'
+import {
+  attackAlternatives,
+  attackAttribute,
+  companionAsCaster,
+  findCatalogEntry,
+  readJutsu,
+  resolveCast,
+} from '../lib/jutsuCast'
 import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
 import { ATTRIBUTE_LABELS } from '../types'
 import type { AttributeKey, Character, Clan, Companion, GameTable, JutsuCast, NPC } from '../types'
 
-/** Acha o alvo pela referência "character:id" / "npc:id". */
-function acharAlvo(ref: string | undefined, characters: Character[], npcs: NPC[]) {
+/** Tudo que pode ser alvo ou agir: ficha, NPC e ficha temporária. */
+export interface MesaViva {
+  characters: Character[]
+  npcs: NPC[]
+  companions: Companion[]
+}
+
+/** Acha o alvo pela referência "character:id" / "npc:id" / "companion:id". */
+export function acharAlvo(ref: string | undefined, mesa: MesaViva) {
   if (!ref) return undefined
   const [kind, id] = ref.split(':')
-  return kind === 'character' ? characters.find((c) => c.id === id) : npcs.find((n) => n.id === id)
+  if (kind === 'character') return mesa.characters.find((c) => c.id === id)
+  if (kind === 'npc') return mesa.npcs.find((n) => n.id === id)
+  return mesa.companions.find((c) => c.id === id)
+}
+
+/**
+ * A lista de alvos da mesa.
+ *
+ * Clone, invocação e marionete entram: eles estão em campo, ocupam espaço e
+ * levam golpe como qualquer um. Marionete quebrada sai da lista — já está
+ * fora de jogo. Um conjurador nunca aparece como alvo de si mesmo.
+ */
+export function alvosDaMesa(mesa: MesaViva, semRef: string | undefined, asGM: boolean) {
+  return [
+    ...mesa.characters
+      .filter((c) => `character:${c.id}` !== semRef && (!c.isNPC || c.visible || asGM))
+      .map((c) => ({ ref: `character:${c.id}`, name: c.name })),
+    ...mesa.npcs
+      .filter((n) => (n.visible || asGM) && `npc:${n.id}` !== semRef)
+      .map((n) => ({ ref: `npc:${n.id}`, name: n.name })),
+    ...mesa.companions
+      .filter((c) => c.status !== 'broken' && `companion:${c.id}` !== semRef)
+      .map((c) => ({ ref: `companion:${c.id}`, name: `${c.name} (de ${c.ownerName})` })),
+  ]
 }
 
 /** Afinidades de quem vai levar o golpe: as da ficha mais as do clã. */
-function afinidadesDoAlvo(alvo: Character | NPC | undefined, clans: Clan[]): string[] {
+function afinidadesDoAlvo(alvo: Character | NPC | Companion | undefined, clans: Clan[]): string[] {
   if (!alvo) return []
-  const proprias = alvo.elements ?? []
+  const proprias = 'elements' in alvo ? (alvo.elements ?? []) : []
   if (!('clanId' in alvo)) return proprias
   const clan = clans.find((c) => c.id === alvo.clanId)
   return [...proprias, ...clanElements(clan)]
@@ -48,16 +87,14 @@ function afinidadesDoAlvo(alvo: Character | NPC | undefined, clans: Clan[]): str
 export function JutsuCastCard({
   table,
   character,
-  characters,
-  npcs,
+  mesa,
   clans,
   requesterUid,
   asGM,
 }: {
   table: GameTable
   character: Character
-  characters: Character[]
-  npcs: NPC[]
+  mesa: MesaViva
   clans: Clan[]
   requesterUid: string
   asGM: boolean
@@ -110,11 +147,8 @@ export function JutsuCastCard({
     setCusto(lido.cost)
   }, [arma, entrada])
 
-  const alvos = [
-    ...characters.filter((c) => c.id !== character.id && (!c.isNPC || c.visible || asGM)).map((c) => ({ ref: `character:${c.id}`, name: c.name })),
-    ...npcs.filter((n) => n.visible || asGM).map((n) => ({ ref: `npc:${n.id}`, name: n.name })),
-  ]
-  const alvo = acharAlvo(alvoRef, characters, npcs)
+  const alvos = alvosDaMesa(mesa, `character:${character.id}`, asGM)
+  const alvo = acharAlvo(alvoRef, mesa)
 
   // Vantagem Elemental (05-combate.md): ciclo Fogo > Vento > Raio > Terra >
   // Água > Fogo — quem usa o elemento superior ataca com Vantagem. O app só
@@ -157,7 +191,7 @@ export function JutsuCastCard({
     // O mestre resolve na hora; o jogador entra na fila.
     if (asGM) {
       const cast = await createJutsuCast(table.id, base)
-      await resolverCast(table, cast, character, characters, npcs, table.gmName)
+      await resolverCast(table, cast, mesa, table.gmName)
       setAviso('Lançado.')
       return
     }
@@ -354,6 +388,17 @@ function montarCompanions(cast: JutsuCast, caster: Character): Companion[] {
       chakraDie: classe?.chakraDie,
     })
   }
+  if (pedido.kind === 'puppet') {
+    if (!pedido.puppetSpec || !pedido.puppetItemId) return []
+    const marionete = buildPuppet({
+      owner: caster,
+      ownerUid: uid,
+      puppetItemId: pedido.puppetItemId,
+      name: pedido.puppetName ?? 'Marionete',
+      spec: pedido.puppetSpec,
+    })
+    return marionete ? [marionete] : []
+  }
   const invocada = buildSummon({
     owner: caster,
     ownerUid: uid,
@@ -364,22 +409,31 @@ function montarCompanions(cast: JutsuCast, caster: Character): Companion[] {
   return invocada ? [invocada] : []
 }
 
-/** Rola, aplica e registra — usado tanto pelo mestre quanto na liberação. */
-export async function resolverCast(
-  table: GameTable,
-  cast: JutsuCast,
-  caster: Character,
-  characters: Character[],
-  npcs: NPC[],
-  gmName: string,
-) {
-  const alvo = acharAlvo(cast.targetRef, characters, npcs)
+/**
+ * Rola, aplica e registra — usado tanto pelo mestre quanto na liberação.
+ *
+ * Quem age pode ser uma ficha de personagem ou uma ficha temporária. Os três
+ * casos das temporárias:
+ *  - **clone**: rola com os próprios modificadores, e o jutsu dele sai pela
+ *    metade do dano, como o manual manda;
+ *  - **invocação**: rola com os próprios;
+ *  - **marionete**: rola com os modificadores do DONO (quem manobra é o
+ *    ninja) mais o bônus do golpe, e o chakra sai da ficha do dono.
+ */
+export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: MesaViva, gmName: string) {
+  const alvo = acharAlvo(cast.targetRef, mesa)
   const condicoesDoAlvo = cast.targetRef
     ? (table.combatOrder.find((p) => p.ref === cast.targetRef)?.conditions ?? []).map((c) => c.name)
     : []
 
+  const ficha = mesa.characters.find((c) => c.id === cast.casterId)
+  const temporaria = cast.casterKind === 'companion' ? mesa.companions.find((c) => c.id === cast.casterId) : undefined
+  const dono = temporaria ? mesa.characters.find((c) => c.id === temporaria.ownerCharacterId) : undefined
+  const quemAge = temporaria ? companionAsCaster(temporaria, dono) : ficha
+  if (!quemAge) throw new Error('Quem lançou não está mais na mesa.')
+
   const fora = resolveCast({
-    caster,
+    caster: quemAge,
     jutsuName: cast.jutsuName,
     classification: cast.classification,
     mode: cast.mode,
@@ -393,28 +447,55 @@ export async function resolverCast(
     targetConditions: condicoesDoAlvo,
     edge: cast.edge ?? 'none',
     edgeReason: cast.edgeReason,
+    extraBonus: cast.extraBonus,
+    damageHalved: cast.damageHalved,
   })
 
+  // De quem sai o chakra: a marionete não tem, então cobra do dono.
+  const pagador: CastChakraSource = temporaria
+    ? temporaria.usesOwnerChakra && dono
+      ? { kind: 'character', id: dono.id, chakra: dono.chakra }
+      : { kind: 'companion', id: temporaria.id, chakra: temporaria.chakra }
+    : { kind: 'character', id: ficha!.id, chakra: ficha!.chakra, weapons: ficha!.weapons }
+
   const [kind, id] = (cast.targetRef ?? ':').split(':')
+  const alvoTemporario = kind === 'companion' ? mesa.companions.find((c) => c.id === id) : undefined
   await applyJutsuCast(
     table.id,
     cast,
-    caster,
+    pagador,
     alvo && fora.targetHp !== undefined
-      ? { kind: kind as 'character' | 'npc', id, hpAfter: fora.targetHp, hp: alvo.hp }
+      ? {
+          kind: kind as 'character' | 'npc' | 'companion',
+          id,
+          hpAfter: fora.targetHp,
+          hp: alvo.hp,
+          companionKind: alvoTemporario?.kind,
+        }
       : null,
     fora.summary,
   )
+
+  // Ficha temporária que chegou a 0 sai do jogo — e a peça dela some do mapa
+  // junto, para o mestre não precisar limpar na mão.
+  let avisoDoFim = ''
+  if (alvoTemporario && fora.targetHp === 0) {
+    await removeCompanionTokens(table.id, [alvoTemporario.id])
+    avisoDoFim =
+      alvoTemporario.kind === 'puppet'
+        ? ` — ${alvoTemporario.name} quebrou e saiu de jogo; o item continua na mochila, esperando conserto`
+        : ` — ${alvoTemporario.name} se desfez`
+  }
 
   // Jutsu de clone ou invocação: as fichas temporárias nascem aqui, junto com
   // o desconto do chakra, e as peças aparecem ao lado da do dono na cena
   // atual (se ele estiver no tabuleiro).
   let avisoDasFichas = ''
-  if (cast.companion) {
-    const fichas = montarCompanions(cast, caster)
+  if (cast.companion && ficha) {
+    const fichas = montarCompanions(cast, ficha)
     if (fichas.length > 0) {
       await createCompanions(table.id, fichas)
-      const pecas = await addCompanionTokens(table.id, caster.id, fichas)
+      const pecas = await addCompanionTokens(table.id, ficha.id, fichas)
       avisoDasFichas =
         ` — ${fichas.length} ficha(s) temporária(s) criada(s)` +
         (pecas > 0 ? ` e ${pecas} peça(s) no mapa` : ' (o personagem não está na tela de jogo, então nenhuma peça entrou)')
@@ -424,9 +505,9 @@ export async function resolverCast(
   await addLogEntry(table.id, {
     actorName: cast.casterName,
     actorType: 'player',
-    characterId: cast.casterId,
+    characterId: temporaria ? temporaria.ownerCharacterId : cast.casterId,
     kind: 'combat',
-    summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}${avisoDasFichas}`,
+    summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}${avisoDasFichas}${avisoDoFim}`,
     dice: fora.dice,
     diceSides: fora.diceSides,
     diceLabel: cast.jutsuName,
@@ -435,15 +516,7 @@ export async function resolverCast(
 }
 
 /** Fila de jutsus esperando o mestre. */
-export function JutsuCastQueue({
-  table,
-  characters,
-  npcs,
-}: {
-  table: GameTable
-  characters: Character[]
-  npcs: NPC[]
-}) {
+export function JutsuCastQueue({ table, mesa }: { table: GameTable; mesa: MesaViva }) {
   const [casts, setCasts] = useState<JutsuCast[]>([])
   const [reason, setReason] = useState<Record<string, string>>({})
 
@@ -455,8 +528,11 @@ export function JutsuCastQueue({
     <Card className="flex flex-col gap-2 p-4">
       <SectionTitle>Jutsus a liberar ({casts.length})</SectionTitle>
       {casts.map((c) => {
-        const caster = characters.find((x) => x.id === c.casterId)
-        const alvo = acharAlvo(c.targetRef, characters, npcs)
+        const quemAge =
+          c.casterKind === 'companion'
+            ? mesa.companions.find((x) => x.id === c.casterId)
+            : mesa.characters.find((x) => x.id === c.casterId)
+        const alvo = acharAlvo(c.targetRef, mesa)
         return (
           <div key={c.id} className="well flex flex-wrap items-center gap-2 rounded-sm p-2 text-sm">
             <span className="text-orange-100">
@@ -486,8 +562,8 @@ export function JutsuCastQueue({
               <Button
                 variant="good"
                 className="px-2 py-0.5 text-[11px]"
-                disabled={!caster}
-                onClick={() => caster && resolverCast(table, c, caster, characters, npcs, table.gmName)}
+                disabled={!quemAge}
+                onClick={() => quemAge && resolverCast(table, c, mesa, table.gmName)}
               >
                 liberar
               </Button>

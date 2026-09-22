@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select, TabChip } from './ui'
 import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import {
+  addPuppetItem,
   armorClassFor,
   armorFromCatalog,
   armorFromShopItem,
@@ -45,7 +46,9 @@ export function GiftPanel({ table, characters }: { table: GameTable; characters:
   const vivos = characters.filter((c) => !c.isNPC)
   const quem = vivos.find((c) => c.id === quemId)
   const doManual = catalogEntries(tipo)
-  const forjados = daForja.filter((i) => i.kind === tipo)
+  // "Item" na entrega inclui as marionetes: é o que o mestre entrega quando
+  // o grupo encontra uma no baú.
+  const forjados = daForja.filter((i) => (tipo === 'gear' ? i.kind === 'gear' || i.kind === 'puppet' : i.kind === tipo))
   const lista = fonte === 'manual' ? doManual.map((i) => i.name) : forjados.map((i) => i.name)
 
   async function entregarItem() {
@@ -86,9 +89,19 @@ export function GiftPanel({ table, characters }: { table: GameTable; characters:
       patch.armorClass = armorClassFor(quem, armadura)
       descricao = `${nome} (+${molde.defenseBonus} CA)`
     } else {
-      const nota = fonte === 'manual' ? GEAR.find((g) => g.name === nome)?.effect : forjados.find((i) => i.name === nome)?.description
-      patch.equipment = stackGear(quem.equipment, nome, quantidade, nota)
-      descricao = `${nome} x${quantidade}`
+      const forjado = forjados.find((i) => i.name === nome)
+      const nota = fonte === 'manual' ? GEAR.find((g) => g.name === nome)?.effect : forjado?.description
+      if (forjado?.kind === 'puppet') {
+        // Marionete não empilha: cada uma é um objeto, e a linha guarda de
+        // qual marionete forjada veio para o dono poder pô-la em campo.
+        let mochila = quem.equipment
+        for (let i = 0; i < quantidade; i++) mochila = addPuppetItem(mochila, nome, forjado.id, nota)
+        patch.equipment = mochila
+        descricao = `${nome} (marionete)`
+      } else {
+        patch.equipment = stackGear(quem.equipment, nome, quantidade, nota)
+        descricao = `${nome} x${quantidade}`
+      }
     }
 
     await updateCharacterDirect(table.id, quem.id, patch)

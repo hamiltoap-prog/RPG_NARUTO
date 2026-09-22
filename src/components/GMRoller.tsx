@@ -5,9 +5,20 @@ import { attackAttribute, findCatalogEntry, npcAsCaster, readJutsu, resolveCast 
 import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
 import { resolveSummonTest, summonSize } from '../lib/summon'
 import { allClans } from '../lib/clans'
-import { addGMRoll, addLogEntry, listenCustomClans, listenGMRolls, updateCharacterDirect, updateNPC } from '../lib/store'
+import {
+  addGMRoll,
+  addLogEntry,
+  applyCompanionHp,
+  listenCompanions,
+  listenCustomClans,
+  listenGMRolls,
+  removeCompanionTokens,
+  updateCharacterDirect,
+  updateNPC,
+} from '../lib/store'
+import { acharAlvo, alvosDaMesa } from './JutsuCastPanel'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, FREE_DICE } from '../types'
-import type { AttributeKey, Character, Clan, GMRoll, GameTable, NPC } from '../types'
+import type { AttributeKey, Character, Clan, Companion, GMRoll, GameTable, NPC } from '../types'
 
 type Aba = 'livre' | 'teste' | 'npc' | 'invocacao'
 
@@ -205,17 +216,17 @@ function CriaturaAge({
   const [bonusAvulso, setBonusAvulso] = useState(4)
   const [comVantagem, setComVantagem] = useState(false)
   const [customClans, setCustomClans] = useState<Clan[]>([])
+  const [companions, setCompanions] = useState<Companion[]>([])
 
   useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
+  useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
 
   const npc = npcs.find((n) => n.id === npcId)
   const ataques = npc?.attacks ?? []
   const jutsus = npc?.jutsus ?? []
-  const alvos = [
-    ...characters.filter((c) => !c.isNPC).map((c) => ({ ref: `character:${c.id}`, name: c.name })),
-    ...npcs.filter((n) => n.id !== npcId).map((n) => ({ ref: `npc:${n.id}`, name: n.name })),
-  ]
-  const alvo = alvoRef ? acharAlvo(alvoRef, characters, npcs) : undefined
+  // Clone, invocação e marionete também levam golpe da criatura do mestre.
+  const alvos = alvosDaMesa({ characters, npcs, companions }, `npc:${npcId}`, true)
+  const alvo = alvoRef ? acharAlvo(alvoRef, { characters, npcs, companions }) : undefined
 
   const ataqueEscolhido = ataques.find((a) => a.id === acaoId)
   const jutsuEscolhido = jutsus.find((j) => j.id === acaoId)
@@ -225,7 +236,7 @@ function CriaturaAge({
   const catalogo = jutsuEscolhido ? findCatalogEntry(jutsuEscolhido.name) : undefined
   const afinidadesDoAlvo = alvo
     ? [
-        ...(alvo.elements ?? []),
+        ...('elements' in alvo ? (alvo.elements ?? []) : []),
         ...('clanId' in alvo ? clanElements(allClans(customClans).find((c) => c.id === alvo.clanId)) : []),
       ]
     : []
@@ -285,6 +296,7 @@ function CriaturaAge({
     const custo = Number((jutsuEscolhido?.chakraCost ?? '').match(/\d+/)?.[0] ?? 0)
 
     // Aplica o dano no alvo e o chakra na criatura.
+    let avisoDoFim = ''
     if (alvo && fora.targetHp !== undefined) {
       const [kind, id] = alvoRef.split(':')
       if (kind === 'character') {
@@ -292,6 +304,15 @@ function CriaturaAge({
           hp: { ...alvo.hp, current: fora.targetHp },
           ...(fora.targetHp === 0 ? { isAlive: false } : {}),
         })
+      } else if (kind === 'companion') {
+        const temporaria = companions.find((c) => c.id === id)
+        if (temporaria) {
+          await applyCompanionHp(table.id, temporaria, fora.targetHp)
+          if (fora.targetHp === 0) {
+            await removeCompanionTokens(table.id, [id]).catch(() => undefined)
+            avisoDoFim = temporaria.kind === 'puppet' ? ` — ${temporaria.name} quebrou` : ` — ${temporaria.name} se desfez`
+          }
+        }
       } else {
         await updateNPC(table.id, id, { hp: { ...alvo.hp, current: fora.targetHp } })
       }
@@ -300,7 +321,7 @@ function CriaturaAge({
       await updateNPC(table.id, npc.id, { chakra: { ...npc.chakra, current: Math.max(0, npc.chakra.current - custo) } })
     }
 
-    const frase = `${npc.name}: ${fora.summary}${custo ? ` (−${custo} chakra)` : ''}`
+    const frase = `${npc.name}: ${fora.summary}${custo ? ` (−${custo} chakra)` : ''}${avisoDoFim}`
     onFeito(frase)
     if (secreta) {
       await addGMRoll(table.id, { label: npc.name, summary: frase, dice: fora.dice, diceSides: fora.diceSides, total: fora.damage })
@@ -420,10 +441,7 @@ function CriaturaAge({
   )
 }
 
-function acharAlvo(ref: string, characters: Character[], npcs: NPC[]) {
-  const [kind, id] = ref.split(':')
-  return kind === 'character' ? characters.find((c) => c.id === id) : npcs.find((n) => n.id === id)
-}
+
 
 /**
  * Teste de atributo ou resistência de criatura invocada.

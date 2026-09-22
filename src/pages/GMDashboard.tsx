@@ -254,7 +254,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
       {tab === 'pedidos' && (
         <div className="flex flex-col gap-3">
           <RollRequestsPanel table={table} />
-          <JutsuCastQueue table={table} characters={characters} npcs={npcs} />
+          <JutsuCastQueue table={table} mesa={{ characters, npcs, companions }} />
           <ChakraGiftPanel table={table} characters={characters} />
           <PendingRequestsPanel tableId={table.id} gmName={table.gmName} />
         </div>

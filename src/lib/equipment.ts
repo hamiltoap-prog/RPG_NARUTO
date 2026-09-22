@@ -119,6 +119,20 @@ export function stackWeapon(lista: readonly Weapon[], nova: Omit<Weapon, 'id'>, 
   }
   return [...lista, { ...nova, name: alvo, id: newId(), quantity: quantidade }]
 }
+/**
+ * Marionete entra como linha própria, sem empilhar: cada uma é um objeto, e
+ * a ficha precisa saber de qual marionete forjada esta linha veio para poder
+ * pô-la em campo.
+ */
+export function addPuppetItem(
+  lista: readonly InventoryItem[],
+  nome: string,
+  puppetId: string,
+  note?: string,
+): InventoryItem[] {
+  return [...lista, { id: newId(), name: nome, quantity: 1, puppetId, ...(note ? { note } : {}) }]
+}
+
 export function stackArmor(lista: readonly Armor[], nova: Omit<Armor, 'id'>): Armor[] {
   const existe = lista.find((a) => a.name.toLowerCase() === nova.name.toLowerCase())
   if (existe) return lista.map((a) => (a.id === existe.id ? { ...a, quantity: (a.quantity ?? 1) + 1 } : a))

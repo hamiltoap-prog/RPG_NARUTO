@@ -114,6 +114,8 @@ export interface InventoryItem {
   name: string
   quantity: number
   note?: string
+  /** Marionete: o item forjado que esta linha representa. */
+  puppetId?: string
 }
 
 export interface Weapon {
@@ -355,7 +357,7 @@ export interface NPC {
 
 /** O que o jutsu pediu para criar; as fichas são montadas na liberação. */
 export interface CompanionRequest {
-  kind: 'clone' | 'summon'
+  kind: CompanionKind
   count: number
   /** Clone: o jutsu que criou. */
   cloneJutsu?: string
@@ -363,12 +365,62 @@ export interface CompanionRequest {
   tribeId?: string
   rankIndex?: number
   size?: SummonSizeKey
+  /** Marionete: o item forjado que está sendo posto em campo. */
+  puppetItemId?: string
+  puppetName?: string
+  /**
+   * A ficha da marionete no momento da ativação. Vai junto no pedido de
+   * propósito: se o mestre reforjar a marionete depois, a que já está em
+   * campo continua sendo a que foi posta em campo.
+   */
+  puppetSpec?: PuppetSpec
 }
+
+/**
+ * Golpe ou jutsu que a marionete traz de fábrica.
+ *
+ * O manual não tem sistema de marionete — isto é regra da casa. Quem manobra
+ * é o ninja: a rolagem usa o modificador e a proficiência do DONO, e cada
+ * golpe soma o bônus próprio que o mestre definiu na forja. O chakra dos
+ * jutsus também sai da ficha do dono, porque a marionete não tem chakra.
+ */
+export interface PuppetJutsu {
+  id: string
+  name: string
+  /** Chakra que sai da ficha do dono. */
+  chakraCost: number
+  mode: 'attack' | 'save' | 'none'
+  /** Atributo do DONO usado na jogada de ataque. */
+  attackAttribute?: AttributeKey
+  /** Atributo com que o alvo resiste. */
+  saveAttribute?: AttributeKey
+  /** Bônus próprio da marionete, somado à rolagem. */
+  bonus?: number
+  damage?: string
+  damageType?: string
+  onSaveSuccess?: 'none' | 'half'
+  description?: string
+}
+
+/** A ficha da marionete, como o mestre a forja. */
+export interface PuppetSpec {
+  hp: number
+  armorClass: number
+  resistancePoints: number
+  /** Chakra do dono para pôr a marionete em campo. Zero = de graça. */
+  activationCost: number
+  attacks: NpcAttack[]
+  jutsus: PuppetJutsu[]
+  /** Itens acoplados e seus efeitos, em texto livre. */
+  gearText?: string
+}
+
+export type CompanionKind = 'clone' | 'summon' | 'puppet'
 
 export interface Companion {
   id: string
   tableId: string
-  kind: 'clone' | 'summon'
+  kind: CompanionKind
   /** Ficha que criou. */
   ownerCharacterId: string
   ownerName: string
@@ -401,6 +453,19 @@ export interface Companion {
   imageUrl?: string
   notes: string
   createdAt: number
+
+  /**
+   * Marionete quebrada continua listada, fora de jogo, até o mestre
+   * consertar. Clone e invocação não têm esse estado: a 0 PV eles somem.
+   */
+  status?: 'active' | 'broken'
+  /** Marionete: os jutsus gastam o chakra da ficha do dono. */
+  usesOwnerChakra?: boolean
+  /** Marionete: o item do inventário que a colocou em campo. */
+  puppetItemId?: string
+  /** Marionete: golpes e jutsus definidos na forja. */
+  ownJutsus?: PuppetJutsu[]
+  gearText?: string
 }
 
 /** Condição pegando em alguém durante o combate. */
@@ -789,12 +854,13 @@ export interface BestiaryEntry {
  * campanha e escolhe preço e estoque de cada um.
  * ------------------------------------------------------------------------- */
 
-export type ShopItemKind = 'weapon' | 'armor' | 'gear'
+export type ShopItemKind = 'weapon' | 'armor' | 'gear' | 'puppet'
 
 export const SHOP_ITEM_KIND_LABELS: Record<ShopItemKind, string> = {
   weapon: 'Arma',
   armor: 'Armadura',
   gear: 'Item',
+  puppet: 'Marionete',
 }
 
 export interface ShopItem {
@@ -811,6 +877,8 @@ export interface ShopItem {
   properties?: string
   /** Armadura: bônus de CA. */
   armorBonus?: number
+  /** Marionete: a ficha que o dono põe em campo. */
+  puppet?: PuppetSpec
   /** Unidades restantes. Ausente = sem limite. Zero esgota o item. */
   stock?: number
   /** Fora do ar sem precisar apagar — útil para item sazonal ou de enredo. */
@@ -861,6 +929,12 @@ export interface JutsuCast {
   casterId: string
   casterName: string
   requesterUid: string
+  /**
+   * Quem age. Ausente = ficha de personagem, como era antes das fichas
+   * temporárias existirem; 'companion' quer dizer que `casterId` é o id de um
+   * clone, invocação ou marionete.
+   */
+  casterKind?: 'character' | 'companion'
 
   jutsuName: string
   classification: string
@@ -894,6 +968,10 @@ export interface JutsuCast {
   weaponId?: string
   /** Arma de arremesso: a resolução desconta uma unidade da ficha. */
   consumesWeapon?: boolean
+  /** Jutsu lançado por clone: o manual manda o dano sair pela metade. */
+  damageHalved?: boolean
+  /** Bônus próprio do golpe da marionete, somado à rolagem do dono. */
+  extraBonus?: number
 
   status: 'pending' | 'resolved' | 'denied'
   createdAt: number

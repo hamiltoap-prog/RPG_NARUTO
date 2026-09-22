@@ -176,3 +176,68 @@ console.log('OK: checagens de vantagem elemental passaram')
   ok(readJutsu({ description: 'causa 3d6 de dano', cost: '4', classification: 'Ninjutsu' }).damageType === undefined,
      'sem tipo escrito, não inventa um')
 }
+
+// --- Bônus de golpe (marionete) e dano pela metade (clone)
+{
+  const alvoFraco = { ...alvo, armorClass: 1 } as unknown as NPC
+  // Sem atributo nem proficiência, o bônus do golpe é tudo o que soma.
+  const semNada = { ...caster, proficiencyBonus: 0, modifiers: { ...caster.modifiers, strength: 0 } } as unknown as Character
+  let comBonus = 0
+  for (let i = 0; i < 400; i++) {
+    const o = resolveCast({
+      caster: semNada, jutsuName: 'Ferrão', classification: 'Bukijutsu', mode: 'attack',
+      attackAttribute: 'strength', proficient: false, damage: '1d8',
+      target: { ...alvo, armorClass: 14 } as unknown as NPC, extraBonus: 7,
+    })
+    if (o.hit) comBonus++
+  }
+  let semBonus = 0
+  for (let i = 0; i < 400; i++) {
+    const o = resolveCast({
+      caster: semNada, jutsuName: 'Ferrão', classification: 'Bukijutsu', mode: 'attack',
+      attackAttribute: 'strength', proficient: false, damage: '1d8',
+      target: { ...alvo, armorClass: 14 } as unknown as NPC,
+    })
+    if (o.hit) semBonus++
+  }
+  console.log(`golpe +7 contra CA 14: ${comBonus}/400 acertos, contra ${semBonus}/400 sem o bônus`)
+  ok(comBonus > semBonus + 80, 'o bônus do golpe tinha que ajudar de verdade')
+  const comTexto = resolveCast({
+    caster: semNada, jutsuName: 'Ferrão', classification: 'Bukijutsu', mode: 'attack',
+    attackAttribute: 'strength', proficient: false, damage: '1d8', target: alvoFraco, extraBonus: 7,
+  })
+  ok(/\+ 7 \(golpe\)/.test(comTexto.summary), 'o registro mostra o bônus do golpe separado')
+
+  // Dano pela metade: mesma rolagem, metade do resultado.
+  let cheio = 0
+  let meio = 0
+  for (let i = 0; i < 600; i++) {
+    cheio += resolveCast({
+      caster, jutsuName: 'J', classification: 'Ninjutsu', mode: 'attack',
+      attackAttribute: 'intelligence', proficient: false, damage: '4d6', target: alvoFraco,
+    }).damage
+    meio += resolveCast({
+      caster, jutsuName: 'J', classification: 'Ninjutsu', mode: 'attack',
+      attackAttribute: 'intelligence', proficient: false, damage: '4d6', target: alvoFraco, damageHalved: true,
+    }).damage
+  }
+  const razao = meio / cheio
+  console.log(`dano do clone: ${meio} contra ${cheio} do original (razão ${razao.toFixed(2)}, esperado ~0,5)`)
+  ok(razao > 0.42 && razao < 0.55, `a metade não bateu: ${razao}`)
+
+  const semAlvo = resolveCast({
+    caster, jutsuName: 'J', classification: 'Ninjutsu', mode: 'none', damage: '4d6',
+    attackAttribute: 'intelligence', proficient: false, damageHalved: true,
+  })
+  ok(semAlvo.damage <= 24 / 2 + 1, 'jutsu sem rolagem também sai pela metade')
+
+  // Resistência com metade: o corte do clone vem antes da metade do sucesso.
+  const resistindo = resolveCast({
+    caster, jutsuName: 'J', classification: 'Ninjutsu', mode: 'save', saveAttribute: 'dexterity',
+    attackAttribute: 'intelligence', proficient: false, damage: '10d6', onSaveSuccess: 'half',
+    target: { ...alvo, resistancePoints: 1 } as unknown as NPC, damageHalved: true,
+  })
+  ok(resistindo.damage <= 60 / 4 + 1, 'clone + resistiu com metade = um quarto do dano cheio')
+}
+
+console.log('OK: checagens de bônus de golpe e dano de clone passaram')

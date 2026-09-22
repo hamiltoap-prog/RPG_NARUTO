@@ -4,7 +4,10 @@ import { SUMMON_BESTIARY } from '../../data/summons'
 import {
   biggestChakraDie,
   buildClones,
+  buildPuppet,
   buildSummon,
+  companionActions,
+  refundOnDismiss,
   cloneArmorClass,
   cloneJutsus,
   isCloneJutsu,
@@ -12,7 +15,7 @@ import {
   readClone,
   summonCost,
 } from '../companions'
-import type { Character } from '../../types'
+import type { Character, Companion } from '../../types'
 
 const ok = (c: boolean, m: string) => { if (!c) throw new Error('FALHOU: ' + m) }
 const acha = (n: string) => JUTSU_CATALOG.find((j) => j.name === n)!
@@ -145,3 +148,81 @@ const acha = (n: string) => JUTSU_CATALOG.find((j) => j.name === n)!
 }
 
 console.log('OK: todas as checagens de clones e invocações passaram')
+
+// --- O que cada ficha temporária sabe fazer
+{
+  const dono = {
+    id: 'c1', tableId: 't1', name: 'Kankuro', armorClass: 15, resistancePoints: 14,
+    attributes: { strength: 10, dexterity: 16, constitution: 12, intelligence: 14, wisdom: 10, charisma: 10 },
+    modifiers: { strength: 0, dexterity: 3, constitution: 1, intelligence: 2, wisdom: 0, charisma: 0 },
+    proficiencyBonus: 3, imageUrl: '', ownerUid: 'uid-k',
+    jutsus: [{ id: 'j1', name: 'ESTILO FOGO: RAJADA DE CHAMAS', details: '' }],
+  } as unknown as Character
+
+  // Invocação: o bônus da tribo e do tamanho já é a conta inteira.
+  const urso = buildSummon({ owner: dono, ownerUid: 'uid-k', tribeId: 'urso', rankIndex: 0, size: 'G' })!
+  const doUrso = companionActions(urso)
+  ok(doUrso.length >= 2, 'o urso tem os golpes naturais como ação')
+  ok(doUrso.every((a) => a.source === 'attack'), 'invocação só tem golpes, não jutsus do dono')
+  ok(doUrso.every((a) => !a.proficient), 'invocação não soma proficiência: o bônus já está fechado')
+  ok(doUrso.every((a) => a.extraBonus === 12), `bônus da tribo (+7) com o do tamanho Grande (+5) = 12, veio ${doUrso[0].extraBonus}`)
+  ok(doUrso.every((a) => a.chakraCost === 0), 'arma natural não custa chakra')
+  console.log(`ações do Urso: ${doUrso.map((a) => a.label).join(' | ')}`)
+
+  // Clone: usa os jutsus do dono, e o dano sai pela metade.
+  const leitura = readClone(JUTSU_CATALOG.find((j) => j.name === 'TÉCNICA DE CLONES DAS SOMBRAS')!)
+  const clone = buildClones({ owner: dono, ownerUid: 'uid-k', jutsuName: 'TÉCNICA DE CLONES DAS SOMBRAS', reading: leitura, count: 1, chakraDie: 'd8' })[0]
+  const doClone = companionActions(clone)
+  ok(doClone.length === 1 && doClone[0].source === 'jutsu', 'o clone leva o jutsu do dono como ação')
+  ok(doClone[0].damageHalved === true, 'o jutsu do clone sai pela metade do dano')
+  ok(doClone[0].proficient, 'o clone é cópia: rola com proficiência')
+  ok(doClone[0].chakraCost > 0, 'o jutsu do clone custa chakra')
+  console.log(`ação do clone: ${doClone[0].label} (${doClone[0].mode}, metade do dano: ${doClone[0].damageHalved})`)
+
+  // Marionete: golpe com bônus próprio, jutsu com chakra do dono.
+  const spec = {
+    hp: 20, armorClass: 13, resistancePoints: 13, activationCost: 3,
+    attacks: [{ id: 'a1', name: 'Ferrão', bonus: 4, damage: '1d8', damageType: 'Perfurante' }],
+    jutsus: [{
+      id: 'pj1', name: 'Névoa Venenosa', chakraCost: 5, mode: 'save' as const,
+      saveAttribute: 'constitution' as const, damage: '3d6', onSaveSuccess: 'half' as const,
+      description: 'Envenenado por 1 rodada',
+    }],
+    gearText: 'Lança-chamas no braço',
+  }
+  const marionete = buildPuppet({ owner: dono, ownerUid: 'uid-k', puppetItemId: 'shop1', name: 'Karasu', spec })!
+  ok(marionete.kind === 'puppet' && marionete.usesOwnerChakra === true, 'marionete gasta o chakra do dono')
+  ok(marionete.chakra.max === 0, 'marionete não tem chakra próprio')
+  ok(marionete.status === 'active' && marionete.puppetItemId === 'shop1', 'nasce ativa e sabe de que item veio')
+  ok(marionete.modifiers.dexterity === 3 && marionete.proficiencyBonus === 3, 'leva os modificadores do dono: quem manobra é o ninja')
+  ok(marionete.hp.max === 20 && marionete.armorClass === 13, 'PV e CA vêm da forja')
+  ok(marionete.gearText === 'Lança-chamas no braço', 'os itens acoplados vão junto')
+
+  const daMarionete = companionActions(marionete)
+  ok(daMarionete.length === 2, `2 ações (1 golpe + 1 jutsu), veio ${daMarionete.length}`)
+  const golpe = daMarionete.find((a) => a.source === 'attack')!
+  ok(golpe.extraBonus === 4 && golpe.proficient, 'o golpe soma o bônus próprio à rolagem do dono, com proficiência')
+  ok(golpe.chakraCost === 0, 'golpe de marionete não custa chakra')
+  const jutsu = daMarionete.find((a) => a.source === 'puppetJutsu')!
+  ok(jutsu.chakraCost === 5 && jutsu.mode === 'save' && jutsu.saveAttribute === 'constitution', 'o jutsu da marionete guarda a mecânica da forja')
+  ok(jutsu.onSaveSuccess === 'half', 'e o que acontece quando o alvo resiste')
+  ok(jutsu.note === 'Envenenado por 1 rodada', 'o efeito em texto chega a quem joga')
+  console.log(`ações da marionete: ${daMarionete.map((a) => `${a.label} [${a.mode}]`).join(' | ')}`)
+
+  // Ficha sem golpe nenhum não trava nada.
+  ok(companionActions({ ...marionete, attacks: [], ownJutsus: [] }).length === 0, 'ficha sem golpes devolve lista vazia')
+}
+
+// --- Retorno de chakra ao desfazer
+{
+  const base = { chakra: { current: 7, max: 8 }, kind: 'clone' as const } as unknown as Companion
+  ok(refundOnDismiss(base) === 3, `metade de 7 arredondada para baixo é 3, veio ${refundOnDismiss(base)}`)
+  ok(refundOnDismiss({ ...base, chakra: { current: 0, max: 8 } }) === 0, 'sem chakra, nada volta')
+  ok(refundOnDismiss({ ...base, chakra: { current: 1, max: 8 } }) === 0, 'metade de 1 é 0')
+  ok(refundOnDismiss({ ...base, kind: 'summon' }) === 3, 'invocação devolve igual ao clone')
+  ok(refundOnDismiss({ ...base, kind: 'puppet', usesOwnerChakra: true }) === 0,
+     'marionete não devolve: o chakra dela nunca foi dela')
+  console.log('retorno ao desfazer: 7 de chakra -> 3 de volta; marionete -> 0')
+}
+
+console.log('OK: checagens de ação e retorno das fichas temporárias passaram')

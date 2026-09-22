@@ -16,6 +16,7 @@ import {
 import { db } from '../firebase'
 import type {
   Companion,
+  CompanionKind,
   Character,
   CombatParticipant,
   BestiaryEntry,
@@ -35,6 +36,7 @@ import type {
   SceneLibraryItem,
   ScenePing,
   SheetChangeRequest,
+  Weapon,
 } from '../types'
 import { spendWeapon } from './equipment'
 import { newId, newTableCode } from './id'
@@ -862,36 +864,102 @@ export function listenMyJutsuCasts(tableId: string, casterId: string, cb: (casts
  * os PV do alvo e marca o pedido como resolvido — tudo numa escrita só, para
  * não sobrar meio golpe se algo falhar no meio.
  */
+/** De onde sai o chakra do lançamento, e de quem é a arma que se gasta. */
+export interface CastChakraSource {
+  kind: 'character' | 'companion'
+  id: string
+  chakra: { current: number; max: number }
+  /** Só faz sentido para ficha de personagem: armas ficam nela. */
+  weapons?: Weapon[]
+}
+
+/** Quem leva o golpe, e o que acontece quando o PV chega a zero. */
+export interface CastHit {
+  kind: 'character' | 'npc' | 'companion'
+  id: string
+  hpAfter: number
+  hp: { current: number; max: number }
+  /** Ficha temporária: clone e invocação somem a 0 PV; marionete quebra. */
+  companionKind?: CompanionKind
+}
+
+/**
+ * Fecha o lançamento em uma escrita só: desconta o chakra de quem pagou,
+ * aplica o dano em quem levou e marca o pedido como resolvido.
+ *
+ * Três casos que a conta precisa saber distinguir:
+ *  - quem PAGA o chakra nem sempre é quem age: a marionete não tem chakra,
+ *    então o custo sai da ficha do dono;
+ *  - ficha temporária que chega a 0 PV some da mesa, porque clone desfeito é
+ *    clone desfeito — não fica uma ficha morta ocupando a lista;
+ *  - marionete a 0 PV não some: fica QUEBRADA, esperando o conserto do
+ *    mestre, porque o item continua na mochila do dono.
+ */
 export async function applyJutsuCast(
   tableId: string,
   cast: JutsuCast,
-  caster: Character,
-  target: { kind: 'character' | 'npc'; id: string; hpAfter: number; hp: { current: number; max: number } } | null,
+  chakraFrom: CastChakraSource,
+  target: CastHit | null,
   resultSummary: string,
 ) {
   const database = requireDb()
   const batch = writeBatch(database)
+
   const patchConjurador: Record<string, unknown> = {
-    chakra: { ...caster.chakra, current: Math.max(0, caster.chakra.current - cast.chakraCost) },
-    updatedAt: Date.now(),
+    chakra: { ...chakraFrom.chakra, current: Math.max(0, chakraFrom.chakra.current - cast.chakraCost) },
   }
   // Arma de arremesso sai da mão: a unidade é descontada na mesma escrita do
   // chakra, para não existir estado em que o ataque saiu mas a shuriken não.
-  if (cast.consumesWeapon && cast.weaponId) {
-    patchConjurador.weapons = spendWeapon(caster.weapons, cast.weaponId)
+  if (cast.consumesWeapon && cast.weaponId && chakraFrom.weapons) {
+    patchConjurador.weapons = spendWeapon(chakraFrom.weapons, cast.weaponId)
   }
-  batch.update(doc(charactersCol(tableId), caster.id), patchConjurador)
+  if (chakraFrom.kind === 'character') {
+    patchConjurador.updatedAt = Date.now()
+    batch.update(doc(charactersCol(tableId), chakraFrom.id), patchConjurador)
+  } else {
+    batch.update(doc(companionsCol(tableId), chakraFrom.id), patchConjurador)
+  }
+
   if (target) {
-    const ref = target.kind === 'character' ? doc(charactersCol(tableId), target.id) : doc(npcsCol(tableId), target.id)
-    const patch: Record<string, unknown> = { hp: { ...target.hp, current: target.hpAfter } }
-    if (target.kind === 'character') {
-      patch.updatedAt = Date.now()
-      if (target.hpAfter === 0) patch.isAlive = false
+    if (target.kind === 'companion') {
+      const ref = doc(companionsCol(tableId), target.id)
+      if (target.hpAfter === 0 && target.companionKind !== 'puppet') {
+        batch.delete(ref)
+      } else if (target.hpAfter === 0) {
+        batch.update(ref, { hp: { ...target.hp, current: 0 }, status: 'broken' })
+      } else {
+        batch.update(ref, { hp: { ...target.hp, current: target.hpAfter } })
+      }
+    } else {
+      const ref = target.kind === 'character' ? doc(charactersCol(tableId), target.id) : doc(npcsCol(tableId), target.id)
+      const patch: Record<string, unknown> = { hp: { ...target.hp, current: target.hpAfter } }
+      if (target.kind === 'character') {
+        patch.updatedAt = Date.now()
+        if (target.hpAfter === 0) patch.isAlive = false
+      }
+      batch.update(ref, patch)
     }
-    batch.update(ref, patch)
   }
+
   batch.update(doc(jutsuCastsCol(tableId), cast.id), { status: 'resolved', resultSummary })
   await batch.commit()
+}
+
+/**
+ * Dano em ficha temporária fora do lançamento (a lista de combate, o − da
+ * ficha). Mesma regra do zero: clone e invocação somem, marionete quebra.
+ */
+export async function applyCompanionHp(tableId: string, companion: Companion, hpAfter: number) {
+  const novo = Math.max(0, Math.min(companion.hp.max, hpAfter))
+  if (novo > 0) {
+    await updateCompanion(tableId, companion.id, { hp: { ...companion.hp, current: novo } })
+    return
+  }
+  if (companion.kind === 'puppet') {
+    await updateCompanion(tableId, companion.id, { hp: { ...companion.hp, current: 0 }, status: 'broken' })
+    return
+  }
+  await deleteCompanion(tableId, companion.id)
 }
 
 export async function denyJutsuCast(tableId: string, castId: string, gmName: string, reason: string) {

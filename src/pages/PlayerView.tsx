@@ -19,6 +19,7 @@ import { JUTSU_CATALOG } from '../data/jutsus'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
 import {
+  addPuppetItem,
   armorClassBreakdown,
   armorClassFor,
   armorFromCatalog,
@@ -34,10 +35,20 @@ import {
 } from '../lib/equipment'
 import { rollDice } from '../lib/dice'
 import { submitCharacterChange, updateNotes } from '../lib/changeRequest'
-import { listenCharacter, listenCharacters, listenCustomClans, listenMissions, listenNPCs, listenRequestsForCharacter, listenShop } from '../lib/store'
+import {
+  listenCharacter,
+  listenCharacters,
+  listenCompanions,
+  listenCustomClans,
+  listenMissions,
+  listenNPCs,
+  listenRequestsForCharacter,
+  listenShop,
+} from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CHAKRA_DONOR_CLASS_ID, REQUESTABLE_FIELD_LABELS } from '../types'
 import type {
   Armor,
+  Companion,
   ArmorCatalogEntry,
   Attributes,
   Character,
@@ -69,6 +80,7 @@ export function PlayerView({
   const [character, setCharacter] = useState<Character | null | undefined>(undefined)
   const [allCharacters, setAllCharacters] = useState<Character[]>([])
   const [npcs, setNpcs] = useState<NPC[]>([])
+  const [companions, setCompanions] = useState<Companion[]>([])
   const [missions, setMissions] = useState<Mission[]>([])
   const [pendingFields, setPendingFields] = useState<Set<RequestableField>>(new Set())
   const [noteDraft, setNoteDraft] = useState('')
@@ -87,6 +99,7 @@ export function PlayerView({
   useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
   useEffect(() => listenShop(table.id, setShopItems), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
+  useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
   useEffect(() => listenMissions(table.id, setMissions), [table.id])
 
   useEffect(() => {
@@ -108,6 +121,9 @@ export function PlayerView({
   }
 
   const clans = allClans(customClans)
+  // Tudo que está em campo: fichas, NPCs e as temporárias (clone, invocação,
+  // marionete). Alvo e conjurador saem daqui.
+  const mesa = { characters: allCharacters, npcs, companions }
   const clan = clans.find((c) => c.id === character.clanId)
   const charClass = CLASSES.find((c) => c.id === character.classId)
 
@@ -135,8 +151,7 @@ export function PlayerView({
         <JutsuCastCard
           table={table}
           character={character}
-          characters={allCharacters}
-          npcs={npcs}
+          mesa={mesa}
           clans={clans}
           requesterUid={actorUid}
           asGM={asGM}
@@ -144,9 +159,11 @@ export function PlayerView({
         <CompanionCard
           table={table}
           character={character}
+          mesa={mesa}
+          shopItems={shopItems}
           requesterUid={actorUid}
           asGM={asGM}
-          onResolveNow={(cast) => resolverCast(table, cast, character, allCharacters, npcs, table.gmName).then(() => undefined)}
+          onResolveNow={(cast) => resolverCast(table, cast, mesa, table.gmName).then(() => undefined)}
         />
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />
@@ -1344,6 +1361,11 @@ function ShopCard({
       await onSubmit({ armor, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
       return
     }
+    if (item.kind === 'puppet') {
+      const equipment = addPuppetItem(character.equipment, item.name, item.id, item.description)
+      await onSubmit({ equipment, ryo: character.ryo - item.cost }, `Comprou a marionete ${item.name} (${item.cost} ryo)`)
+      return
+    }
     const equipment = stackGear(character.equipment, item.name, 1, item.description)
     await onSubmit({ equipment, ryo: character.ryo - item.cost }, `Comprou ${item.name} (${item.cost} ryo)`)
   }
@@ -1352,7 +1374,9 @@ function ShopCard({
   const usaManual = table.shopUsesManual ?? true
   const daMesa = shopItems.filter((i) => i.available && i.stock !== 0)
   const daMesaNaAba = daMesa.filter((i) =>
-    tab === 'weapons' ? i.kind === 'weapon' : tab === 'armor' ? i.kind === 'armor' : i.kind === 'gear',
+    // A aba "Itens" leva junto as marionetes forjadas: para quem compra, é
+    // mais um item da vitrine.
+    tab === 'weapons' ? i.kind === 'weapon' : tab === 'armor' ? i.kind === 'armor' : i.kind === 'gear' || i.kind === 'puppet',
   )
 
   // Loja fechada pelo mestre não aparece para o grupo.

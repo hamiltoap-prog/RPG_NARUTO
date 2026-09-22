@@ -1,6 +1,8 @@
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from './id'
+import { attackAttribute, findCatalogEntry, readJutsu } from './jutsuCast'
+import type { CastMode } from './jutsuCast'
 import { summonSize } from './summon'
 import { SUMMON_RANKS } from '../types'
 import type {
@@ -11,6 +13,7 @@ import type {
   JutsuCatalogEntry,
   Modifiers,
   NpcAttack,
+  PuppetSpec,
   SummonSizeKey,
 } from '../types'
 
@@ -281,4 +284,156 @@ export function buildSummon(input: BuildSummonInput): Companion | null {
 /** Custo em chakra de uma invocação, pela tabela de rank. */
 export function summonCost(rankIndex: number): number {
   return (SUMMON_RANKS[rankIndex] ?? SUMMON_RANKS[0]).cost
+}
+
+/* ---------------------------------------------------------------------------
+ * O que uma ficha temporária sabe fazer
+ * ------------------------------------------------------------------------- */
+
+/** Uma ação pronta para virar pedido de lançamento. */
+export interface CompanionAction {
+  id: string
+  label: string
+  source: 'attack' | 'jutsu' | 'puppetJutsu'
+  mode: CastMode
+  /** Atributo da rolagem. Para o clone e a invocação é o próprio; para a
+   * marionete é o do dono, porque quem manobra é o ninja. */
+  attackAttribute: AttributeKey
+  saveAttribute?: AttributeKey
+  proficient: boolean
+  /** Bônus plano do golpe, somado à rolagem. */
+  extraBonus?: number
+  damage?: string
+  damageType?: string
+  chakraCost: number
+  /** Jutsu de clone sai pela metade do dano (regra do manual). */
+  damageHalved?: boolean
+  onSaveSuccess?: 'none' | 'half'
+  note?: string
+}
+
+/**
+ * Tudo que a ficha temporária pode fazer neste turno, já com a conta montada.
+ *
+ * Cada tipo rola de um jeito, e a diferença importa:
+ *
+ *  - **invocação**: a arma natural já vem com o bônus fechado (modificador da
+ *    tribo + bônus do tamanho), então a rolagem é d20 + esse bônus, sem
+ *    atributo nem proficiência por cima — é o que a seção de Kuchiyose manda;
+ *  - **clone**: usa os jutsus do dono com os modificadores do dono (o clone é
+ *    cópia), e o dano do jutsu sai pela metade;
+ *  - **marionete**: o golpe soma o bônus próprio à rolagem do DONO, e o
+ *    chakra do jutsu sai da ficha dele.
+ */
+export function companionActions(c: Companion): CompanionAction[] {
+  const acoes: CompanionAction[] = []
+
+  for (const a of c.attacks ?? []) {
+    const daTribo = c.kind === 'summon'
+    acoes.push({
+      id: `attack:${a.id}`,
+      label: `${a.name} ${a.bonus >= 0 ? '+' : ''}${a.bonus} · ${a.damage}`,
+      source: 'attack',
+      mode: 'attack',
+      // Invocação não soma atributo: o bônus da tribo já é a conta inteira.
+      attackAttribute: daTribo ? 'strength' : 'dexterity',
+      proficient: !daTribo,
+      extraBonus: a.bonus,
+      damage: a.damage,
+      damageType: a.damageType,
+      chakraCost: 0,
+      note: daTribo ? 'arma natural: o bônus da tribo e do tamanho já estão na conta' : undefined,
+    })
+  }
+
+  for (const j of c.jutsus ?? []) {
+    const entrada = findCatalogEntry(j.name)
+    if (!entrada) continue
+    const lido = readJutsu(entrada)
+    acoes.push({
+      id: `jutsu:${j.id}`,
+      label: `${j.name}${lido.cost ? ` (${lido.cost} chakra)` : ''}`,
+      source: 'jutsu',
+      mode: lido.mode,
+      attackAttribute: attackAttribute(entrada.classification),
+      saveAttribute: lido.saveAttribute,
+      proficient: true,
+      damage: lido.damage,
+      damageType: lido.damageType,
+      chakraCost: lido.cost,
+      damageHalved: c.halfDamage,
+      note: c.halfDamage ? 'jutsu de clone: o dano sai pela metade' : undefined,
+    })
+  }
+
+  for (const j of c.ownJutsus ?? []) {
+    acoes.push({
+      id: `puppetJutsu:${j.id}`,
+      label: `${j.name}${j.chakraCost ? ` (${j.chakraCost} chakra do dono)` : ''}`,
+      source: 'puppetJutsu',
+      mode: j.mode,
+      attackAttribute: j.attackAttribute ?? 'dexterity',
+      saveAttribute: j.saveAttribute,
+      proficient: true,
+      extraBonus: j.bonus,
+      damage: j.damage,
+      damageType: j.damageType,
+      chakraCost: j.chakraCost,
+      onSaveSuccess: j.onSaveSuccess,
+      note: j.description,
+    })
+  }
+
+  return acoes
+}
+
+/**
+ * Chakra que volta para o dono ao desfazer a ficha: **metade do que sobrou**,
+ * arredondado para baixo. Marionete não devolve nada — o chakra dela nunca
+ * foi dela.
+ */
+export function refundOnDismiss(c: Companion): number {
+  if (c.usesOwnerChakra || c.kind === 'puppet') return 0
+  return Math.floor((c.chakra?.current ?? 0) / 2)
+}
+
+/** Põe a marionete forjada em campo, como ficha do dono. */
+export function buildPuppet(input: {
+  owner: Character
+  ownerUid: string
+  puppetItemId: string
+  name: string
+  spec: PuppetSpec
+  description?: string
+}): Companion | null {
+  const spec = input.spec
+  if (!spec) return null
+  return {
+    id: newId(),
+    tableId: input.owner.tableId,
+    kind: 'puppet',
+    ownerCharacterId: input.owner.id,
+    ownerName: input.owner.name,
+    ownerUid: input.ownerUid,
+    name: input.name,
+    sourceJutsu: 'Manobra de marionete',
+    hp: { current: spec.hp, max: spec.hp },
+    // Marionete não tem chakra próprio: o que os jutsus dela gastam sai da
+    // ficha de quem a manobra.
+    chakra: { current: 0, max: 0 },
+    armorClass: spec.armorClass,
+    resistancePoints: spec.resistancePoints,
+    modifiers: input.owner.modifiers,
+    proficiencyBonus: input.owner.proficiencyBonus,
+    attacks: spec.attacks,
+    ownJutsus: spec.jutsus,
+    gearText: spec.gearText,
+    halfDamage: false,
+    duration: 'Fica em campo até ser guardada ou quebrar',
+    usesOwnerChakra: true,
+    puppetItemId: input.puppetItemId,
+    status: 'active',
+    notes: input.description ?? '',
+    createdAt: Date.now(),
+  }
 }

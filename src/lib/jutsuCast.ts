@@ -2,7 +2,7 @@ import { CONDITIONS } from '../data/conditions'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { applyCriticalMultiplier, rollD20, rollDice } from './dice'
 import type { Edge } from './dice'
-import type { AttributeKey, Character, JutsuCatalogEntry, Modifiers, NPC } from '../types'
+import type { AttributeKey, Character, Companion, JutsuCatalogEntry, Modifiers, NPC } from '../types'
 
 /**
  * Lançar um jutsu sem fazer conta na mão.
@@ -134,7 +134,8 @@ export function effectiveResistance(base: number, conditions: string[] = []): nu
   return base + extra
 }
 
-export type CastTarget = (Character | NPC) & { conditions?: string[] }
+/** Quem pode levar o golpe: ficha, NPC ou ficha temporária. */
+export type CastTarget = (Character | NPC | Companion) & { conditions?: string[] }
 
 /**
  * Quem conjura pode ser um personagem ou uma criatura. O que a conta precisa
@@ -146,6 +147,24 @@ export interface Caster {
   modifiers: Modifiers
   proficiencyBonus: number
   chakra: { current: number; max: number }
+}
+
+/**
+ * Empresta a uma ficha temporária a forma da conta.
+ *
+ * A marionete é o caso especial: quem manobra é o ninja, então a rolagem
+ * usa os modificadores e a proficiência do DONO. O clone e a invocação usam
+ * os próprios.
+ */
+export function companionAsCaster(c: Companion, owner?: { modifiers: Modifiers; proficiencyBonus: number }): Caster {
+  const doDono = c.kind === 'puppet' && owner
+  return {
+    id: c.id,
+    name: c.name,
+    modifiers: doDono ? owner.modifiers : c.modifiers,
+    proficiencyBonus: doDono ? owner.proficiencyBonus : c.proficiencyBonus,
+    chakra: c.chakra,
+  }
 }
 
 /** Empresta a um NPC a forma que a conta de lançamento espera. */
@@ -183,6 +202,17 @@ export interface CastInput {
   edge?: Edge
   /** Só para o registro: "Fogo supera Vento". */
   edgeReason?: string
+  /**
+   * Bônus plano somado à jogada de ataque, além do atributo e da
+   * proficiência. É o bônus próprio do golpe da marionete, que se soma ao
+   * ninja que a manobra.
+   */
+  extraBonus?: number
+  /**
+   * Dano pela metade. O manual manda isso para os jutsus lançados por clone
+   * ("causam metade do dano"), e o corte vale depois do crítico.
+   */
+  damageHalved?: boolean
 }
 
 export interface CastOutcome {
@@ -204,11 +234,14 @@ export function resolveCast(input: CastInput): CastOutcome {
   const { caster, target } = input
   const mod = caster.modifiers[input.attackAttribute]
   const prof = input.proficient ? caster.proficiencyBonus : 0
+  const extra = input.extraBonus ?? 0
+  /** Corte do dano pela metade (jutsu de clone), aplicado por último. */
+  const metade = (n: number) => (input.damageHalved ? Math.floor(n / 2) : n)
 
   // ---- Jutsu sem ataque nem resistência: só acontece.
   if (input.mode === 'none') {
     const dano = input.damage ? rollDice(input.damage) : null
-    const total = dano?.total ?? 0
+    const total = metade(dano?.total ?? 0)
     return {
       summary: `${input.jutsuName}${target ? ` em ${target.name}` : ''}${dano ? `: ${total} de dano ${input.damageType ?? ''}`.trimEnd() : ' — efeito aplicado'}`,
       dice: dano?.rolls ?? [],
@@ -229,7 +262,7 @@ export function resolveCast(input: CastInput): CastOutcome {
     const rolagem = rollD20(alvoMod, false, 0)
     const resistiu = rolagem.total >= pr
     const dadoDano = input.damage ? rollDice(input.damage) : null
-    const cheio = dadoDano?.total ?? 0
+    const cheio = metade(dadoDano?.total ?? 0)
     const dano = resistiu ? (input.onSaveSuccess === 'half' ? Math.floor(cheio / 2) : 0) : cheio
     return {
       summary:
@@ -246,7 +279,7 @@ export function resolveCast(input: CastInput): CastOutcome {
   }
 
   // ---- Ataque: quem rola é o conjurador, contra a CA do alvo.
-  const rolagem = rollD20(mod, input.proficient, caster.proficiencyBonus, input.edge ?? 'none')
+  const rolagem = rollD20(mod + extra, input.proficient, caster.proficiencyBonus, input.edge ?? 'none')
   const ca = target?.armorClass ?? 0
   // 20 natural sempre acerta e 1 natural sempre erra, seja qual for a conta
   // (05-combate.md, "Acertos e falhas críticas").
@@ -260,12 +293,14 @@ export function resolveCast(input: CastInput): CastOutcome {
       // Crítico do manual: dados de dano × Bônus de Proficiência.
       r = applyCriticalMultiplier(r, caster.proficiencyBonus)
     }
-    dano = r.total
+    dano = metade(r.total)
   }
   const doisDados = rolagem.bothRolls
     ? ` [${rolagem.bothRolls.join(' e ')}, ${rolagem.edge === 'advantage' ? 'vantagem' : 'desvantagem'}${input.edgeReason ? `: ${input.edgeReason}` : ''}]`
     : ''
-  const conta = `d20(${rolagem.roll})${doisDados}${mod ? ` + ${mod}` : ''}${prof ? ` + ${prof} (prof.)` : ''} = ${rolagem.total}`
+  const conta =
+    `d20(${rolagem.roll})${doisDados}${mod ? ` + ${mod}` : ''}${extra ? ` + ${extra} (golpe)` : ''}` +
+    `${prof ? ` + ${prof} (prof.)` : ''} = ${rolagem.total}`
   return {
     summary:
       `${input.jutsuName}${target ? ` em ${target.name}` : ''}: ${conta}` +
@@ -273,7 +308,7 @@ export function resolveCast(input: CastInput): CastOutcome {
       (rolagem.isFumble
         ? ' — 1 natural, falha crítica'
         : acertou
-          ? `${rolagem.isCritical ? ' — acerto crítico!' : ' — acertou'}${dano ? `, ${dano} de dano${input.damageType ? ` ${input.damageType}` : ''}` : ''}`
+          ? `${rolagem.isCritical ? ' — acerto crítico!' : ' — acertou'}${dano ? `, ${dano} de dano${input.damageType ? ` ${input.damageType}` : ''}${input.damageHalved ? ' (metade, clone)' : ''}` : ''}`
           : ' — errou'),
     dice: [rolagem.roll, ...dadosDano],
     diceSides: 20,
