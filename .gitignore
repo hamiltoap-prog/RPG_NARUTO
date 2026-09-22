@@ -21,3 +21,8 @@ firestore-debug.log
 
 # Mapa gerado só para testar a tela de jogo localmente
 public/teste-mapa.png
+
+# Capturas de tela dos testes de ponta a ponta (Playwright), que caem na raiz
+# quando o script roda com o projeto como diretório de trabalho. São
+# artefatos de verificação, não conteúdo do projeto.
+/*.png
