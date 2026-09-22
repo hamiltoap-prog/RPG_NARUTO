@@ -11,8 +11,10 @@ import {
   applyCompanionHp,
   removeCompanionTokens,
   updateCharacterDirect,
+  updateCompanion,
   updateNPC,
 } from '../lib/store'
+import { condicoesDe } from '../lib/conditions'
 import type { ActiveCondition, Character, CombatParticipant, Companion, GameTable, NPC } from '../types'
 
 /** Quem pode entrar na ordem de combate: ficha, NPC ou ficha temporária. */
@@ -116,7 +118,11 @@ export function CombatTracker({
     const atual = table.combatOrder[table.combatTurnIndex]
     const proximo = table.combatOrder[(table.combatTurnIndex + 1) % table.combatOrder.length]
     const fechaRodada = (table.combatTurnIndex + 1) % table.combatOrder.length === 0
-    await advanceCombatTurn(table.id, table)
+    await advanceCombatTurn(
+      table.id,
+      table,
+      participants.map((p) => ({ ref: p.ref, conditions: condicoesDe(p.entity, table) })),
+    )
     await addLogEntry(table.id, {
       actorName: table.gmName,
       actorType: 'gm',
@@ -166,11 +172,23 @@ export function CombatTracker({
     setDano((p) => ({ ...p, [ref]: 0 }))
   }
 
+  /**
+   * Condição mora na ficha — é o que faz o selo aparecer no mapa e a condição
+   * sobreviver ao fim do combate. A lista de combate fica como espelho, para
+   * quem ainda estiver com a tela antiga aberta não ver coisa diferente.
+   */
   async function mexerCondicao(ref: string, proximas: ActiveCondition[], aviso: string) {
-    await setCombatOrder(
-      table.id,
-      table.combatOrder.map((p) => (p.ref === ref ? { ...p, conditions: proximas } : p)),
-    )
+    const [kind, id] = ref.split(':')
+    if (kind === 'character') await updateCharacterDirect(table.id, id, { conditions: proximas })
+    else if (kind === 'companion') await updateCompanion(table.id, id, { conditions: proximas })
+    else await updateNPC(table.id, id, { conditions: proximas })
+
+    if (table.combatOrder.some((p) => p.ref === ref)) {
+      await setCombatOrder(
+        table.id,
+        table.combatOrder.map((p) => (p.ref === ref ? { ...p, conditions: proximas } : p)),
+      )
+    }
     await addLogEntry(table.id, { actorName: table.gmName, actorType: 'gm', kind: 'combat', summary: aviso })
   }
 
@@ -286,16 +304,16 @@ export function CombatTracker({
                 )}
 
                 {/* Condições pegando, com o prazo que falta. */}
-                {(p.conditions ?? []).length > 0 && (
+                {condicoesDe(entidadeDe(p.ref), table).length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
-                    {(p.conditions ?? []).map((c) => (
+                    {condicoesDe(entidadeDe(p.ref), table).map((c) => (
                       <button
                         key={c.name}
                         title={CONDITIONS.find((x) => x.name === c.name)?.effect}
                         onClick={() =>
                           mexerCondicao(
                             p.ref,
-                            (p.conditions ?? []).filter((x) => x.name !== c.name),
+                            condicoesDe(entidadeDe(p.ref), table).filter((x) => x.name !== c.name),
                             `${nomeDe(p)} não está mais ${c.name}.`,
                           )
                         }
@@ -313,7 +331,10 @@ export function CombatTracker({
                     onAdd={(nome, rodadas) =>
                       mexerCondicao(
                         p.ref,
-                        [...(p.conditions ?? []).filter((x) => x.name !== nome), { name: nome, ...(rodadas ? { rounds: rodadas } : {}) }],
+                        [
+                          ...condicoesDe(entidadeDe(p.ref), table).filter((x) => x.name !== nome),
+                          { name: nome, ...(rodadas ? { rounds: rodadas } : {}) },
+                        ],
                         `${nomeDe(p)} está ${nome}${rodadas ? ` por ${rodadas} rodada(s)` : ''}.`,
                       ).then(() => setCondRef(null))
                     }

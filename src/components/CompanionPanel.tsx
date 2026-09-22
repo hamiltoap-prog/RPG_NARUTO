@@ -14,7 +14,8 @@ import {
 } from '../lib/companions'
 import { findCatalogEntry } from '../lib/jutsuCast'
 import { summonSize } from '../lib/summon'
-import { alvosDaMesa } from './JutsuCastPanel'
+import { alvosDaMesa, motivoDaListaDeAlvos } from './JutsuCastPanel'
+import { CondicoesDoGolpe } from './CondicoesDoGolpe'
 import type { MesaViva } from './JutsuCastPanel'
 import {
   createChangeRequest,
@@ -26,7 +27,7 @@ import {
   updateCompanion,
 } from '../lib/store'
 import { ATTRIBUTE_LABELS, SUMMON_RANKS, SUMMON_SIZES } from '../types'
-import type { Character, Companion, GameTable, JutsuCast, ShopItem, SummonSizeKey } from '../types'
+import type { Character, Companion, GameTable, JutsuCast, Scene, ShopItem, SummonSizeKey } from '../types'
 
 /**
  * Clones, invocações e marionetes: fichas temporárias que se joga de verdade.
@@ -50,6 +51,7 @@ export function CompanionCard({
   table,
   character,
   mesa,
+  scene,
   shopItems,
   requesterUid,
   asGM,
@@ -58,6 +60,8 @@ export function CompanionCard({
   table: GameTable
   character: Character
   mesa: MesaViva
+  /** A cena aberta decide quem está na tela de jogo e pode virar alvo. */
+  scene: Scene | null
   shopItems: ShopItem[]
   requesterUid: string
   asGM: boolean
@@ -387,6 +391,7 @@ export function CompanionCard({
               companion={c}
               table={table}
               mesa={mesa}
+              scene={scene}
               dono={character}
               requesterUid={requesterUid}
               asGM={asGM}
@@ -433,6 +438,7 @@ function FichaEmCampo({
   companion,
   table,
   mesa,
+  scene,
   dono,
   requesterUid,
   asGM,
@@ -443,6 +449,7 @@ function FichaEmCampo({
   companion: Companion
   table: GameTable
   mesa: MesaViva
+  scene: Scene | null
   dono: Character
   requesterUid: string
   asGM: boolean
@@ -453,10 +460,27 @@ function FichaEmCampo({
   const [acaoId, setAcaoId] = useState('')
   const [alvoRef, setAlvoRef] = useState('')
   const [aviso, setAviso] = useState('')
+  /** Condições e área do golpe: o app sugere, quem age confirma. */
+  const [condicoes, setCondicoes] = useState<string[]>([])
+  const [rodadas, setRodadas] = useState<number | undefined>(undefined)
+  const [extras, setExtras] = useState<string[]>([])
 
   const acoes = useMemo(() => companionActions(companion), [companion])
   const acao = acoes.find((a) => a.id === acaoId)
-  const alvos = alvosDaMesa(mesa, `companion:${companion.id}`, asGM)
+
+  // Trocar de golpe recarrega as condições que aquele golpe impõe. A conta
+  // depende só do golpe escolhido: `acao` é objeto novo a cada snapshot da
+  // ficha (o PV muda o tempo todo em combate), e reagir a ele apagaria o que
+  // a pessoa acabou de marcar.
+  useEffect(() => {
+    const escolhido = companionActions(companion).find((a) => a.id === acaoId)
+    setCondicoes(escolhido?.conditions ?? [])
+    setRodadas(escolhido?.conditionRounds)
+    setExtras([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acaoId, companion.id])
+  const alvos = alvosDaMesa(mesa, `companion:${companion.id}`, asGM, { table, scene })
+  const motivoAlvos = motivoDaListaDeAlvos(asGM, table, scene)
   const volta = refundOnDismiss(companion)
 
   // A marionete gasta o chakra do dono; clone e invocação, o próprio.
@@ -484,6 +508,10 @@ function FichaEmCampo({
       targetName: alvos.find((a) => a.ref === alvoRef)?.name,
       extraBonus: acao.extraBonus,
       damageHalved: acao.damageHalved,
+      conditions: condicoes.length ? condicoes : undefined,
+      conditionRounds: condicoes.length ? rodadas : undefined,
+      extraTargetRefs: extras.length ? extras : undefined,
+      extraTargetNames: extras.length ? extras.map((r) => alvos.find((a) => a.ref === r)?.name ?? r) : undefined,
     })
     if (asGM) {
       await onResolveNow(cast)
@@ -532,11 +560,15 @@ function FichaEmCampo({
         </span>
         <span>CA {companion.armorClass}</span>
         <span>PR {companion.resistancePoints}</span>
-        {companion.chakra.max > 0 && (
-          <span>
-            Chakra {companion.chakra.current}/{companion.chakra.max}
-          </span>
-        )}
+        <span>
+          {companion.chakra.max > 0 ? (
+            <>
+              Chakra {companion.chakra.current}/{companion.chakra.max}
+            </>
+          ) : (
+            'sem chakra próprio'
+          )}
+        </span>
         {companion.usesOwnerChakra && <Badge>usa o seu chakra</Badge>}
         {companion.halfDamage && <Badge tone="warn">jutsu pela metade</Badge>}
       </div>
@@ -573,6 +605,21 @@ function FichaEmCampo({
         </div>
       ) : (
         <p className="text-[11px] text-orange-400/50">Sem golpes nem jutsus — esta ficha só ocupa espaço no mapa.</p>
+      )}
+      {acoes.length > 0 && motivoAlvos && <p className="text-[11px] text-orange-400/50">{motivoAlvos}</p>}
+
+      {acao && (
+        <CondicoesDoGolpe
+          condicoes={condicoes}
+          onCondicoes={setCondicoes}
+          rodadas={rodadas}
+          onRodadas={setRodadas}
+          area={acao.area}
+          alvos={alvos}
+          extras={extras}
+          onExtras={setExtras}
+          alvoPrincipal={alvoRef}
+        />
       )}
 
       {acao && (

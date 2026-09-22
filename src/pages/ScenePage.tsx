@@ -6,6 +6,8 @@ import { firebaseConfigured } from '../firebase'
 import { useAuthUid } from '../hooks/useAuth'
 import { drawFog, emptyFog, fogRows, isRevealed, paintFog, remapFog, resampleFog, setAll } from '../lib/fog'
 import { newId } from '../lib/id'
+import { condicoesDe, efeitoDaCondicao, selo } from '../lib/conditions'
+import type { Ficha } from '../lib/conditions'
 import {
   EMPTY_MAP,
   MAX_GRID_COLUMNS,
@@ -388,7 +390,7 @@ export function ScenePage() {
   const stagedTokens = scene.tokens.filter((t) => t.onBoard === false)
 
   /** A ficha por trás da peça: personagem, NPC ou ficha temporária. */
-  function fichaDaPeca(t: SceneToken): { name: string; hp: { current: number; max: number } } | undefined {
+  function fichaDaPeca(t: SceneToken): Ficha | undefined {
     if (t.refType === 'character') return characters.find((c) => c.id === t.refId)
     if (t.refType === 'npc') return npcs.find((n) => n.id === t.refId)
     if (t.refType === 'companion') return companions.find((c) => c.id === t.refId)
@@ -626,7 +628,10 @@ export function ScenePage() {
               const combatRef = t.refType && t.refId ? `${t.refType}:${t.refId}` : undefined
               const isActive = Boolean(activeCombatant && combatRef && activeCombatant === combatRef)
               const naLuta = combatRef ? combatePorRef.get(combatRef) : undefined
-              const condicoes = naLuta?.conditions ?? []
+              // As condições moram na ficha, então o selo aparece em combate e
+              // fora dele — um jutsu que cega alguém no meio da conversa marca
+              // a peça do mesmo jeito.
+              const condicoes = condicoesDe(ref, table)
               return (
                 <div
                   key={t.id}
@@ -659,10 +664,12 @@ export function ScenePage() {
                       {condicoes.slice(0, 4).map((c) => (
                         <span
                           key={c.name}
-                          title={`${c.name}${c.rounds !== undefined ? ` (${c.rounds} rodada(s))` : ''}`}
-                          className="rounded-sm border border-[color:var(--orange)] bg-black/85 px-1 font-display text-[9px] uppercase leading-tight text-[color:var(--orange)]"
+                          title={`${c.name}${c.rounds !== undefined ? ` (${c.rounds} rodada(s))` : ' (sem prazo)'}${
+                            efeitoDaCondicao(c.name) ? `\n${efeitoDaCondicao(c.name)}` : ''
+                          }`}
+                          className="rounded-sm border border-[color:var(--orange)] bg-black/85 px-1 font-display text-[9px] uppercase leading-tight text-[color:var(--orange)] shadow-[0_0_6px_rgba(0,0,0,0.9)]"
                         >
-                          {c.name.slice(0, 3)}
+                          {selo(c.name)}
                           {c.rounds !== undefined && c.rounds}
                         </span>
                       ))}

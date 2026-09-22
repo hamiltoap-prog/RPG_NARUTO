@@ -1,5 +1,6 @@
 import { Button, Input, Select, Textarea } from './ui'
 import { newId } from '../lib/id'
+import { CONDITIONS } from '../data/conditions'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
 import type { AttributeKey, NpcAttack, PuppetJutsu, PuppetSpec } from '../types'
 
@@ -270,6 +271,78 @@ export function PuppetForge({ spec, onChange }: { spec: PuppetSpec; onChange: (s
                 />
               </label>
             </div>
+
+            {/* Condição que o golpe impõe. Aqui é escolha do mestre: o texto
+                livre acima é para a mesa ler, isto é o que o app aplica. */}
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex min-w-0 flex-1 flex-col gap-0.5 text-[10px] text-orange-400/60">
+                condição que impõe
+                <Select
+                  value=""
+                  className="px-2 py-0.5 text-xs"
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    mexer({
+                      jutsus: spec.jutsus.map((x) =>
+                        x.id === j.id ? { ...x, conditions: [...(x.conditions ?? []), e.target.value] } : x,
+                      ),
+                    })
+                  }}
+                >
+                  <option value="">{(j.conditions ?? []).length ? 'Acrescentar outra...' : 'Nenhuma'}</option>
+                  {CONDITIONS.filter((c) => c.name !== 'Normal' && !(j.conditions ?? []).includes(c.name)).map((c) => (
+                    <option key={c.name} value={c.name} title={c.effect}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              {(j.conditions ?? []).length > 0 && (
+                <label className="flex shrink-0 flex-col gap-0.5 text-[10px] text-orange-400/60">
+                  rodadas
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="—"
+                    value={j.conditionRounds ?? ''}
+                    className="w-20 px-2 py-0.5 text-xs"
+                    onChange={(e) =>
+                      mexer({
+                        jutsus: spec.jutsus.map((x) =>
+                          x.id === j.id
+                            ? { ...x, conditionRounds: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0) }
+                            : x,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              )}
+            </div>
+            {(j.conditions ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {(j.conditions ?? []).map((nome) => (
+                  <button
+                    key={nome}
+                    type="button"
+                    title={`${CONDITIONS.find((c) => c.name === nome)?.effect ?? ''}\n(clique para tirar)`}
+                    onClick={() =>
+                      mexer({
+                        jutsus: spec.jutsus.map((x) =>
+                          x.id === j.id ? { ...x, conditions: (x.conditions ?? []).filter((c) => c !== nome) } : x,
+                        ),
+                      })
+                    }
+                    className="rounded-sm border border-[color:var(--orange)]/60 bg-black/50 px-1.5 py-0.5 font-display text-[10px] uppercase tracking-[0.08em] text-[color:var(--orange)] hover:border-red-500 hover:text-red-300"
+                  >
+                    {nome} ✕
+                  </button>
+                ))}
+                <span className="self-center text-[10px] text-orange-400/50">
+                  {j.conditionRounds === undefined ? 'sem prazo — até o mestre tirar' : `por ${j.conditionRounds} rodada(s)`}
+                </span>
+              </div>
+            )}
           </div>
         ))}
         {spec.jutsus.length === 0 && <p className="text-[11px] text-orange-300/50">Nenhum jutsu ainda.</p>}

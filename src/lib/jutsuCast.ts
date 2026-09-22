@@ -42,6 +42,16 @@ export interface JutsuReading {
   damageType?: string
   /** Custo em chakra, já em número. */
   cost: number
+  /**
+   * Condições que a descrição diz impor. O manual escreve isso em texto
+   * corrido, então a leitura é um palpite — quem lança confirma na tela antes
+   * de a condição grudar em alguém.
+   */
+  conditions: string[]
+  /** Prazo em rodadas, quando o texto dá um; ausente = até o mestre tirar. */
+  conditionRounds?: number
+  /** Como a descrição fala da área atingida, quando ela pega mais de um. */
+  area?: string
 }
 
 const ATRIBUTO_POR_NOME: Record<string, AttributeKey> = {
@@ -76,6 +86,106 @@ function semAcento(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
+/**
+ * Como cada condição do manual aparece escrita dentro da descrição de um
+ * jutsu. O texto nunca usa o nome da ficha ("Caído"); usa o verbo ("derruba",
+ * "cai ao chão"), então cada condição tem as formas que de fato aparecem.
+ */
+const MARCAS_DE_CONDICAO: [string, RegExp][] = [
+  ['Sangramento', /\bsangrament\w*|\bsangrando\b|\bsangra\b/],
+  ['Queimado', /\bqueimad\w+/],
+  ['Cego', /\bceg[oa]s?\b|\bcegad\w+|\bcegueira\b/],
+  ['Atordoado', /\batordoad\w+|\batordoament\w+/],
+  ['Surdo', /\bsurd[oa]s?\b|\bsurdez\b/],
+  ['Envenenado', /\benvenenad\w+|\benvenenament\w+/],
+  ['Exausto', /\bexaust[oa]s?\b|\bexaustao\b/],
+  ['Amedrontado', /\bamedrontad\w+/],
+  ['Agarrado', /\bagarrad\w+/],
+  ['Incapacitado', /\bincapacitad\w+/],
+  ['Invisível', /\binvisiv\w+|\binvisibilidade\b/],
+  ['Paralisado', /\bparalisad\w+|\bparalisia\b/],
+  ['Petrificado', /\bpetrificad\w+/],
+  ['Caído', /\bcaid[oa]s?\b|\bderrubad\w+|\bderruba\b|\bao chao\b/],
+  ['Restrito', /\brestrit[oa]s?\b|\brestringid\w+/],
+  ['Choque', /\bem choque\b|\bchocad\w+/],
+  ['Lento', /\blent[oa]s?\b/],
+  ['Estupefato', /\bestupefat\w+/],
+  ['Inconsciente', /\binconscient\w+/],
+  ['Enfraquecido', /\benfraquecid\w+/],
+  ['Frenesi', /\bfrenesi\b/],
+  ['Enfeitiçado', /\benfeiticad\w+/],
+]
+
+/**
+ * O texto cita condições por dois motivos opostos: para impor ("o alvo fica
+ * Cego") e para tirar ou ignorar ("remove Cego", "imune a Cego", "resistência
+ * a essa condição"). Só o primeiro caso vira condição em cima de alguém, e o
+ * que separa os dois é a palavra logo antes.
+ */
+const NEGA_CONDICAO =
+  /\b(imune|imunes|imunidade|remove|removida?|remover|cura|curad[oa]|curar|encerra|termina|deixa de estar|nao (?:fica|esta|pode ficar)|resistencia a|contra a condicao|ignora)\b/
+
+/** Prazos que o manual escreve por extenso, em rodadas. */
+function leRodadas(plano: string): number | undefined {
+  const rodadas = plano.match(/por\s+(\d+)\s+rodadas?/)
+  if (rodadas) return Number(rodadas[1])
+  const minutos = plano.match(/por\s+(\d+)\s+minutos?/)
+  // Uma rodada do manual são 6 segundos: 1 minuto = 10 rodadas.
+  if (minutos) return Number(minutos[1]) * 10
+  if (/ate o (?:final|fim) do (?:seu )?proximo turno/.test(plano)) return 1
+  if (/ate o (?:final|fim) do (?:seu )?turno/.test(plano)) return 1
+  return undefined
+}
+
+/** Palavras com que o manual descreve a área de um jutsu. */
+const MARCAS_DE_AREA: [RegExp, string][] = [
+  [/raio de (\d+[,.]?\d*)\s*metros?/, 'raio de $1 m'],
+  [/cone de (\d+[,.]?\d*)\s*metros?/, 'cone de $1 m'],
+  [/esfera de (\d+[,.]?\d*)\s*metros?/, 'esfera de $1 m'],
+  [/cubo de (\d+[,.]?\d*)\s*metros?/, 'cubo de $1 m'],
+  [/linha de (\d+[,.]?\d*)\s*metros?/, 'linha de $1 m'],
+  [/em um cone/, 'cone'],
+  [/todas as criaturas/, 'todas as criaturas na área'],
+  [/cada criatura/, 'cada criatura na área'],
+  [/todos os alvos|todos os inimigos/, 'todos os alvos na área'],
+]
+
+/**
+ * Lê da descrição a área atingida. Serve para a tela avisar que o jutsu não
+ * é de alvo único — a geometria da mesa continua sendo do mestre, o app só
+ * deixa marcar quem mais está dentro.
+ */
+export function readArea(description: string): string | undefined {
+  const plano = semAcento(description)
+  for (const [re, rotulo] of MARCAS_DE_AREA) {
+    const m = plano.match(re)
+    if (m) return rotulo.replace('$1', m[1] ?? '')
+  }
+  return undefined
+}
+
+/**
+ * Lê da descrição as condições que o jutsu impõe.
+ *
+ * É leitura de texto livre, então erra nos dois sentidos: pode trazer uma
+ * condição que o jutsu só cita de passagem, e pode não ver uma escrita de um
+ * jeito que não está aqui. Por isso o resultado chega na tela como sugestão
+ * marcável, nunca como efeito automático.
+ */
+export function readConditions(description: string): string[] {
+  const plano = semAcento(description)
+  const achadas: string[] = []
+  for (const [nome, re] of MARCAS_DE_CONDICAO) {
+    const m = plano.match(re)
+    if (!m || m.index === undefined) continue
+    // A janela antes da palavra diz se o jutsu impõe ou tira a condição.
+    const antes = plano.slice(Math.max(0, m.index - 60), m.index)
+    if (NEGA_CONDICAO.test(antes)) continue
+    achadas.push(nome)
+  }
+  return achadas
+}
+
 /** Lê da descrição o que der: ataque ou resistência, dado de dano e custo. */
 export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' | 'classification'>): JutsuReading {
   const d = entry.description ?? ''
@@ -107,6 +217,9 @@ export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
     damage: dano?.[1],
     damageType: tipo?.[1]?.toLowerCase(),
     cost: Number((entry.cost ?? '').match(/\d+/)?.[0] ?? 0),
+    conditions: readConditions(d),
+    conditionRounds: leRodadas(plano),
+    area: readArea(d),
   }
 }
 
@@ -134,8 +247,14 @@ export function effectiveResistance(base: number, conditions: string[] = []): nu
   return base + extra
 }
 
-/** Quem pode levar o golpe: ficha, NPC ou ficha temporária. */
-export type CastTarget = (Character | NPC | Companion) & { conditions?: string[] }
+/**
+ * Quem pode levar o golpe: ficha, NPC ou ficha temporária.
+ *
+ * As condições em cima do alvo não vêm daqui: chegam em `targetConditions`,
+ * já reduzidas a nomes, porque quem monta a lista é quem sabe se a luta está
+ * rolando.
+ */
+export type CastTarget = Character | NPC | Companion
 
 /**
  * Quem conjura pode ser um personagem ou uma criatura. O que a conta precisa
@@ -229,6 +348,21 @@ export interface CastOutcome {
   targetHp?: number
 }
 
+/**
+ * Dano que pode ser dado fixo ou em dados.
+ *
+ * O ataque desarmado do manual é "1 + Modificador de Força" — um número, sem
+ * dado nenhum. O resto do sistema usa NdM. Esta função aceita os dois para o
+ * resto da conta não precisar saber a diferença.
+ */
+export function rollDamage(notation: string | undefined): { total: number; rolls: number[]; sides: number } {
+  if (!notation) return { total: 0, rolls: [], sides: 20 }
+  const fixo = notation.trim().match(/^(\d+)$/)
+  if (fixo) return { total: Number(fixo[1]), rolls: [], sides: 20 }
+  const r = rollDice(notation)
+  return { total: r.total, rolls: r.rolls, sides: Number(notation.split('d')[1]?.match(/\d+/)?.[0] ?? 6) }
+}
+
 /** Rola, compara e calcula o dano — a conta inteira de uma vez. */
 export function resolveCast(input: CastInput): CastOutcome {
   const { caster, target } = input
@@ -240,12 +374,12 @@ export function resolveCast(input: CastInput): CastOutcome {
 
   // ---- Jutsu sem ataque nem resistência: só acontece.
   if (input.mode === 'none') {
-    const dano = input.damage ? rollDice(input.damage) : null
+    const dano = input.damage ? rollDamage(input.damage) : null
     const total = metade(dano?.total ?? 0)
     return {
       summary: `${input.jutsuName}${target ? ` em ${target.name}` : ''}${dano ? `: ${total} de dano ${input.damageType ?? ''}`.trimEnd() : ' — efeito aplicado'}`,
       dice: dano?.rolls ?? [],
-      diceSides: dano ? Number(input.damage!.split('d')[1]) : 20,
+      diceSides: dano?.sides ?? 20,
       hit: true,
       critical: false,
       fumble: false,
@@ -261,7 +395,7 @@ export function resolveCast(input: CastInput): CastOutcome {
     const pr = effectiveResistance(target?.resistancePoints ?? 0, input.targetConditions)
     const rolagem = rollD20(alvoMod, false, 0)
     const resistiu = rolagem.total >= pr
-    const dadoDano = input.damage ? rollDice(input.damage) : null
+    const dadoDano = input.damage ? rollDamage(input.damage) : null
     const cheio = metade(dadoDano?.total ?? 0)
     const dano = resistiu ? (input.onSaveSuccess === 'half' ? Math.floor(cheio / 2) : 0) : cheio
     return {
@@ -287,13 +421,21 @@ export function resolveCast(input: CastInput): CastOutcome {
   let dano = 0
   let dadosDano: number[] = []
   if (acertou && input.damage) {
-    let r = rollDice(input.damage)
-    dadosDano = r.rolls
-    if (rolagem.isCritical) {
-      // Crítico do manual: dados de dano × Bônus de Proficiência.
-      r = applyCriticalMultiplier(r, caster.proficiencyBonus)
+    const fixo = input.damage.trim().match(/^(\d+)$/)
+    if (fixo) {
+      // Dano fixo (soco: 1 + Mod. Força). Não há dados para multiplicar no
+      // crítico, então o número é o número.
+      dano = metade(Number(fixo[1]))
+    } else {
+      let r = rollDice(input.damage)
+      dadosDano = r.rolls
+      if (rolagem.isCritical) {
+        // Crítico do manual: dados de dano × Bônus de Proficiência. Só os
+        // dados: o modificador plano do dano não entra na multiplicação.
+        r = applyCriticalMultiplier(r, caster.proficiencyBonus)
+      }
+      dano = metade(r.total)
     }
-    dano = metade(r.total)
   }
   const doisDados = rolagem.bothRolls
     ? ` [${rolagem.bothRolls.join(' e ')}, ${rolagem.edge === 'advantage' ? 'vantagem' : 'desvantagem'}${input.edgeReason ? `: ${input.edgeReason}` : ''}]`

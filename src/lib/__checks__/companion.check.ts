@@ -103,6 +103,10 @@ const acha = (n: string) => JUTSU_CATALOG.find((j) => j.name === n)!
       { id: 'j1', name: 'RASENGAN', details: '' },
       { id: 'j2', name: 'TÉCNICA DE MULTICLONES DAS SOMBRAS', details: '' },
     ],
+    weapons: [
+      { id: 'w1', name: 'Kunai', damage: '1d4', equipped: true, consumable: true, quantity: 5 },
+      { id: 'w2', name: 'Katana na mochila', damage: '1d8', equipped: false },
+    ],
   } as unknown as Character
 
   const leitura = readClone(acha('TÉCNICA DE MULTICLONES DAS SOMBRAS'))
@@ -118,7 +122,18 @@ const acha = (n: string) => JUTSU_CATALOG.find((j) => j.name === n)!
   ok(clones.every((c) => !(c.jutsus ?? []).some((j) => /clone/i.test(j.name))), 'o clone NÃO pode criar outros clones')
   ok(new Set(clones.map((c) => c.id)).size === 3, 'ids diferentes')
   ok(clones.map((c) => c.name).join('|') === 'Clone de Naruto 1|Clone de Naruto 2|Clone de Naruto 3', 'nomes numerados')
-  console.log(`3 clones de Naruto: ${clones[0].hp.max} PV, CA ${clones[0].armorClass}, ${clones[0].chakra.max} chakra, PR ${clones[0].resistancePoints}, ${(clones[0].jutsus ?? []).length} jutsu(s) sem clone`)
+  ok(clones.every((c) => (c.weapons ?? []).length === 1 && c.weapons![0].name === 'Kunai'), 'o clone leva só as ferramentas equipadas')
+  ok(clones.every((c) => c.unarmedDamage === 2), `soco do clone = 1 + Mod. Força (1) = 2, deu ${clones[0].unarmedDamage}`)
+
+  // As ações que o clone pode escolher na tela: soco, ferramenta e jutsu.
+  const acoesDoClone = companionActions(clones[0])
+  ok(acoesDoClone.some((a) => a.source === 'unarmed'), 'o clone pode atacar desarmado')
+  ok(acoesDoClone.some((a) => a.source === 'weapon' && a.label.startsWith('Kunai')), 'o clone pode usar a kunai')
+  ok(acoesDoClone.some((a) => a.source === 'jutsu' && a.damageHalved), 'o jutsu do clone sai pela metade')
+  console.log(
+    `3 clones de Naruto: ${clones[0].hp.max} PV, CA ${clones[0].armorClass}, ${clones[0].chakra.max} chakra, ` +
+      `PR ${clones[0].resistancePoints}, ${acoesDoClone.length} ação(ões) — ${acoesDoClone.map((a) => a.source).join(', ')}`,
+  )
 
   // Invocação feita pelo jogador
   const urso = SUMMON_BESTIARY.find((c) => c.id === 'urso')!
@@ -173,11 +188,18 @@ console.log('OK: todas as checagens de clones e invocações passaram')
   const leitura = readClone(JUTSU_CATALOG.find((j) => j.name === 'TÉCNICA DE CLONES DAS SOMBRAS')!)
   const clone = buildClones({ owner: dono, ownerUid: 'uid-k', jutsuName: 'TÉCNICA DE CLONES DAS SOMBRAS', reading: leitura, count: 1, chakraDie: 'd8' })[0]
   const doClone = companionActions(clone)
-  ok(doClone.length === 1 && doClone[0].source === 'jutsu', 'o clone leva o jutsu do dono como ação')
-  ok(doClone[0].damageHalved === true, 'o jutsu do clone sai pela metade do dano')
-  ok(doClone[0].proficient, 'o clone é cópia: rola com proficiência')
-  ok(doClone[0].chakraCost > 0, 'o jutsu do clone custa chakra')
-  console.log(`ação do clone: ${doClone[0].label} (${doClone[0].mode}, metade do dano: ${doClone[0].damageHalved})`)
+  const jutsuDoClone = doClone.find((a) => a.source === 'jutsu')!
+  ok(Boolean(jutsuDoClone), 'o clone leva o jutsu do dono como ação')
+  ok(jutsuDoClone.damageHalved === true, 'o jutsu do clone sai pela metade do dano')
+  ok(jutsuDoClone.proficient, 'o clone é cópia: rola com proficiência')
+  ok(jutsuDoClone.chakraCost > 0, 'o jutsu do clone custa chakra')
+  // O clone também soca e usa ferramenta: ele é uma cópia de uma pessoa, não
+  // um lançador de jutsu com pernas.
+  const soco = doClone.find((a) => a.source === 'unarmed')!
+  ok(Boolean(soco), 'o clone pode atacar desarmado')
+  ok(soco.damage === String(1 + dono.modifiers.strength), `soco = 1 + Mod. Força, veio ${soco.damage}`)
+  ok(soco.chakraCost === 0, 'socar não custa chakra')
+  console.log(`ações do clone: ${doClone.map((a) => `${a.source}:${a.label}`).join(' | ')}`)
 
   // Marionete: golpe com bônus próprio, jutsu com chakra do dono.
   const spec = {

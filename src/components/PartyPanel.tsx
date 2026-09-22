@@ -31,6 +31,12 @@ export function PartyPanel({
                 <p className="truncate text-sm font-semibold text-orange-100">{c.name}</p>
                 {!c.isAlive && <Badge tone="bad">caído</Badge>}
                 {c.condition !== 'Normal' && <Badge tone="warn">{c.condition}</Badge>}
+                {(c.conditions ?? []).map((x) => (
+                  <Badge key={x.name} tone="warn">
+                    {x.name}
+                    {x.rounds !== undefined ? ` ${x.rounds}r` : ''}
+                  </Badge>
+                ))}
               </div>
               <p className="truncate text-xs text-orange-300/50">
                 {clan?.name} · {charClass?.name} · Nv. {c.level}

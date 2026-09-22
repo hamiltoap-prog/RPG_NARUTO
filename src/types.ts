@@ -262,7 +262,17 @@ export interface Character {
   armor: Armor[]
   jutsus: Jutsu[]
   proficiencies: string[]
+  /** Condição única, como a ficha sempre teve. Continua valendo para o
+   * seletor da ficha; as várias com prazo vivem em `conditions`. */
   condition: string
+  /**
+   * Condições pegando na criatura, com o prazo de cada uma.
+   *
+   * Passaram a morar na ficha, e não na linha da ordem de combate: uma
+   * condição é da criatura, não da luta — e assim o selo aparece no mapa
+   * mesmo fora de combate, que é quando o jutsu de enredo pega alguém.
+   */
+  conditions?: ActiveCondition[]
 
   imageUrl: string
 
@@ -340,6 +350,8 @@ export interface NPC {
    * testes do Kuchiyose ("1d4 + atributo bruto contra o próprio PR"). */
   summonSize?: SummonSizeKey
   attributes?: Attributes
+  /** Condições pegando na criatura — ver Character.conditions. */
+  conditions?: ActiveCondition[]
 }
 
 /* ---------------------------------------------------------------------------
@@ -399,6 +411,10 @@ export interface PuppetJutsu {
   damage?: string
   damageType?: string
   onSaveSuccess?: 'none' | 'half'
+  /** Condições que o golpe impõe a quem ele pega. */
+  conditions?: string[]
+  /** Prazo em rodadas; ausente = até o mestre tirar. */
+  conditionRounds?: number
   description?: string
 }
 
@@ -466,6 +482,16 @@ export interface Companion {
   /** Marionete: golpes e jutsus definidos na forja. */
   ownJutsus?: PuppetJutsu[]
   gearText?: string
+  /**
+   * Armas que a ficha carrega. O clone é cópia de quem o criou, então leva as
+   * ferramentas ninja equipadas do dono — mas o que ele arremessa não sai da
+   * mochila do original: some junto com o clone.
+   */
+  weapons?: Weapon[]
+  /** O clone pode atacar desarmado, como qualquer pessoa. */
+  unarmedDamage?: number
+  /** Condições pegando na ficha — ver Character.conditions. */
+  conditions?: ActiveCondition[]
 }
 
 /** Condição pegando em alguém durante o combate. */
@@ -972,6 +998,20 @@ export interface JutsuCast {
   damageHalved?: boolean
   /** Bônus próprio do golpe da marionete, somado à rolagem do dono. */
   extraBonus?: number
+  /**
+   * Condições que o jutsu impõe a quem for atingido, lidas da descrição e
+   * confirmadas por quem lança.
+   */
+  conditions?: string[]
+  /** Prazo em rodadas; ausente = dura até o mestre tirar. */
+  conditionRounds?: number
+  /**
+   * Alvos adicionais, para o jutsu de área. O app não sabe a geometria da
+   * mesa, então quem lança marca quem está na área e a resolução roda para
+   * cada um.
+   */
+  extraTargetRefs?: string[]
+  extraTargetNames?: string[]
 
   status: 'pending' | 'resolved' | 'denied'
   createdAt: number

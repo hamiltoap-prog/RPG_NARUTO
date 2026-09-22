@@ -14,6 +14,7 @@ import { Help } from '../components/Help'
 import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
+import { efeitoDaCondicao } from '../lib/conditions'
 import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
@@ -43,6 +44,7 @@ import {
   listenMissions,
   listenNPCs,
   listenRequestsForCharacter,
+  listenScene,
   listenShop,
 } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CHAKRA_DONOR_CLASS_ID, REQUESTABLE_FIELD_LABELS } from '../types'
@@ -61,6 +63,7 @@ import type {
   Mission,
   NPC,
   RequestableField,
+  Scene,
   ShopItem,
   Weapon,
   WeaponCatalogEntry,
@@ -81,6 +84,7 @@ export function PlayerView({
   const [allCharacters, setAllCharacters] = useState<Character[]>([])
   const [npcs, setNpcs] = useState<NPC[]>([])
   const [companions, setCompanions] = useState<Companion[]>([])
+  const [scene, setScene] = useState<Scene | null>(null)
   const [missions, setMissions] = useState<Mission[]>([])
   const [pendingFields, setPendingFields] = useState<Set<RequestableField>>(new Set())
   const [noteDraft, setNoteDraft] = useState('')
@@ -100,6 +104,9 @@ export function PlayerView({
   useEffect(() => listenShop(table.id, setShopItems), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
   useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
+  // A tela de jogo diz quem está no tabuleiro — é o que limita os alvos
+  // fora de combate.
+  useEffect(() => listenScene(table.id, setScene), [table.id])
   useEffect(() => listenMissions(table.id, setMissions), [table.id])
 
   useEffect(() => {
@@ -153,6 +160,7 @@ export function PlayerView({
           character={character}
           mesa={mesa}
           clans={clans}
+          scene={scene}
           requesterUid={actorUid}
           asGM={asGM}
         />
@@ -160,6 +168,7 @@ export function PlayerView({
           table={table}
           character={character}
           mesa={mesa}
+          scene={scene}
           shopItems={shopItems}
           requesterUid={actorUid}
           asGM={asGM}
@@ -454,6 +463,22 @@ function VitalsCard({
             ))}
           </Select>
           <PendingNote fields={['condition']} pending={pendingFields} />
+          {/* Condições impostas por golpe: quem tira é o mestre, então aqui
+              elas só aparecem — com o efeito do manual no título. */}
+          {(character.conditions ?? []).length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(character.conditions ?? []).map((c) => (
+                <span
+                  key={c.name}
+                  title={`${efeitoDaCondicao(c.name)}${c.rounds !== undefined ? `\n(${c.rounds} rodada(s))` : '\n(sem prazo — até o mestre tirar)'}`}
+                  className="rounded-sm border border-[color:var(--orange)] px-1.5 py-0.5 font-display text-[10px] uppercase tracking-[0.08em] text-[color:var(--orange)]"
+                >
+                  {c.name}
+                  {c.rounds !== undefined && <span className="ml-1 text-orange-300/60">{c.rounds}r</span>}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <p className="text-xs uppercase text-orange-400/60">Descanso</p>

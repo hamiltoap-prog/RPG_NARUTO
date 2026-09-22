@@ -14,9 +14,12 @@ import {
   listenGMRolls,
   removeCompanionTokens,
   updateCharacterDirect,
+  updateCompanion,
   updateNPC,
 } from '../lib/store'
+import { condicoesDe, mesclarCondicoes } from '../lib/conditions'
 import { acharAlvo, alvosDaMesa } from './JutsuCastPanel'
+import { CondicoesDoGolpe } from './CondicoesDoGolpe'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, FREE_DICE } from '../types'
 import type { AttributeKey, Character, Clan, Companion, GMRoll, GameTable, NPC } from '../types'
 
@@ -217,6 +220,10 @@ function CriaturaAge({
   const [comVantagem, setComVantagem] = useState(false)
   const [customClans, setCustomClans] = useState<Clan[]>([])
   const [companions, setCompanions] = useState<Companion[]>([])
+  /** Condições e área do golpe: o app lê do manual, o mestre confirma. */
+  const [condicoes, setCondicoes] = useState<string[]>([])
+  const [rodadas, setRodadas] = useState<number | undefined>(undefined)
+  const [extras, setExtras] = useState<string[]>([])
 
   useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
   useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
@@ -248,6 +255,18 @@ function CriaturaAge({
   const superado = resolveComAtaque ? elementAdvantage(elementoDoJutsu, afinidadesDoAlvo) : null
   const motivoVantagem = superado ? `${elementoDoJutsu} supera ${superado}` : ''
   useEffect(() => setComVantagem(Boolean(superado)), [superado])
+
+  // Trocar de golpe recarrega o que o manual diz que ele impõe. Golpe de
+  // criatura não tem descrição no catálogo, então entra limpo.
+  const lidoDoCatalogo = catalogo ? readJutsu(catalogo) : undefined
+  const areaDoJutsu = lidoDoCatalogo?.area
+  useEffect(() => {
+    setCondicoes(lidoDoCatalogo?.conditions ?? [])
+    setRodadas(lidoDoCatalogo?.conditionRounds)
+    setExtras([])
+    // A leitura só muda quando muda o jutsu escolhido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acaoId, npcId])
 
   async function agir() {
     if (!npc) return
@@ -287,41 +306,77 @@ function CriaturaAge({
         ? caster
         : { ...caster, proficiencyBonus: 0, modifiers: { ...caster.modifiers, strength: bonus } }
 
-    const fora = resolveCast({
-      ...entrada,
-      caster: casterAjustado,
-      edge: resolveComAtaque && comVantagem ? 'advantage' : 'none',
-      edgeReason: resolveComAtaque && comVantagem ? motivoVantagem || 'vantagem da mesa' : undefined,
-    })
     const custo = Number((jutsuEscolhido?.chakraCost ?? '').match(/\d+/)?.[0] ?? 0)
 
-    // Aplica o dano no alvo e o chakra na criatura.
-    let avisoDoFim = ''
-    if (alvo && fora.targetHp !== undefined) {
-      const [kind, id] = alvoRef.split(':')
+    // Jutsu de área pega mais de um: o mestre marcou quem está dentro, e cada
+    // um leva a própria rolagem. Sem alvo nenhum o golpe só é narrado.
+    const refs = [...new Set([alvoRef, ...extras].filter(Boolean))]
+    const rodadasDeAlvo = refs.length > 0 ? refs : ['']
+
+    const resumos: string[] = []
+    let dadosPrimeiro: number[] = []
+    let ladosPrimeiro = 20
+    let danoPrimeiro = 0
+
+    for (const ref of rodadasDeAlvo) {
+      const quemLeva = ref ? acharAlvo(ref, { characters, npcs, companions }) : undefined
+      const fora = resolveCast({
+        ...entrada,
+        caster: casterAjustado,
+        target: quemLeva,
+        targetConditions: condicoesDe(quemLeva, table).map((c) => c.name),
+        edge: resolveComAtaque && comVantagem ? 'advantage' : 'none',
+        edgeReason: resolveComAtaque && comVantagem ? motivoVantagem || 'vantagem da mesa' : undefined,
+      })
+      resumos.push(fora.summary)
+      if (resumos.length === 1) {
+        dadosPrimeiro = fora.dice
+        ladosPrimeiro = fora.diceSides
+        danoPrimeiro = fora.damage
+      }
+      if (!quemLeva) continue
+
+      // Condição só gruda em quem o golpe pegou.
+      const pegou = (entrada.mode as string) === 'none' || fora.hit
+      const impoe = pegou ? condicoes : []
+      const proximas = impoe.length ? mesclarCondicoes(condicoesDe(quemLeva, table), impoe, rodadas) : undefined
+      if (impoe.length) {
+        resumos.push(`${quemLeva.name} fica ${impoe.join(', ')}${rodadas ? ` por ${rodadas} rodada(s)` : ''}`)
+      }
+
+      const pv = fora.targetHp
+      const [kind, id] = ref.split(':')
       if (kind === 'character') {
         await updateCharacterDirect(table.id, id, {
-          hp: { ...alvo.hp, current: fora.targetHp },
-          ...(fora.targetHp === 0 ? { isAlive: false } : {}),
+          ...(pv !== undefined ? { hp: { ...quemLeva.hp, current: pv }, ...(pv === 0 ? { isAlive: false } : {}) } : {}),
+          ...(proximas ? { conditions: proximas } : {}),
         })
       } else if (kind === 'companion') {
         const temporaria = companions.find((c) => c.id === id)
         if (temporaria) {
-          await applyCompanionHp(table.id, temporaria, fora.targetHp)
-          if (fora.targetHp === 0) {
-            await removeCompanionTokens(table.id, [id]).catch(() => undefined)
-            avisoDoFim = temporaria.kind === 'puppet' ? ` — ${temporaria.name} quebrou` : ` — ${temporaria.name} se desfez`
+          if (proximas) await updateCompanion(table.id, id, { conditions: proximas })
+          if (pv !== undefined) {
+            await applyCompanionHp(table.id, temporaria, pv)
+            if (pv === 0) {
+              await removeCompanionTokens(table.id, [id]).catch(() => undefined)
+              resumos.push(temporaria.kind === 'puppet' ? `${temporaria.name} quebrou` : `${temporaria.name} se desfez`)
+            }
           }
         }
       } else {
-        await updateNPC(table.id, id, { hp: { ...alvo.hp, current: fora.targetHp } })
+        await updateNPC(table.id, id, {
+          ...(pv !== undefined ? { hp: { ...quemLeva.hp, current: pv } } : {}),
+          ...(proximas ? { conditions: proximas } : {}),
+        })
       }
     }
+
     if (custo > 0 && npc.chakra) {
       await updateNPC(table.id, npc.id, { chakra: { ...npc.chakra, current: Math.max(0, npc.chakra.current - custo) } })
     }
 
-    const frase = `${npc.name}: ${fora.summary}${custo ? ` (−${custo} chakra)` : ''}${avisoDoFim}`
+    const fora = { summary: resumos.join(' · '), dice: dadosPrimeiro, diceSides: ladosPrimeiro, damage: danoPrimeiro }
+    const frase = `${npc.name}: ${fora.summary}${custo ? ` (−${custo} chakra)` : ''}`
     onFeito(frase)
     if (secreta) {
       await addGMRoll(table.id, { label: npc.name, summary: frase, dice: fora.dice, diceSides: fora.diceSides, total: fora.damage })
@@ -415,6 +470,20 @@ function CriaturaAge({
             Dica: guarde os golpes na aba NPCs e eles aparecem aqui prontos, sem digitar de novo.
           </p>
         </div>
+      )}
+
+      {npc && (
+        <CondicoesDoGolpe
+          condicoes={condicoes}
+          onCondicoes={setCondicoes}
+          rodadas={rodadas}
+          onRodadas={setRodadas}
+          area={areaDoJutsu}
+          alvos={alvos}
+          extras={extras}
+          onExtras={setExtras}
+          alvoPrincipal={alvoRef}
+        />
       )}
 
       {alvo && (

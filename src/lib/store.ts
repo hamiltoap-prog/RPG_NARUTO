@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import type {
+  ActiveCondition,
   Companion,
   CompanionKind,
   Character,
@@ -231,25 +232,52 @@ export async function setCombatOrder(tableId: string, order: CombatParticipant[]
  * Passa a vez. Ao voltar ao primeiro da lista, fecha a rodada — e é aí que as
  * condições com prazo perdem uma rodada e as que zeram caem sozinhas.
  */
-export async function advanceCombatTurn(tableId: string, table: GameTable) {
+export async function advanceCombatTurn(
+  tableId: string,
+  table: GameTable,
+  /**
+   * Quem está na luta, pelas fichas. Fechada a rodada, o prazo das condições
+   * cai de um em CADA ficha — é lá que elas moram desde que jutsu passou a
+   * impor condição fora de combate também.
+   */
+  fichas: { ref: string; conditions?: ActiveCondition[] }[] = [],
+) {
   const total = table.combatOrder.length
   if (total === 0) return
   const nextIndex = (table.combatTurnIndex + 1) % total
   const fechouRodada = nextIndex === 0
   const round = (table.combatRound ?? 1) + (fechouRodada ? 1 : 0)
 
+  /** Um turno a menos no prazo; a que zera sai sozinha. */
+  const correr = (cs: ActiveCondition[]) =>
+    cs.map((c) => (c.rounds === undefined ? c : { ...c, rounds: c.rounds - 1 })).filter((c) => c.rounds === undefined || c.rounds > 0)
+
   const order = fechouRodada
     ? table.combatOrder.map((p) => ({
         ...p,
         // Passada a primeira rodada, ninguém segue surpreso.
         surprised: false,
-        conditions: (p.conditions ?? [])
-          .map((c) => (c.rounds === undefined ? c : { ...c, rounds: c.rounds - 1 }))
-          .filter((c) => c.rounds === undefined || c.rounds > 0),
+        conditions: correr(p.conditions ?? []),
       }))
     : table.combatOrder
 
   await updateTable(tableId, { combatTurnIndex: nextIndex, combatRound: round, combatOrder: order })
+  if (!fechouRodada) return
+
+  const database = requireDb()
+  const batch = writeBatch(database)
+  let mexeu = false
+  for (const f of fichas) {
+    const atuais = f.conditions ?? []
+    if (atuais.length === 0) continue
+    const proximas = correr(atuais)
+    if (proximas.length === atuais.length && proximas.every((c, i) => c.rounds === atuais[i].rounds)) continue
+    const [kind, id] = f.ref.split(':')
+    const col = kind === 'character' ? charactersCol(tableId) : kind === 'npc' ? npcsCol(tableId) : companionsCol(tableId)
+    batch.update(doc(col, id), { conditions: proximas })
+    mexeu = true
+  }
+  if (mexeu) await batch.commit()
 }
 
 // ---------- Personagens ----------
@@ -881,6 +909,12 @@ export interface CastHit {
   hp: { current: number; max: number }
   /** Ficha temporária: clone e invocação somem a 0 PV; marionete quebra. */
   companionKind?: CompanionKind
+  /**
+   * A lista de condições que o alvo fica tendo depois do golpe — já mesclada
+   * por quem resolveu, porque só lá se sabe o que o alvo já carregava. Ausente
+   * = o golpe não mexe nas condições dele.
+   */
+  conditions?: ActiveCondition[]
 }
 
 /**
@@ -899,7 +933,7 @@ export async function applyJutsuCast(
   tableId: string,
   cast: JutsuCast,
   chakraFrom: CastChakraSource,
-  target: CastHit | null,
+  targets: CastHit[],
   resultSummary: string,
 ) {
   const database = requireDb()
@@ -920,24 +954,25 @@ export async function applyJutsuCast(
     batch.update(doc(companionsCol(tableId), chakraFrom.id), patchConjurador)
   }
 
-  if (target) {
+  for (const target of targets) {
     if (target.kind === 'companion') {
       const ref = doc(companionsCol(tableId), target.id)
       if (target.hpAfter === 0 && target.companionKind !== 'puppet') {
+        // Clone desfeito some inteiro: nem adianta guardar condição nele.
         batch.delete(ref)
       } else if (target.hpAfter === 0) {
-        batch.update(ref, { hp: { ...target.hp, current: 0 }, status: 'broken' })
+        batch.update(ref, stripUndefined({ hp: { ...target.hp, current: 0 }, status: 'broken', conditions: target.conditions }))
       } else {
-        batch.update(ref, { hp: { ...target.hp, current: target.hpAfter } })
+        batch.update(ref, stripUndefined({ hp: { ...target.hp, current: target.hpAfter }, conditions: target.conditions }))
       }
     } else {
       const ref = target.kind === 'character' ? doc(charactersCol(tableId), target.id) : doc(npcsCol(tableId), target.id)
-      const patch: Record<string, unknown> = { hp: { ...target.hp, current: target.hpAfter } }
+      const patch: Record<string, unknown> = { hp: { ...target.hp, current: target.hpAfter }, conditions: target.conditions }
       if (target.kind === 'character') {
         patch.updatedAt = Date.now()
         if (target.hpAfter === 0) patch.isAlive = false
       }
-      batch.update(ref, patch)
+      batch.update(ref, stripUndefined(patch))
     }
   }
 

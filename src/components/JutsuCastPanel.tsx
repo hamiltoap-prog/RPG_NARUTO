@@ -11,7 +11,9 @@ import {
   listenPendingJutsuCasts,
   removeCompanionTokens,
 } from '../lib/store'
-import type { CastChakraSource } from '../lib/store'
+import type { CastChakraSource, CastHit } from '../lib/store'
+import { condicoesDe, mesclarCondicoes } from '../lib/conditions'
+import { CondicoesDoGolpe } from './CondicoesDoGolpe'
 import { buildClones, buildPuppet, buildSummon, readClone } from '../lib/companions'
 import { CLASSES } from '../data/classes'
 import {
@@ -24,7 +26,7 @@ import {
 } from '../lib/jutsuCast'
 import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
 import { ATTRIBUTE_LABELS } from '../types'
-import type { AttributeKey, Character, Clan, Companion, GameTable, JutsuCast, NPC } from '../types'
+import type { AttributeKey, Character, Clan, Companion, GameTable, JutsuCast, NPC, Scene } from '../types'
 
 /** Tudo que pode ser alvo ou agir: ficha, NPC e ficha temporária. */
 export interface MesaViva {
@@ -43,24 +45,59 @@ export function acharAlvo(ref: string | undefined, mesa: MesaViva) {
 }
 
 /**
- * A lista de alvos da mesa.
+ * A lista de alvos que quem age pode escolher.
  *
- * Clone, invocação e marionete entram: eles estão em campo, ocupam espaço e
- * levam golpe como qualquer um. Marionete quebrada sai da lista — já está
- * fora de jogo. Um conjurador nunca aparece como alvo de si mesmo.
+ * Três regras, nesta ordem:
+ *
+ *  1. **O mestre alcança todo mundo.** Ele conduz a cena; se decidiu que
+ *     alguém está no alcance, está.
+ *  2. **Com combate em andamento, só quem está na luta.** Quem não entrou na
+ *     ordem de iniciativa não está lá para ser acertado.
+ *  3. **Sem combate, só quem está na tela de jogo.** Peça no tabuleiro é o que
+ *     diz onde cada um está; quem não tem peça não é alvo para o jogador.
+ *
+ * Marionete quebrada nunca entra, e ninguém é alvo de si mesmo.
  */
-export function alvosDaMesa(mesa: MesaViva, semRef: string | undefined, asGM: boolean) {
-  return [
+export function alvosDaMesa(
+  mesa: MesaViva,
+  semRef: string | undefined,
+  asGM: boolean,
+  contexto?: { table?: GameTable | null; scene?: Scene | null },
+) {
+  const todos = [
     ...mesa.characters
-      .filter((c) => `character:${c.id}` !== semRef && (!c.isNPC || c.visible || asGM))
+      .filter((c) => !c.isNPC || c.visible || asGM)
       .map((c) => ({ ref: `character:${c.id}`, name: c.name })),
-    ...mesa.npcs
-      .filter((n) => (n.visible || asGM) && `npc:${n.id}` !== semRef)
-      .map((n) => ({ ref: `npc:${n.id}`, name: n.name })),
+    ...mesa.npcs.filter((n) => n.visible || asGM).map((n) => ({ ref: `npc:${n.id}`, name: n.name })),
     ...mesa.companions
-      .filter((c) => c.status !== 'broken' && `companion:${c.id}` !== semRef)
+      .filter((c) => c.status !== 'broken')
       .map((c) => ({ ref: `companion:${c.id}`, name: `${c.name} (de ${c.ownerName})` })),
-  ]
+  ].filter((a) => a.ref !== semRef)
+
+  if (asGM) return todos
+
+  const table = contexto?.table
+  if (table?.combatActive) {
+    const naLuta = new Set(table.combatOrder.map((p) => p.ref))
+    return todos.filter((a) => naLuta.has(a.ref))
+  }
+
+  const scene = contexto?.scene
+  if (!scene) return todos
+  const noTabuleiro = new Set(
+    (scene.tokens ?? [])
+      .filter((t) => t.onBoard !== false && t.refType && t.refId)
+      .map((t) => `${t.refType}:${t.refId}`),
+  )
+  return todos.filter((a) => noTabuleiro.has(a.ref))
+}
+
+/** Por que a lista de alvos está curta — a pessoa merece saber. */
+export function motivoDaListaDeAlvos(asGM: boolean, table?: GameTable | null, scene?: Scene | null): string {
+  if (asGM) return ''
+  if (table?.combatActive) return 'Em combate, só quem está na ordem de iniciativa pode ser alvo.'
+  if (!scene) return ''
+  return 'Fora de combate, só quem tem peça na tela de jogo pode ser alvo.'
 }
 
 /** Afinidades de quem vai levar o golpe: as da ficha mais as do clã. */
@@ -89,6 +126,7 @@ export function JutsuCastCard({
   character,
   mesa,
   clans,
+  scene,
   requesterUid,
   asGM,
 }: {
@@ -96,6 +134,8 @@ export function JutsuCastCard({
   character: Character
   mesa: MesaViva
   clans: Clan[]
+  /** A tela de jogo, para saber quem está no tabuleiro. */
+  scene: Scene | null
   requesterUid: string
   asGM: boolean
 }) {
@@ -113,6 +153,11 @@ export function JutsuCastCard({
   const [meus, setMeus] = useState<JutsuCast[]>([])
   /** Vantagem elemental: o app sugere, a mesa confirma. */
   const [comVantagem, setComVantagem] = useState(false)
+  /** Condições que o golpe impõe: lidas da descrição, conferidas aqui. */
+  const [condicoes, setCondicoes] = useState<string[]>([])
+  const [rodadas, setRodadas] = useState<number | undefined>(undefined)
+  /** Jutsu de área: quem mais está dentro, marcado por quem lança. */
+  const [extras, setExtras] = useState<string[]>([])
 
   useEffect(() => listenMyJutsuCasts(table.id, character.id, setMeus), [table.id, character.id])
 
@@ -136,6 +181,9 @@ export function JutsuCastCard({
       setAtributo(distancia || acuidade ? 'dexterity' : 'strength')
       setDano(arma.damage || '1d4')
       setCusto(0)
+      setCondicoes([])
+      setRodadas(undefined)
+      setExtras([])
       return
     }
     if (!entrada) return
@@ -145,9 +193,16 @@ export function JutsuCastCard({
     setSaveAttr(lido.saveAttribute ?? 'constitution')
     setDano(lido.damage ?? '')
     setCusto(lido.cost)
+    setCondicoes(lido.conditions)
+    setRodadas(lido.conditionRounds)
+    setExtras([])
   }, [arma, entrada])
 
-  const alvos = alvosDaMesa(mesa, `character:${character.id}`, asGM)
+  /** A área que o app leu da descrição — só jutsu tem; arma não. */
+  const area = !arma && entrada ? readJutsu(entrada).area : undefined
+
+  const alvos = alvosDaMesa(mesa, `character:${character.id}`, asGM, { table, scene })
+  const motivoAlvos = motivoDaListaDeAlvos(asGM, table, scene)
   const alvo = acharAlvo(alvoRef, mesa)
 
   // Vantagem Elemental (05-combate.md): ciclo Fogo > Vento > Raio > Terra >
@@ -186,6 +241,10 @@ export function JutsuCastCard({
       targetName: alvo?.name,
       edge: modo === 'attack' && comVantagem ? ('advantage' as const) : ('none' as const),
       edgeReason: modo === 'attack' && comVantagem ? motivoVantagem || 'vantagem da mesa' : undefined,
+      conditions: condicoes.length ? condicoes : undefined,
+      conditionRounds: condicoes.length ? rodadas : undefined,
+      extraTargetRefs: extras.length ? extras : undefined,
+      extraTargetNames: extras.length ? extras.map((r) => alvos.find((a) => a.ref === r)?.name ?? r) : undefined,
     }
 
     // O mestre resolve na hora; o jogador entra na fila.
@@ -239,7 +298,7 @@ export function JutsuCastCard({
             )}
           </Select>
         </label>
-        <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-orange-400/60">
           alvo (opcional)
           <Select value={alvoRef} onChange={(e) => setAlvoRef(e.target.value)}>
             <option value="">Sem alvo — só narrar</option>
@@ -251,6 +310,8 @@ export function JutsuCastCard({
           </Select>
         </label>
       </div>
+
+      {motivoAlvos && <p className="text-[11px] text-orange-400/50">{motivoAlvos}</p>}
 
       {acao && (
         <div className="well flex flex-col gap-2 rounded-sm p-3">
@@ -334,6 +395,18 @@ export function JutsuCastCard({
               <Input type="number" min={0} value={custo} onChange={(e) => setCusto(Number(e.target.value) || 0)} className="w-20" />
             </label>
           </div>
+
+          <CondicoesDoGolpe
+            condicoes={condicoes}
+            onCondicoes={setCondicoes}
+            rodadas={rodadas}
+            onRodadas={setRodadas}
+            area={area}
+            alvos={alvos}
+            extras={extras}
+            onExtras={setExtras}
+            alvoPrincipal={alvoRef}
+          />
 
           {alvo && (
             <p className="text-xs text-orange-400/60">
@@ -421,35 +494,92 @@ function montarCompanions(cast: JutsuCast, caster: Character): Companion[] {
  *    ninja) mais o bônus do golpe, e o chakra sai da ficha do dono.
  */
 export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: MesaViva, gmName: string) {
-  const alvo = acharAlvo(cast.targetRef, mesa)
-  const condicoesDoAlvo = cast.targetRef
-    ? (table.combatOrder.find((p) => p.ref === cast.targetRef)?.conditions ?? []).map((c) => c.name)
-    : []
-
   const ficha = mesa.characters.find((c) => c.id === cast.casterId)
   const temporaria = cast.casterKind === 'companion' ? mesa.companions.find((c) => c.id === cast.casterId) : undefined
   const dono = temporaria ? mesa.characters.find((c) => c.id === temporaria.ownerCharacterId) : undefined
   const quemAge = temporaria ? companionAsCaster(temporaria, dono) : ficha
   if (!quemAge) throw new Error('Quem lançou não está mais na mesa.')
 
-  const fora = resolveCast({
-    caster: quemAge,
-    jutsuName: cast.jutsuName,
-    classification: cast.classification,
-    mode: cast.mode,
-    attackAttribute: cast.attackAttribute,
-    proficient: cast.proficient,
-    saveAttribute: cast.saveAttribute,
-    damage: cast.damage,
-    damageType: cast.damageType,
-    onSaveSuccess: cast.onSaveSuccess,
-    target: alvo,
-    targetConditions: condicoesDoAlvo,
-    edge: cast.edge ?? 'none',
-    edgeReason: cast.edgeReason,
-    extraBonus: cast.extraBonus,
-    damageHalved: cast.damageHalved,
-  })
+  // Jutsu de área pega mais de um. Quem lançou marcou na tela quem está
+  // dentro, porque a geometria da mesa é da mesa — o app só resolve. Cada
+  // alvo leva a sua própria rolagem: no manual, a resistência é de cada um.
+  // O mesmo alvo marcado duas vezes (como principal e na área) levaria dois
+  // golpes de um jutsu só, então a lista entra sem repetição.
+  const refs = [...new Set([cast.targetRef, ...(cast.extraTargetRefs ?? [])].filter(Boolean) as string[])]
+  const alvos = refs.map((r) => ({ ref: r, ficha: acharAlvo(r, mesa) })).filter((a) => a.ficha)
+
+  const golpes: CastHit[] = []
+  const resumos: string[] = []
+  let dadosPrimeiro: number[] = []
+  let ladosPrimeiro = 20
+  const desfeitas: string[] = []
+
+  /** Sem alvo nenhum o jutsu ainda acontece: é narrado e o chakra sai. */
+  const rodadas = alvos.length > 0 ? alvos : [{ ref: '', ficha: undefined as ReturnType<typeof acharAlvo> }]
+
+  for (const a of rodadas) {
+    const fora = resolveCast({
+      caster: quemAge,
+      jutsuName: cast.jutsuName,
+      classification: cast.classification,
+      mode: cast.mode,
+      attackAttribute: cast.attackAttribute,
+      proficient: cast.proficient,
+      saveAttribute: cast.saveAttribute,
+      damage: cast.damage,
+      damageType: cast.damageType,
+      onSaveSuccess: cast.onSaveSuccess,
+      target: a.ficha,
+      targetConditions: condicoesDe(a.ficha, table).map((c) => c.name),
+      edge: cast.edge ?? 'none',
+      edgeReason: cast.edgeReason,
+      extraBonus: cast.extraBonus,
+      damageHalved: cast.damageHalved,
+    })
+    resumos.push(fora.summary)
+    if (resumos.length === 1) {
+      dadosPrimeiro = fora.dice
+      ladosPrimeiro = fora.diceSides
+    }
+    if (!a.ficha) continue
+
+    const [kind, id] = a.ref.split(':')
+    const temp = kind === 'companion' ? mesa.companions.find((c) => c.id === id) : undefined
+
+    // Condição só gruda em quem o golpe pegou: no ataque, quem foi acertado;
+    // na resistência, quem falhou; no jutsu sem rolagem, todo mundo da área.
+    const pegou = cast.mode === 'none' || fora.hit
+    const impoe = pegou ? (cast.conditions ?? []) : []
+    const condicoes = impoe.length
+      ? mesclarCondicoes(condicoesDe(a.ficha, table), impoe, cast.conditionRounds)
+      : undefined
+    if (impoe.length) resumos.push(`${a.ficha.name} fica ${impoe.join(', ')}${cast.conditionRounds ? ` por ${cast.conditionRounds} rodada(s)` : ''}`)
+
+    const hpDepois = fora.targetHp ?? a.ficha.hp.current
+    if (fora.targetHp !== undefined || condicoes) {
+      golpes.push({
+        kind: kind as 'character' | 'npc' | 'companion',
+        id,
+        hpAfter: hpDepois,
+        hp: a.ficha.hp,
+        companionKind: temp?.kind,
+        conditions: condicoes,
+      })
+    }
+
+    // Ficha temporária que chegou a 0 sai do jogo — e a peça dela some do
+    // mapa junto, para o mestre não precisar limpar na mão.
+    if (temp && hpDepois === 0) {
+      desfeitas.push(temp.id)
+      resumos.push(
+        temp.kind === 'puppet'
+          ? `${temp.name} quebrou e saiu de jogo; o item continua na mochila, esperando conserto`
+          : `${temp.name} se desfez`,
+      )
+    }
+  }
+
+  const resumo = resumos.join(' · ')
 
   // De quem sai o chakra: a marionete não tem, então cobra do dono.
   const pagador: CastChakraSource = temporaria
@@ -458,34 +588,14 @@ export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: Mesa
       : { kind: 'companion', id: temporaria.id, chakra: temporaria.chakra }
     : { kind: 'character', id: ficha!.id, chakra: ficha!.chakra, weapons: ficha!.weapons }
 
-  const [kind, id] = (cast.targetRef ?? ':').split(':')
-  const alvoTemporario = kind === 'companion' ? mesa.companions.find((c) => c.id === id) : undefined
-  await applyJutsuCast(
-    table.id,
-    cast,
-    pagador,
-    alvo && fora.targetHp !== undefined
-      ? {
-          kind: kind as 'character' | 'npc' | 'companion',
-          id,
-          hpAfter: fora.targetHp,
-          hp: alvo.hp,
-          companionKind: alvoTemporario?.kind,
-        }
-      : null,
-    fora.summary,
-  )
+  await applyJutsuCast(table.id, cast, pagador, golpes, resumo)
 
-  // Ficha temporária que chegou a 0 sai do jogo — e a peça dela some do mapa
-  // junto, para o mestre não precisar limpar na mão.
-  let avisoDoFim = ''
-  if (alvoTemporario && fora.targetHp === 0) {
-    await removeCompanionTokens(table.id, [alvoTemporario.id])
-    avisoDoFim =
-      alvoTemporario.kind === 'puppet'
-        ? ` — ${alvoTemporario.name} quebrou e saiu de jogo; o item continua na mochila, esperando conserto`
-        : ` — ${alvoTemporario.name} se desfez`
-  }
+  if (desfeitas.length > 0) await removeCompanionTokens(table.id, desfeitas)
+
+  // Os dados que a mesa vê na animação são os do primeiro alvo: com cinco
+  // alvos de área seriam cinco animações, e a frase do registro já conta o
+  // que aconteceu com cada um.
+  const fora = { summary: resumo, dice: dadosPrimeiro, diceSides: ladosPrimeiro }
 
   // Jutsu de clone ou invocação: as fichas temporárias nascem aqui, junto com
   // o desconto do chakra, e as peças aparecem ao lado da do dono na cena
@@ -507,7 +617,7 @@ export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: Mesa
     actorType: 'player',
     characterId: temporaria ? temporaria.ownerCharacterId : cast.casterId,
     kind: 'combat',
-    summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}${avisoDasFichas}${avisoDoFim}`,
+    summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}${avisoDasFichas}`,
     dice: fora.dice,
     diceSides: fora.diceSides,
     diceLabel: cast.jutsuName,
@@ -551,6 +661,8 @@ export function JutsuCastQueue({ table, mesa }: { table: GameTable; mesa: MesaVi
               {c.mode === 'attack' ? `ataque por ${ATTRIBUTE_LABELS[c.attackAttribute]}` : c.mode === 'save' ? `resistência de ${ATTRIBUTE_LABELS[c.saveAttribute ?? 'constitution']}` : 'sem rolagem'}
               {c.damage && ` · ${c.damage}`}
               {c.chakraCost > 0 && ` · ${c.chakraCost} chakra`}
+              {c.conditions?.length ? ` · impõe ${c.conditions.join(', ')}${c.conditionRounds ? ` por ${c.conditionRounds} rodada(s)` : ''}` : ''}
+              {c.extraTargetNames?.length ? ` · também pega ${c.extraTargetNames.join(', ')}` : ''}
             </span>
             <span className="ml-auto flex items-center gap-1.5">
               <Input

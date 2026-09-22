@@ -1,7 +1,7 @@
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from './id'
-import { attackAttribute, findCatalogEntry, readJutsu } from './jutsuCast'
+import { attackAttribute, findCatalogEntry, readArea, readJutsu } from './jutsuCast'
 import type { CastMode } from './jutsuCast'
 import { summonSize } from './summon'
 import { SUMMON_RANKS } from '../types'
@@ -74,6 +74,17 @@ export interface CloneReading {
    * casos o app não finge que sabe e pede os números.
    */
   sheetWorthy: boolean
+  /**
+   * O jutsu diz que o clone não carrega armas nem ferramentas (é o caso do
+   * Clone de Inseto). Sem isso, ele sairia com a mochila do original.
+   */
+  noWeapons: boolean
+  /**
+   * O jutsu diz que o clone não ataca nem conjura (o Clone Explosivo só
+   * existe para explodir). Ele entra em campo, ocupa espaço e leva dano, mas
+   * não tem ação nenhuma.
+   */
+  noActions: boolean
 }
 
 /** Todos os jutsus de clone do catálogo. */
@@ -134,6 +145,8 @@ export function readClone(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
     halfDamage: /metade do dano/.test(plano),
     duration: entry.duration ?? '',
     sheetWorthy: pv !== undefined,
+    noWeapons: /nao possui armas|sem armas ou ferramentas/.test(plano),
+    noActions: /nao pode realizar acoes de ataque nem conjurar/.test(plano),
   }
 }
 
@@ -200,7 +213,13 @@ export function buildClones(input: BuildCloneInput): Companion[] {
     proficiencyBonus: owner.proficiencyBonus,
     // O clone usa os jutsus do dono, menos outros clones (o manual é
     // explícito: "exceto os que tenham Clone no nome").
-    jutsus: owner.jutsus.filter((j) => !isCloneJutsu(j.name)),
+    jutsus: reading.noActions ? [] : owner.jutsus.filter((j) => !isCloneJutsu(j.name)),
+    // É uma cópia de uma pessoa: soca e usa as ferramentas que o original
+    // tem na mão. O que o clone arremessa não sai da mochila do original —
+    // some junto com ele.
+    weapons: reading.noWeapons || reading.noActions ? [] : (owner.weapons ?? []).filter((w) => w.equipped),
+    // Ataque desarmado do manual: 1 + Modificador de Força (05-combate.md).
+    unarmedDamage: reading.noActions ? 0 : Math.max(1, 1 + owner.modifiers.strength),
     halfDamage: reading.halfDamage,
     duration: reading.duration,
     imageUrl: owner.imageUrl || undefined,
@@ -294,7 +313,7 @@ export function summonCost(rankIndex: number): number {
 export interface CompanionAction {
   id: string
   label: string
-  source: 'attack' | 'jutsu' | 'puppetJutsu'
+  source: 'unarmed' | 'weapon' | 'attack' | 'jutsu' | 'puppetJutsu'
   mode: CastMode
   /** Atributo da rolagem. Para o clone e a invocação é o próprio; para a
    * marionete é o do dono, porque quem manobra é o ninja. */
@@ -309,6 +328,11 @@ export interface CompanionAction {
   /** Jutsu de clone sai pela metade do dano (regra do manual). */
   damageHalved?: boolean
   onSaveSuccess?: 'none' | 'half'
+  /** Condições que a ação impõe, lidas do manual ou forjadas pelo mestre. */
+  conditions?: string[]
+  conditionRounds?: number
+  /** Como a descrição fala da área, quando o golpe pega mais de um. */
+  area?: string
   note?: string
 }
 
@@ -327,6 +351,41 @@ export interface CompanionAction {
  */
 export function companionActions(c: Companion): CompanionAction[] {
   const acoes: CompanionAction[] = []
+
+  // Soco. O clone é cópia de uma pessoa, e pessoa soca: "Ataque desarmado =
+  // 1 + Modificador de Força" (05-combate.md).
+  if (c.unarmedDamage && c.unarmedDamage > 0) {
+    acoes.push({
+      id: 'unarmed',
+      label: `Ataque desarmado · ${c.unarmedDamage} de dano`,
+      source: 'unarmed',
+      mode: 'attack',
+      attackAttribute: 'strength',
+      proficient: true,
+      damage: String(c.unarmedDamage),
+      damageType: 'Contusão',
+      chakraCost: 0,
+      note: '1 + Modificador de Força',
+    })
+  }
+
+  // Ferramentas ninja que o clone carrega.
+  for (const w of c.weapons ?? []) {
+    const distancia = /Arremesso|Alcance/i.test(w.properties ?? '')
+    const acuidade = /Acuidade/i.test(w.properties ?? '')
+    acoes.push({
+      id: `weapon:${w.id}`,
+      label: `${w.name} · ${w.damage}${(w.quantity ?? 1) > 1 ? ` (${w.quantity})` : ''}`,
+      source: 'weapon',
+      mode: 'attack',
+      attackAttribute: distancia || acuidade ? 'dexterity' : 'strength',
+      proficient: true,
+      damage: w.damage,
+      damageType: w.damageType,
+      chakraCost: 0,
+      note: w.consumable ? 'a ferramenta do clone some com ele; não sai da sua mochila' : undefined,
+    })
+  }
 
   for (const a of c.attacks ?? []) {
     const daTribo = c.kind === 'summon'
@@ -362,6 +421,9 @@ export function companionActions(c: Companion): CompanionAction[] {
       damageType: lido.damageType,
       chakraCost: lido.cost,
       damageHalved: c.halfDamage,
+      conditions: lido.conditions,
+      conditionRounds: lido.conditionRounds,
+      area: lido.area,
       note: c.halfDamage ? 'jutsu de clone: o dano sai pela metade' : undefined,
     })
   }
@@ -380,6 +442,9 @@ export function companionActions(c: Companion): CompanionAction[] {
       damageType: j.damageType,
       chakraCost: j.chakraCost,
       onSaveSuccess: j.onSaveSuccess,
+      conditions: j.conditions,
+      conditionRounds: j.conditionRounds,
+      area: j.description ? readArea(j.description) : undefined,
       note: j.description,
     })
   }
