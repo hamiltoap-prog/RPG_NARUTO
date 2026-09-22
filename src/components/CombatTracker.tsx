@@ -335,7 +335,7 @@ export function CombatTracker({
               checked={Boolean(selected[p.ref])}
               onChange={(e) => setSelected((prev) => ({ ...prev, [p.ref]: e.target.checked }))}
             />
-            <span className="flex-1 text-orange-100">{p.name}</span>
+            <span className="min-w-0 flex-1 break-words text-orange-100">{p.name}</span>
             <label className="flex items-center gap-1 text-[11px] text-orange-400/60">
               <input
                 type="checkbox"
@@ -365,7 +365,9 @@ export function CombatTracker({
         ))}
         {participants.length === 0 && <p className="text-sm text-orange-300/50">Nenhum personagem ou NPC na mesa ainda.</p>}
       </div>
-      <div className="flex gap-2">
+      {/* Os dois botões não cabem lado a lado no celular: "Iniciar combate"
+          saía 34px para fora do cartão. */}
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="secondary"
           onClick={() => {

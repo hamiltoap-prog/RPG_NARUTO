@@ -46,8 +46,17 @@ export function Button({
   )
 }
 
+/**
+ * `min-w-0` é o que impede um campo de estourar a linha.
+ *
+ * Um item de flex não encolhe abaixo do tamanho natural do conteúdo, e o
+ * tamanho natural de um `<select>` é a largura da opção mais longa. Com
+ * opções como "Armadura Samurai — +10 CA · Destreza Nenhum · Desvantagem em
+ * Furtividade...", o campo ficava com 1534px e empurrava o resto do cartão
+ * para fora da tela no celular.
+ */
 const fieldBase =
-  'rounded-sm border border-[color:var(--line)] bg-[color:var(--surface-well)] px-3 py-1.5 text-sm text-white outline-none transition placeholder:text-orange-400/35 focus:border-[color:var(--orange)]'
+  'min-w-0 rounded-sm border border-[color:var(--line)] bg-[color:var(--surface-well)] px-3 py-1.5 text-sm text-white outline-none transition placeholder:text-orange-400/35 focus:border-[color:var(--orange)]'
 
 /**
  * Campos ocupam a linha toda por padrão, mas um `w-` vindo de fora manda.

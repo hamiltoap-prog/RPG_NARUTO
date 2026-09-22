@@ -663,14 +663,14 @@ function InventoryCard({
         </p>
       )}
 
-      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+      <div className="mt-2 grid min-w-0 gap-4 sm:grid-cols-2">
         {/* ---- Armas ---- */}
-        <div>
+        <div className="min-w-0">
           <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Armas</p>
           {weapons.length === 0 && <p className="text-xs text-orange-300/50">Nenhuma.</p>}
           {weapons.map((w) => (
-            <div key={w.id} className="flex flex-wrap items-center justify-between gap-1 py-0.5 text-sm">
-              <span className={w.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'}>
+            <div key={w.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-0.5 text-sm">
+              <span className={`min-w-0 flex-1 break-words ${w.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'}`}>
                 {w.name}
                 {w.damage && <span className="text-orange-400/60"> {w.damage}</span>}
                 {w.consumable && (
@@ -679,7 +679,7 @@ function InventoryCard({
                   </span>
                 )}
               </span>
-              <span className="flex items-center gap-1.5">
+              <span className="flex shrink-0 items-center gap-1.5">
                 <button
                   className="px-1 text-orange-400 hover:text-orange-200"
                   disabled={blocked}
@@ -712,8 +712,8 @@ function InventoryCard({
               </span>
             </div>
           ))}
-          <div className="mt-1 flex gap-1">
-            <Select value={novaArma} onChange={(e) => setNovaArma(e.target.value)} className="flex-1 text-xs" disabled={blocked}>
+          <div className="mt-1 flex min-w-0 gap-1">
+            <Select value={novaArma} onChange={(e) => setNovaArma(e.target.value)} className="min-w-0 flex-1 text-xs" disabled={blocked}>
               <option value="">Arma do catálogo...</option>
               {armasDoCatalogo.map((a) => (
                 <option key={a.name} value={a.name}>
@@ -722,6 +722,7 @@ function InventoryCard({
               ))}
             </Select>
             <Button
+              className="shrink-0"
               disabled={blocked || !novaArma}
               onClick={() => {
                 const entry = WEAPONS.find((w) => w.name === novaArma)
@@ -736,12 +737,15 @@ function InventoryCard({
         </div>
 
         {/* ---- Armaduras ---- */}
-        <div>
+        <div className="min-w-0">
           <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Armaduras</p>
           {armor.length === 0 && <p className="text-xs text-orange-300/50">Nenhuma.</p>}
           {armor.map((a) => (
-            <div key={a.id} className="flex flex-wrap items-center justify-between gap-1 py-0.5 text-sm">
-              <span className={a.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'} title={a.note}>
+            <div key={a.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-0.5 text-sm">
+              <span
+                className={`min-w-0 flex-1 break-words ${a.equipped ? 'text-orange-100' : 'text-orange-400/50 line-through'}`}
+                title={a.note}
+              >
                 {a.name} <span className="text-orange-400/60">+{a.defenseBonus} CA</span>
                 {a.dexCap !== undefined && (
                   <span className="ml-1 text-[10px] uppercase text-orange-400/50">
@@ -749,7 +753,7 @@ function InventoryCard({
                   </span>
                 )}
               </span>
-              <span className="flex items-center gap-1.5">
+              <span className="flex shrink-0 items-center gap-1.5">
                 <button
                   className="text-[11px] text-orange-400 hover:text-orange-200"
                   disabled={blocked}
@@ -767,8 +771,8 @@ function InventoryCard({
               </span>
             </div>
           ))}
-          <div className="mt-1 flex gap-1">
-            <Select value={novaArmadura} onChange={(e) => setNovaArmadura(e.target.value)} className="flex-1 text-xs" disabled={blocked}>
+          <div className="mt-1 flex min-w-0 gap-1">
+            <Select value={novaArmadura} onChange={(e) => setNovaArmadura(e.target.value)} className="min-w-0 flex-1 text-xs" disabled={blocked}>
               <option value="">Armadura do catálogo...</option>
               {armadurasDoCatalogo.map((a) => (
                 <option key={a.name} value={a.name}>
@@ -777,6 +781,7 @@ function InventoryCard({
               ))}
             </Select>
             <Button
+              className="shrink-0"
               disabled={blocked || !novaArmadura}
               onClick={() => {
                 const entry = ARMORS.find((a) => a.name === novaArmadura)
@@ -792,15 +797,15 @@ function InventoryCard({
       </div>
 
       {/* ---- Itens ---- */}
-      <div className="mt-3">
+      <div className="mt-3 min-w-0">
         <p className="mb-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Itens</p>
         {equipment.length === 0 && <p className="text-xs text-orange-300/50">Nada na mochila.</p>}
         {equipment.map((i) => (
-          <div key={i.id} className="flex flex-wrap items-center justify-between gap-1 py-0.5 text-sm">
-            <span className="text-orange-100" title={i.note}>
+          <div key={i.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 py-0.5 text-sm">
+            <span className="min-w-0 flex-1 break-words text-orange-100" title={i.note}>
               {i.name}
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex shrink-0 items-center gap-1.5">
               <button
                 className="px-1 text-orange-400 hover:text-orange-200"
                 disabled={blocked}
@@ -826,7 +831,10 @@ function InventoryCard({
             </span>
           </div>
         ))}
-        <div className="mt-1 flex flex-wrap gap-1">
+        {/* No celular o seletor do catálogo fica na linha inteira: dividindo
+            espaço com o campo livre e o botão, sobrava largura só para
+            "Item do catálog." */}
+        <div className="mt-1 flex min-w-0 flex-wrap gap-1">
           <Select
             value=""
             onChange={(e) => {
@@ -834,7 +842,7 @@ function InventoryCard({
               const entry = GEAR.find((g) => g.name === e.target.value)
               mexer({ equipment: stackGear(equipment, e.target.value, 1, entry?.effect) })
             }}
-            className="flex-1 text-xs"
+            className="min-w-0 basis-full text-xs sm:basis-auto sm:flex-1"
             disabled={blocked}
           >
             <option value="">Item do catálogo...</option>
@@ -848,10 +856,11 @@ function InventoryCard({
             placeholder="Item da mesa"
             value={novoItem}
             onChange={(e) => setNovoItem(e.target.value)}
-            className="w-36 text-xs"
+            className="min-w-0 flex-1 text-xs sm:w-36 sm:flex-none"
             disabled={blocked}
           />
           <Button
+            className="shrink-0"
             disabled={blocked || !novoItem.trim()}
             onClick={() => {
               mexer({ equipment: stackGear(equipment, novoItem.trim(), 1) })

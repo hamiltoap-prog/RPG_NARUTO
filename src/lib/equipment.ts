@@ -389,19 +389,35 @@ export function catalogEntries(kind: 'weapon' | 'armor' | 'gear'): { name: strin
     return WEAPONS.map((w) => ({
       name: w.name,
       cost: parseRyoCost(w.cost),
-      detail: `${w.damage} ${w.damageType} · ${w.properties}`,
+      detail: resumo(`${w.damage} ${w.damageType} · ${w.properties}`),
     }))
   }
   if (kind === 'armor') {
     return ARMORS.map((a) => ({
       name: a.name,
       cost: parseRyoCost(a.cost),
-      detail: `+${a.armorBonus} CA · Destreza ${a.dexBonus}${a.effect ? ` · ${a.effect}` : ''}${daCasa(a.houseRule)}`,
+      detail: resumo(`+${a.armorBonus} CA · Destreza ${a.dexBonus}${a.effect ? ` · ${a.effect}` : ''}`) + daCasa(a.houseRule),
     }))
   }
   return GEAR.map((g) => ({
     name: g.name,
     cost: parseRyoCost(g.cost),
-    detail: `${g.effect ?? g.category}${daCasa(g.houseRule)}`,
+    detail: resumo(g.effect ?? g.category) + daCasa(g.houseRule),
   }))
+}
+
+/**
+ * Corta a descrição no fim de uma palavra.
+ *
+ * O efeito de um item vai a 150 caracteres no manual, e um `<option>` com
+ * esse tamanho estica o `<select>` para a largura da opção mais longa — era
+ * isso que empurrava o inventário para fora da tela no celular. O texto
+ * inteiro continua na ficha, na anotação do item.
+ */
+function resumo(texto: string, maximo = 52): string {
+  const limpo = texto.trim()
+  if (limpo.length <= maximo) return limpo
+  const corte = limpo.slice(0, maximo)
+  const espaco = corte.lastIndexOf(' ')
+  return `${(espaco > maximo * 0.6 ? corte.slice(0, espaco) : corte).replace(/[,;·]$/, '')}…`
 }
