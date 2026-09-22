@@ -9,9 +9,7 @@ Cada item abaixo traz o **estado atual**:
 - ⏳ **Aberto** — depende de uma decisão de regra do dono da mesa; enquanto
   isso o app segue a leitura literal do manual, marcada em cada item.
 
-Dos 19 pontos, **18 estão fechados**. Segue aberto só o item 13d (nomes de
-equipamento inicial que o capítulo de Equipamento não lista) — e ele não trava
-nada: esses itens entram na ficha como avulsos.
+Os **19 pontos estão fechados**.
 
 ---
 
@@ -213,22 +211,42 @@ Tartaruga.
 **Decisão:** a contagem do resumo é que está errada. As **17** estão em
 `src/data/summons.ts` e no bestiário do app.
 
-## ⏳ 13d. Equipamento inicial cita itens que o Capítulo de Equipamento não lista
+## ✅ 13d. Equipamento inicial cita itens fora do capítulo de Equipamento
 
 O equipamento inicial das classes nomeia itens que **não existem** no catálogo
-do Capítulo 5: *bombas de fumaça*, *bomba de papel*, *Lâminas de Soco*,
-*Tecido de Contenção*, *Kit de Medicina*, *Pergaminhos em Branco*, *Papéis
-Bomba*, *Pergaminho de Ninjutsu (Rank-D)* e *Jaqueta de Combate*.
+do Capítulo 5: *bombas de fumaça*, *bomba de papel* / *Papéis Bomba*,
+*Lâminas de Soco*, *Tecido de Contenção*, *Kit de Medicina*, *Pergaminhos em
+Branco*, *Pergaminho de Ninjutsu (Rank-D)* e *Jaqueta de Combate*.
 
-Das 60 alternativas de equipamento inicial das 8 classes, 38 casam com um item
-do catálogo, 10 são escolhas abertas por categoria ("1 arma simples") e 12
-caem nesses nomes soltos.
+**Decisão: resolvidos, de duas formas.**
 
-**Enquanto não houver decisão:** o app põe esses nomes na ficha como itens
-avulsos, com o nome que o manual usa e uma nota dizendo que não constam do
-capítulo de Equipamento. Não inventa preço, dano nem efeito para eles. Se você
-quiser transformá-los em itens de verdade, dá para criá-los na forja da mesa
-com o preço e o efeito que a sua mesa decidir.
+**Quatro eram o mesmo item com outro nome** — como "Discernimento" e
+"Intuição". O texto do equipamento inicial passa por uma tabela de sinônimos
+(`SINONIMOS`, em `src/lib/equipment.ts`) em vez de o catálogo ganhar
+duplicatas:
+
+| Nome citado pela classe | Item do catálogo |
+|---|---|
+| bomba de papel · Papéis Bomba | Selos Explosivos (100 ryo) |
+| Lâminas de Soco | Lâminas de Punho (35 ryo) |
+| Kit de Medicina | Kit Médico (75 ryo) |
+
+**Os outros cinco viraram itens da casa**, com preço e efeito definidos para a
+mesa e sempre ancorados em algo que o manual já precifica. Ficam marcados com
+`houseRule` no catálogo e aparecem com a etiqueta *"item da casa"* nos
+seletores de compra e de entrega, para não se passarem por regra do livro:
+
+| Item da casa | Preço | Âncora usada |
+|---|---|---|
+| Bomba de Fumaça | 75 ryo | metade da Bomba de Pimenta (150), que faz névoa e ainda dá um bônus |
+| Tecido de Contenção | 60 ryo | um pouco acima da Corda de 15m (20 ryo), por ser ferramenta de contenção |
+| Pergaminho em Branco | 20 ryo | acima do Papel para Selos (15 ryo), por comportar mais que uma folha |
+| Pergaminho de Ninjutsu (Rank-D a S) | 250 · 750 · 1500 · 3000 · 6000 ryo | acima de um Kit de Ferramentas (200 ryo), subindo com o rank |
+| Jaqueta de Combate | 30 ryo | acima da Armadura de Couro (+2, 25 ryo), pelos bolsos de saque rápido |
+
+Com isso, **as 60 alternativas de equipamento inicial das 8 classes** resolvem:
+50 viram item do catálogo e 10 são escolhas abertas por categoria ("1 arma
+simples"). Nenhuma sobra como nome solto.
 
 ## ✅ 14. Itens com o mesmo nome em lugares diferentes
 

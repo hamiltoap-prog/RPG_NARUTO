@@ -6,7 +6,8 @@ import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
 import { PartyPanel } from '../components/PartyPanel'
 import { ChakraGiftCard } from '../components/ChakraGiftPanel'
-import { JutsuCastCard } from '../components/JutsuCastPanel'
+import { JutsuCastCard, resolverCast } from '../components/JutsuCastPanel'
+import { CompanionCard } from '../components/CompanionPanel'
 import { SurvivalHud } from '../components/SurvivalPanel'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Help } from '../components/Help'
@@ -139,6 +140,13 @@ export function PlayerView({
           clans={clans}
           requesterUid={actorUid}
           asGM={asGM}
+        />
+        <CompanionCard
+          table={table}
+          character={character}
+          requesterUid={actorUid}
+          asGM={asGM}
+          onResolveNow={(cast) => resolverCast(table, cast, character, allCharacters, npcs, table.gmName).then(() => undefined)}
         />
         <AttributesCard character={character} clan={clan} charClass={charClass} onSubmit={submit} pendingFields={pendingFields} />
         <InventoryCard character={character} onSubmit={submit} pendingFields={pendingFields} />

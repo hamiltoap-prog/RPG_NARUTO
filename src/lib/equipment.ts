@@ -221,6 +221,29 @@ export interface StartingChoice {
 
 const CONECTORES = new Set(['de', 'da', 'do', 'das', 'dos', 'em', 'para', 'com', 'e', 'a', 'o', 'as', 'os', 'ou'])
 
+/**
+ * Nomes diferentes para o mesmo item.
+ *
+ * O manual chama a mesma coisa de dois jeitos em capítulos diferentes — do
+ * mesmo modo que "Discernimento" e "Intuição" são a mesma perícia. Em vez de
+ * criar itens duplicados no catálogo, o texto do equipamento inicial é
+ * traduzido para o nome que o capítulo de Equipamento usa.
+ */
+const SINONIMOS: { de: RegExp; para: string }[] = [
+  // "papel bomba" é o selo explosivo, que o catálogo já precifica em 100 ryo.
+  { de: /pap[eé](l|is)\s+bomba|bomba\s+de\s+papel/i, para: 'Selos Explosivos' },
+  // "Lâminas de Soco" e "Lâminas de Punho" são a mesma arma marcial.
+  { de: /l[âa]minas?\s+de\s+soco/i, para: 'Lâminas de Punho' },
+  // O Ninja Médico começa com "Kit de Medicina"; o catálogo diz "Kit Médico".
+  { de: /kit\s+de\s+medicina/i, para: 'Kit Médico' },
+]
+
+/** Troca o nome citado pelo nome do catálogo, quando são a mesma coisa. */
+function aplicarSinonimos(texto: string): string {
+  for (const s of SINONIMOS) if (s.de.test(texto)) return s.para
+  return texto
+}
+
 function semAcento(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
@@ -294,7 +317,7 @@ function lerOpcao(texto: string): StartingOption {
   const pedido = Number(limpo.match(/^(\d+)/)?.[1] ?? 0)
   const count = pedido > 0 ? pedido : 1
 
-  const achado = acharNoCatalogo(limpo)
+  const achado = acharNoCatalogo(aplicarSinonimos(limpo))
   if (achado) {
     // "20 shurikens" pede 20 unidades, mesmo o catálogo vendendo de 5 em 5.
     const quantidade = pedido > 0 ? pedido : bundleSize(achado.name)
@@ -353,8 +376,15 @@ export function applyStartingPicks(
   return { weapons, armor, equipment }
 }
 
-/** Itens do catálogo por tipo, para os seletores de compra e de entrega. */
+/**
+ * Itens do catálogo por tipo, para os seletores de compra e de entrega.
+ *
+ * Item da casa vai marcado: o preço e o efeito dele foram definidos para a
+ * mesa, não estão no capítulo de Equipamento, e quem está escolhendo merece
+ * saber disso na hora de escolher.
+ */
 export function catalogEntries(kind: 'weapon' | 'armor' | 'gear'): { name: string; cost: number; detail: string }[] {
+  const daCasa = (marcado: boolean | undefined) => (marcado ? ' · item da casa' : '')
   if (kind === 'weapon') {
     return WEAPONS.map((w) => ({
       name: w.name,
@@ -366,8 +396,12 @@ export function catalogEntries(kind: 'weapon' | 'armor' | 'gear'): { name: strin
     return ARMORS.map((a) => ({
       name: a.name,
       cost: parseRyoCost(a.cost),
-      detail: `+${a.armorBonus} CA · Destreza ${a.dexBonus}${a.effect ? ` · ${a.effect}` : ''}`,
+      detail: `+${a.armorBonus} CA · Destreza ${a.dexBonus}${a.effect ? ` · ${a.effect}` : ''}${daCasa(a.houseRule)}`,
     }))
   }
-  return GEAR.map((g) => ({ name: g.name, cost: parseRyoCost(g.cost), detail: g.effect ?? g.category }))
+  return GEAR.map((g) => ({
+    name: g.name,
+    cost: parseRyoCost(g.cost),
+    detail: `${g.effect ?? g.category}${daCasa(g.houseRule)}`,
+  }))
 }

@@ -82,6 +82,10 @@ export interface ArmorCatalogEntry {
   dexBonus: string
   effect?: string
   category: 'Leve' | 'Média' | 'Pesada'
+  /** Item da casa: citado pelo manual em outro lugar (equipamento inicial,
+   * pacotes) mas sem ficha no capítulo de Equipamento. Preço e efeito foram
+   * definidos para a mesa — ver docs/rules/00-observacoes.md, item 13d. */
+  houseRule?: boolean
 }
 
 export interface GearItem {
@@ -89,6 +93,8 @@ export interface GearItem {
   cost: string
   effect?: string
   category: string
+  /** Item da casa — ver ArmorCatalogEntry.houseRule. */
+  houseRule?: boolean
 }
 
 export interface Skill {
@@ -334,6 +340,69 @@ export interface NPC {
   attributes?: Attributes
 }
 
+/* ---------------------------------------------------------------------------
+ * Fichas temporárias: clones e invocações
+ *
+ * Um clone das sombras e uma criatura invocada não são efeitos de texto — são
+ * corpos que agem no turno de quem os criou. Cada um vira uma ficha própria,
+ * controlada por quem lançou o jutsu (o jogador na ficha dele, o mestre na
+ * dele), e uma peça ao lado da peça do dono no mapa.
+ *
+ * Ficam em coleção separada (`companions`) de propósito: o jogador precisa
+ * poder mexer nelas sem pedir licença — é o próprio clone dele —, e as fichas
+ * de NPC são escrita exclusiva do mestre.
+ * ------------------------------------------------------------------------- */
+
+/** O que o jutsu pediu para criar; as fichas são montadas na liberação. */
+export interface CompanionRequest {
+  kind: 'clone' | 'summon'
+  count: number
+  /** Clone: o jutsu que criou. */
+  cloneJutsu?: string
+  /** Invocação: tribo, rank e tamanho escolhidos. */
+  tribeId?: string
+  rankIndex?: number
+  size?: SummonSizeKey
+}
+
+export interface Companion {
+  id: string
+  tableId: string
+  kind: 'clone' | 'summon'
+  /** Ficha que criou. */
+  ownerCharacterId: string
+  ownerName: string
+  /** Quem controla: o uid do dono da ficha, ou o do mestre. */
+  ownerUid: string
+  name: string
+  sourceJutsu: string
+
+  hp: { current: number; max: number }
+  chakra: { current: number; max: number }
+  armorClass: number
+  resistancePoints: number
+  modifiers: Modifiers
+  proficiencyBonus: number
+
+  /** Golpes prontos (invocação). */
+  attacks?: NpcAttack[]
+  /** Jutsus que o clone pode usar — os do dono, menos outros clones. */
+  jutsus?: Jutsu[]
+  /** O manual manda o dano dos jutsus do clone sair pela metade. */
+  halfDamage: boolean
+  /** Duração literal do jutsu, para a mesa saber quando acaba. */
+  duration: string
+
+  /** Invocação: tamanho e bônus de ataque da tribo. */
+  summonSize?: SummonSizeKey
+  attackModifier?: number
+  attributes?: Attributes
+
+  imageUrl?: string
+  notes: string
+  createdAt: number
+}
+
 /** Condição pegando em alguém durante o combate. */
 export interface ActiveCondition {
   name: string
@@ -449,13 +518,14 @@ export interface RollRequest {
 
 // ---------- Tela de jogo (mapa tático) ----------
 
-export type SceneTokenKind = 'pc' | 'npc' | 'monster' | 'boss'
+export type SceneTokenKind = 'pc' | 'npc' | 'monster' | 'boss' | 'companion'
 
 export const SCENE_TOKEN_LABELS: Record<SceneTokenKind, string> = {
   pc: 'Personagem',
   npc: 'NPC',
   monster: 'Inimigo',
   boss: 'Chefe',
+  companion: 'Clone / invocação',
 }
 
 /**
@@ -483,8 +553,13 @@ export interface SceneToken {
   /** Tamanho em quadrados da grade (1 = criatura média). Quando presente, manda. */
   squares?: number
   /** Ligada a uma ficha: mostra PV ao vivo e segue o dono. */
-  refType?: 'character' | 'npc'
+  refType?: 'character' | 'npc' | 'companion'
   refId?: string
+  /**
+   * Peça de clone/invocação: vive só na cena atual. Não entra no retrato que
+   * a biblioteca guarda — carregar uma cena salva não traz clones de volta.
+   */
+  temporary?: boolean
   /** Falso = "preparada" na bandeja do mestre, ainda fora do mapa. */
   onBoard?: boolean
 }
@@ -807,6 +882,13 @@ export interface JutsuCast {
   /** Vantagem elemental (ou outra combinada na mesa) na jogada de ataque. */
   edge?: 'none' | 'advantage' | 'disadvantage'
   edgeReason?: string
+
+  /**
+   * Jutsu que cria fichas temporárias (clone ou invocação). Vai no pedido, e
+   * não direto na coleção, para o chakra e as fichas nascerem na mesma
+   * liberação do mestre — como todo o resto que mexe em ficha.
+   */
+  companion?: CompanionRequest
 
   /** Ataque com arma da ficha, em vez de jutsu. */
   weaponId?: string

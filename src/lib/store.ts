@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import type {
+  Companion,
   Character,
   CombatParticipant,
   BestiaryEntry,
@@ -30,12 +31,14 @@ import type {
   NPC,
   RollRequest,
   Scene,
+  SceneToken,
   SceneLibraryItem,
   ScenePing,
   SheetChangeRequest,
 } from '../types'
 import { spendWeapon } from './equipment'
 import { newId, newTableCode } from './id'
+import { gridColumns, spotsAround, stageAspect } from './sceneGeometry'
 
 function requireDb() {
   if (!db) throw new Error('Firebase não configurado. Confira o arquivo .env (veja .env.example).')
@@ -447,6 +450,114 @@ export function listenNPCs(tableId: string, cb: (npcs: NPC[]) => void) {
     query(npcsCol(tableId), orderBy('createdAt', 'asc')),
     (snap) => cb(snap.docs.map((d) => d.data() as NPC)),
     defaultOnError('NPCs'),
+  )
+}
+
+/* ---------------------------------------------------------------------------
+ * Fichas temporárias: clones e invocações
+ *
+ * Coleção própria, e não a de NPC, por causa de quem escreve: a ficha de NPC
+ * é escrita exclusiva do mestre, e um clone precisa ser mexido pelo jogador
+ * que o criou — é o corpo dele. As regras deixam o dono (pelo uid) e o mestre
+ * escreverem; todo mundo lê, porque a peça aparece no mapa de todos.
+ * ------------------------------------------------------------------------- */
+
+export function companionsCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'companions')
+}
+
+/** Cria várias de uma vez — quatro clones das sombras são quatro fichas. */
+export async function createCompanions(tableId: string, companions: Companion[]) {
+  if (companions.length === 0) return
+  const database = requireDb()
+  const batch = writeBatch(database)
+  for (const c of companions) {
+    batch.set(doc(companionsCol(tableId), c.id), stripUndefined(c))
+  }
+  await batch.commit()
+}
+
+export async function updateCompanion(tableId: string, companionId: string, patch: Partial<Companion>) {
+  await updateDoc(doc(companionsCol(tableId), companionId), stripUndefined(patch))
+}
+
+export async function deleteCompanion(tableId: string, companionId: string) {
+  await deleteDoc(doc(companionsCol(tableId), companionId))
+}
+
+/** Desfaz de uma vez as fichas temporárias que o jutsu criou. */
+export async function dismissCompanions(tableId: string, ids: string[]) {
+  if (ids.length === 0) return
+  const database = requireDb()
+  const batch = writeBatch(database)
+  for (const id of ids) batch.delete(doc(companionsCol(tableId), id))
+  await batch.commit()
+}
+
+/**
+ * Põe as peças dos clones/invocações ao lado da peça do dono na cena ATUAL.
+ *
+ * Duas decisões importantes:
+ *  - se o personagem não tem peça no tabuleiro, nada acontece. Não faz
+ *    sentido materializar um clone num mapa onde o original nem está;
+ *  - as peças nascem com `temporary`, e o retrato que a biblioteca guarda as
+ *    ignora — carregar uma cena salva não ressuscita clone nenhum.
+ *
+ * Devolve quantas peças entraram, para a mesa saber o que aconteceu.
+ */
+export async function addCompanionTokens(
+  tableId: string,
+  ownerCharacterId: string,
+  companions: readonly Companion[],
+): Promise<number> {
+  if (companions.length === 0) return 0
+  const snap = await getDoc(sceneDoc(tableId))
+  if (!snap.exists()) return 0
+  const scene = snap.data() as Scene
+  const tokens = scene.tokens ?? []
+  const dono = tokens.find((t) => t.refType === 'character' && t.refId === ownerCharacterId && t.onBoard !== false)
+  if (!dono) return 0
+
+  const colunas = gridColumns(scene)
+  const aspecto = stageAspect(scene)
+  const ocupadas = tokens.filter((t) => t.onBoard !== false).map((t) => ({ x: t.x, y: t.y }))
+  const vagas = spotsAround({ x: dono.x, y: dono.y }, companions.length, ocupadas, colunas, aspecto)
+
+  const novas: SceneToken[] = companions.map((c, i) => ({
+    id: newId(),
+    label: c.name,
+    kind: 'companion',
+    imageUrl: c.imageUrl,
+    x: vagas[i].x,
+    y: vagas[i].y,
+    size: dono.size,
+    squares: 1,
+    refType: 'companion',
+    refId: c.id,
+    temporary: true,
+    onBoard: true,
+  }))
+  await saveSceneTokens(tableId, [...tokens, ...novas])
+  return novas.length
+}
+
+/** Tira do mapa as peças das fichas temporárias que sumiram. */
+export async function removeCompanionTokens(tableId: string, companionIds: readonly string[]) {
+  if (companionIds.length === 0) return
+  const snap = await getDoc(sceneDoc(tableId))
+  if (!snap.exists()) return
+  const scene = snap.data() as Scene
+  const tokens = scene.tokens ?? []
+  const restantes = tokens.filter((t) => !(t.refType === 'companion' && t.refId && companionIds.includes(t.refId)))
+  if (restantes.length === tokens.length) return
+  await saveSceneTokens(tableId, restantes)
+}
+
+export function listenCompanions(tableId: string, cb: (list: Companion[]) => void) {
+  return onSnapshot(
+    query(companionsCol(tableId), orderBy('createdAt', 'asc')),
+    (snap) => cb(snap.docs.map((d) => d.data() as Companion)),
+    defaultOnError('clones e invocações'),
   )
 }
 

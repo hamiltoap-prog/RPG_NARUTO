@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, Input, SectionTitle, Select } from './ui'
 import {
+  addCompanionTokens,
   addLogEntry,
   applyJutsuCast,
+  createCompanions,
   createJutsuCast,
   denyJutsuCast,
   listenMyJutsuCasts,
   listenPendingJutsuCasts,
 } from '../lib/store'
+import { buildClones, buildSummon, readClone } from '../lib/companions'
+import { CLASSES } from '../data/classes'
 import { attackAlternatives, attackAttribute, findCatalogEntry, readJutsu, resolveCast } from '../lib/jutsuCast'
 import { clanElements, elementAdvantage, jutsuElement } from '../lib/jutsuAccess'
 import { ATTRIBUTE_LABELS } from '../types'
-import type { AttributeKey, Character, Clan, GameTable, JutsuCast, NPC } from '../types'
+import type { AttributeKey, Character, Clan, Companion, GameTable, JutsuCast, NPC } from '../types'
 
 /** Acha o alvo pela referência "character:id" / "npc:id". */
 function acharAlvo(ref: string | undefined, characters: Character[], npcs: NPC[]) {
@@ -332,8 +336,36 @@ export function JutsuCastCard({
   )
 }
 
+/** Monta as fichas que o pedido pediu, a partir da ficha viva de quem lançou. */
+function montarCompanions(cast: JutsuCast, caster: Character): Companion[] {
+  const pedido = cast.companion
+  if (!pedido) return []
+  const uid = caster.ownerUid
+  if (pedido.kind === 'clone') {
+    const entrada = pedido.cloneJutsu ? findCatalogEntry(pedido.cloneJutsu) : undefined
+    if (!entrada) return []
+    const classe = CLASSES.find((c) => c.id === caster.classId)
+    return buildClones({
+      owner: caster,
+      ownerUid: uid,
+      jutsuName: pedido.cloneJutsu!,
+      reading: readClone(entrada),
+      count: pedido.count,
+      chakraDie: classe?.chakraDie,
+    })
+  }
+  const invocada = buildSummon({
+    owner: caster,
+    ownerUid: uid,
+    tribeId: pedido.tribeId ?? '',
+    rankIndex: pedido.rankIndex ?? 0,
+    size: pedido.size ?? 'M',
+  })
+  return invocada ? [invocada] : []
+}
+
 /** Rola, aplica e registra — usado tanto pelo mestre quanto na liberação. */
-async function resolverCast(
+export async function resolverCast(
   table: GameTable,
   cast: JutsuCast,
   caster: Character,
@@ -374,12 +406,27 @@ async function resolverCast(
     fora.summary,
   )
 
+  // Jutsu de clone ou invocação: as fichas temporárias nascem aqui, junto com
+  // o desconto do chakra, e as peças aparecem ao lado da do dono na cena
+  // atual (se ele estiver no tabuleiro).
+  let avisoDasFichas = ''
+  if (cast.companion) {
+    const fichas = montarCompanions(cast, caster)
+    if (fichas.length > 0) {
+      await createCompanions(table.id, fichas)
+      const pecas = await addCompanionTokens(table.id, caster.id, fichas)
+      avisoDasFichas =
+        ` — ${fichas.length} ficha(s) temporária(s) criada(s)` +
+        (pecas > 0 ? ` e ${pecas} peça(s) no mapa` : ' (o personagem não está na tela de jogo, então nenhuma peça entrou)')
+    }
+  }
+
   await addLogEntry(table.id, {
     actorName: cast.casterName,
     actorType: 'player',
     characterId: cast.casterId,
     kind: 'combat',
-    summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}`,
+    summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}${avisoDasFichas}`,
     dice: fora.dice,
     diceSides: fora.diceSides,
     diceLabel: cast.jutsuName,

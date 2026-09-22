@@ -132,8 +132,9 @@ ok(!isThrowable(undefined), 'sem propriedades, não consome')
     }
   }
   console.log(`equipamento inicial: ${comItens} alternativas viraram itens do catálogo, ${comEscolha} viraram escolha por categoria, ${avulsos.length} ficaram avulsas`)
-  console.log('avulsas (citadas pela classe, ausentes do capítulo de Equipamento):', [...new Set(avulsos.map((a) => a.replace(/^\d+\s*/, '')))].join(' | '))
+  if (avulsos.length > 0) console.log('avulsas:', [...new Set(avulsos.map((a) => a.replace(/^\d+\s*/, '')))].join(' | '))
   ok(comItens > 25, 'a maior parte do equipamento inicial devia sair do catálogo')
+  ok(avulsos.length === 0, `todo o equipamento inicial devia achar item ou categoria; sobraram ${avulsos.length}`)
 
   // O caso que o usuário citou: 20 shurikens em uma linha só.
   const genjutsu = readStartingEquipment(CLASSES[0].startingEquipment)
@@ -146,11 +147,13 @@ ok(!isThrowable(undefined), 'sem propriedades, não consome')
   const aplicado = applyStartingPicks(picksShuriken)
   ok(aplicado.weapons.length === 1 && aplicado.weapons[0].quantity === 20, 'as 20 entram como uma linha só na ficha')
 
-  // "Pá" não pode casar dentro de "bomba de papel".
+  // "bomba de papel" é o selo explosivo, não o item "Pá" (que casava por
+  // substring antes da comparação passar a ser palavra por palavra).
   const cacador = readStartingEquipment(CLASSES.find((c) => /Ca[çc]ador/.test(c.name))!.startingEquipment)
   const linhaPapel = cacador.find((e) => /papel/i.test(e.label))!
   const opPapel = linhaPapel.options.find((o) => /papel/i.test(o.label))!
-  ok(opPapel.type === 'free', '"bomba de papel" não devia casar com nenhum item do catálogo')
+  ok(opPapel.type === 'items' && opPapel.picks[0].name === 'Selos Explosivos',
+     '"bomba de papel" devia virar Selos Explosivos, não Pá')
   const opSelo = linhaPapel.options.find((o) => /luz/i.test(o.label))!
   ok(opSelo.type === 'items' && opSelo.picks[0].name === 'Selo de Luz' && opSelo.picks[0].quantity === 2,
      '"2 selos de luz" tem que achar o Selo de Luz do catálogo')
@@ -165,6 +168,36 @@ ok(!isThrowable(undefined), 'sem propriedades, não consome')
   const taijutsu = readStartingEquipment(CLASSES.find((c) => /Taijutsu/.test(c.name))!.startingEquipment)
   const linhaTonfa = taijutsu.find((e) => /Tonfa/.test(e.label))!
   ok(linhaTonfa.options.length === 3, `"Tonfa, Nunchaku ou Braçadeiras" devia dar 3 alternativas, deu ${linhaTonfa.options.length}`)
+}
+
+// --- Sinônimos e itens da casa
+{
+  const nomes = (linhas: readonly string[]) =>
+    readStartingEquipment(linhas).flatMap((e) => e.options.flatMap((o) => (o.type === 'items' ? o.picks.map((p) => p.name) : [])))
+
+  const medico = nomes(CLASSES.find((c) => /M[ée]dico/.test(c.name))!.startingEquipment)
+  ok(medico.includes('Kit Médico'), '"Kit de Medicina" devia virar o Kit Médico do catálogo')
+  ok(medico.includes('Tecido de Contenção'), 'o Tecido de Contenção (item da casa) devia estar no catálogo agora')
+
+  const estrategista = nomes(CLASSES.find((c) => /Estrategista/.test(c.name))!.startingEquipment)
+  ok(estrategista.includes('Lâminas de Punho'), '"Lâminas de Soco" devia virar Lâminas de Punho')
+
+  const armas = nomes(CLASSES.find((c) => /Especialista em Armas/.test(c.name))!.startingEquipment)
+  ok(armas.includes('Jaqueta de Combate'), 'a Jaqueta de Combate (item da casa) devia estar no catálogo')
+  const jaqueta = ARMORS.find((a) => a.name === 'Jaqueta de Combate')!
+  ok(jaqueta.houseRule === true, 'a Jaqueta tem que ficar marcada como item da casa')
+  ok(jaqueta.armorBonus === 2 && jaqueta.dexBonus === 'Total', 'Jaqueta: +2 de CA, Destreza total')
+
+  const genjutsu = nomes(CLASSES[0].startingEquipment)
+  ok(genjutsu.includes('Bomba de Fumaça'), 'a Bomba de Fumaça (item da casa) devia estar no catálogo')
+
+  const daCasa = [...GEAR, ...ARMORS].filter((i) => i.houseRule)
+  console.log(`itens da casa: ${daCasa.length} —`, daCasa.map((i) => `${i.name} (${i.cost})`).join(', '))
+  ok(daCasa.length === 9, `esperava 9 itens da casa, achei ${daCasa.length}`)
+  for (const i of daCasa) ok(parseRyoCost(i.cost) > 0, `${i.name} precisa de preço`)
+  // Nenhum item da casa pode passar por item do manual sem marca.
+  ok(GEAR.filter((g) => /Bomba de Fumaça|Tecido de Contenção|Pergaminho em Branco|Pergaminho de Ninjutsu/.test(g.name)).every((g) => g.houseRule),
+     'todo item da casa fica marcado')
 }
 
 console.log('OK: todas as checagens de equipamento passaram')

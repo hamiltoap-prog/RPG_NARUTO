@@ -1,4 +1,4 @@
-import { applyMapTransform, invertMapTransform, remapPoint } from '../sceneGeometry'
+import { applyMapTransform, invertMapTransform, remapPoint, snapToGrid, spotsAround } from '../sceneGeometry'
 
 const aspect = 16 / 9
 const pontos = [
@@ -64,3 +64,46 @@ if (isRevealed(movida, 0.3, 0.5)) throw new Error('FALHOU: a névoa ficou para t
 const volta = remapFog(movida, para, de, aspect)
 if (!isRevealed(volta, 0.3, 0.5)) throw new Error('FALHOU: voltar o mapa não devolveu a névoa')
 console.log('OK: a névoa acompanha o mapa e volta com ele')
+
+// --- Onde os clones e as invocações nascem: ao lado da peça do dono
+{
+  const ok = (c: boolean, m: string) => { if (!c) throw new Error('FALHOU: ' + m) }
+  const colunas = 20
+  const aspecto = 1
+  const cell = 1 / colunas
+  const dono = { x: 0.5, y: 0.5 }
+
+  const tres = spotsAround(dono, 3, [dono], colunas, aspecto)
+  ok(tres.length === 3, `pediu 3 casas, veio ${tres.length}`)
+  ok(tres.every((p) => Math.max(Math.abs(p.x - dono.x), Math.abs(p.y - dono.y)) <= cell * 1.6),
+     'as três primeiras nascem coladas no dono (primeiro anel)')
+  ok(new Set(tres.map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)).size === 3, 'sem duas peças na mesma casa')
+  ok(tres.every((p) => Math.abs(p.x - dono.x) > 1e-9 || Math.abs(p.y - dono.y) > 1e-9), 'nenhuma nasce em cima do dono')
+  console.log('3 clones em volta do dono:', tres.map((p) => `(${p.x.toFixed(3)},${p.y.toFixed(3)})`).join(' '))
+
+  // Casa ocupada por outra peça é pulada.
+  const vizinho = { x: dono.x + cell, y: dono.y }
+  const comVizinho = spotsAround(dono, 2, [dono, vizinho], colunas, aspecto)
+  ok(comVizinho.every((p) => Math.abs(p.x - vizinho.x) > 1e-9 || Math.abs(p.y - vizinho.y) > 1e-9),
+     'não põe clone na casa de quem já está lá')
+
+  // Dez clones cabem: o anel cresce quando o primeiro (8 casas) lota.
+  const dez = spotsAround(dono, 10, [dono], colunas, aspecto)
+  ok(dez.length === 10, `10 clones precisam de 10 casas, veio ${dez.length}`)
+  ok(new Set(dez.map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)).size === 10, '10 casas distintas')
+  // O primeiro anel tem 8 casas, então o 9º e o 10º caem no segundo — e
+  // nunca mais longe que isso.
+  const base = snapToGrid(dono.x, dono.y, 1, colunas, aspecto)
+  const aneis = dez.map((p) => Math.round(Math.max(Math.abs(p.x - base.x), Math.abs(p.y - base.y)) / cell))
+  ok(aneis.filter((a) => a === 1).length === 8, `o primeiro anel devia levar 8 clones, levou ${aneis.filter((a) => a === 1).length}`)
+  ok(aneis.filter((a) => a === 2).length === 2, 'os dois últimos vão para o segundo anel')
+  ok(Math.max(...aneis) === 2, `nenhum clone devia passar do segundo anel, o mais longe foi no ${Math.max(...aneis)}º`)
+  console.log(`10 clones: 8 no primeiro anel, 2 no segundo — nenhum mais longe que isso`)
+
+  // Dono na beirada: nada sai do tabuleiro.
+  const naBorda = spotsAround({ x: 0.02, y: 0.02 }, 5, [], colunas, aspecto)
+  ok(naBorda.every((p) => p.x > 0 && p.x < 1 && p.y > 0 && p.y < 1), 'nenhuma peça nasce fora do palco')
+  console.log('dono na beirada: todas as 5 casas continuam dentro do palco')
+}
+
+console.log('OK: checagens de posicionamento de clones passaram')

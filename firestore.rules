@@ -203,6 +203,25 @@ service cloud.firestore {
         allow write: if isGM(tableId);
       }
 
+      // Fichas temporárias (clones e invocações). Diferente de NPC de
+      // propósito: o jogador que lançou o jutsu precisa mexer na ficha do
+      // próprio clone sem pedir licença ao mestre — é o corpo dele agindo no
+      // turno dele. Então quem escreve é o DONO (pelo uid gravado na ficha)
+      // ou o mestre; todos leem, porque a peça aparece no mapa de todo mundo.
+      // O uid do dono não pode ser trocado depois, senão qualquer um puxaria
+      // o clone alheio para si.
+      match /companions/{companionId} {
+        allow read: if signedIn();
+        allow create: if isGM(tableId) ||
+          (signedIn() && request.resource.data.ownerUid == request.auth.uid);
+        allow update: if isGM(tableId) ||
+          (signedIn() &&
+            resource.data.ownerUid == request.auth.uid &&
+            request.resource.data.ownerUid == resource.data.ownerUid);
+        allow delete: if isGM(tableId) ||
+          (signedIn() && resource.data.ownerUid == request.auth.uid);
+      }
+
       match /missions/{missionId} {
         allow read: if signedIn();
         allow write: if isGM(tableId);

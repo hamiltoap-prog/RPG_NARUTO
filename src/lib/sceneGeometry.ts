@@ -165,3 +165,50 @@ export function remapTokens(
     return { ...t, x: clamp01(q.x), y: clamp01(q.y) }
   })
 }
+
+/**
+ * Casas livres em volta de uma peça, em anel, de dentro para fora.
+ *
+ * É onde os clones e as invocações nascem: o manual diz "o clone surge em um
+ * espaço desocupado a até 2 metros de você", então a peça aparece colada na
+ * do dono, e não num canto qualquer do mapa. Casa ocupada é pulada, e o anel
+ * cresce quando o primeiro se esgota.
+ */
+export function spotsAround(
+  origin: Pt,
+  howMany: number,
+  occupied: readonly Pt[],
+  columns: number,
+  aspect: number,
+): Pt[] {
+  const cellX = 1 / columns
+  const cellY = aspect / columns
+  const livres: Pt[] = []
+  const tomadas = [...occupied]
+
+  // O dono é encaixado UMA vez, e daí em diante os passos são múltiplos
+  // exatos da célula. Encaixar cada casa de novo fazia duas casas vizinhas
+  // caírem na mesma, porque o arredondamento de meio quadrado oscila com o
+  // erro de ponto flutuante — e aí o anel era descartado como "ocupado" e os
+  // clones nasciam longe do original.
+  const base = snapToGrid(origin.x, origin.y, 1, columns, aspect)
+
+  for (let anel = 1; anel <= 6 && livres.length < howMany; anel++) {
+    for (let dy = -anel; dy <= anel && livres.length < howMany; dy++) {
+      for (let dx = -anel; dx <= anel && livres.length < howMany; dx++) {
+        // Só a borda do anel: o interior já foi visto na volta anterior.
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== anel) continue
+        const p = { x: base.x + dx * cellX, y: base.y + dy * cellY }
+        if (p.x <= 0 || p.x >= 1 || p.y <= 0 || p.y >= 1) continue
+        const ocupada = tomadas.some((t) => Math.abs(t.x - p.x) < cellX / 2 && Math.abs(t.y - p.y) < cellY / 2)
+        if (ocupada) continue
+        livres.push(p)
+        tomadas.push(p)
+      }
+    }
+  }
+
+  // Mapa cheio: empilha na casa do dono em vez de perder a peça.
+  while (livres.length < howMany) livres.push(origin)
+  return livres
+}

@@ -59,6 +59,19 @@ export const ARMORS: ArmorCatalogEntry[] = [
   { name: 'Armadura de Batalha Padrão', cost: '1500 ryo', armorBonus: 7, dexBonus: 'Nenhum', effect: 'Dano não-Chakra −2', category: 'Pesada' },
   { name: 'Armadura de Batalha Shinobi', cost: '2000 ryo', armorBonus: 9, dexBonus: 'Nenhum', effect: 'Desvantagem em Furtividade; dano não-Chakra −3', category: 'Pesada' },
   { name: 'Armadura Samurai', cost: '2500 ryo', armorBonus: 10, dexBonus: 'Nenhum', effect: 'Desvantagem em Furtividade; dano não-Chakra −5; requer Força 15', category: 'Pesada' },
+  // --- Item da casa: o Especialista em Armas começa com "Armadura Acolchoada
+  // ou Jaqueta de Combate", mas a Jaqueta não tem ficha no capítulo de
+  // Equipamento. Valores definidos para a mesa, ancorados na Armadura de
+  // Couro (+2, 25 ryo): um pouco mais caro pelos bolsos de saque rápido.
+  {
+    name: 'Jaqueta de Combate',
+    cost: '30 ryo',
+    armorBonus: 2,
+    dexBonus: 'Total',
+    effect: 'Bolsos de saque rápido: pegar uma ferramenta ninja guardada é ação livre',
+    category: 'Leve',
+    houseRule: true,
+  },
 ]
 
 export const GEAR: GearItem[] = [
@@ -139,6 +152,82 @@ export const GEAR: GearItem[] = [
   { name: 'Kit de Rastreamento', cost: '200 ryo', category: 'Kit de Ferramentas' },
   { name: 'Kit de Armadilhas', cost: '200 ryo', category: 'Kit de Ferramentas' },
   { name: 'Kit de Ferreiro de Armas', cost: '200 ryo', category: 'Kit de Ferramentas' },
+
+  // -------------------------------------------------------------------------
+  // Itens da casa.
+  //
+  // O equipamento inicial das classes e os pacotes de equipamento citam estes
+  // nomes, mas o capítulo de Equipamento não traz ficha para eles (ver
+  // docs/rules/00-observacoes.md, item 13d). Preço e efeito foram definidos
+  // para a mesa, sempre ancorados em um item que o manual já precifica, e
+  // ficam marcados com houseRule para não se passarem por regra do livro.
+  // -------------------------------------------------------------------------
+  {
+    // Âncora: Bomba de Pimenta (150 ryo) faz névoa de 3m por 1 min com um
+    // benefício extra. A de fumaça só esconde, então custa metade.
+    name: 'Bomba de Fumaça',
+    cost: '75 ryo',
+    effect: 'Ação padrão, alcance 9m: nuvem de 4m de raio por 1 minuto. A área fica levemente obscurecida — desvantagem em Percepção pela visão através dela, e quem está dentro fica escondido de quem olha de fora',
+    category: 'Explosivos',
+    houseRule: true,
+  },
+  {
+    // Âncora: Corda (15m) custa 20 ryo; o tecido é ferramenta de contenção do
+    // Ninja Médico, então vale um pouco mais que corda comum.
+    name: 'Tecido de Contenção',
+    cost: '60 ryo',
+    effect: 'Ação padrão em alvo adjacente Médio ou menor: teste de resistência de Força ou fica Imobilizado. O alvo repete o teste no fim de cada turno dele; ao passar, o tecido se rompe e é perdido',
+    category: 'Utilitário',
+    houseRule: true,
+  },
+  {
+    // Âncora: Papel para Selos custa 15 ryo. O pergaminho comporta mais que
+    // uma folha, então 20.
+    name: 'Pergaminho em Branco',
+    cost: '20 ryo',
+    effect: 'Pergaminho virgem para registrar um selo, um jutsu ou um contrato. Ao ser usado, deixa de estar em branco',
+    category: 'Utilitário',
+    houseRule: true,
+  },
+  // Pergaminhos de jutsu: o Especialista em Ninjutsu começa com um de Rank-D.
+  // O preço sobe junto com o rank, e a família inteira entra para a loja ter
+  // o que oferecer conforme o grupo avança. Âncora: um Kit de Ferramentas
+  // custa 200 ryo, então o pergaminho mais barato custa um pouco mais.
+  {
+    name: 'Pergaminho de Ninjutsu (Rank-D)',
+    cost: '250 ryo',
+    effect: 'Estudo de 8 horas: aprende um jutsu Rank-D que você já poderia aprender (rank, clã e afinidade). O pergaminho se desfaz ao ser usado',
+    category: 'Pergaminhos de Jutsu',
+    houseRule: true,
+  },
+  {
+    name: 'Pergaminho de Ninjutsu (Rank-C)',
+    cost: '750 ryo',
+    effect: 'Estudo de 8 horas: aprende um jutsu Rank-C que você já poderia aprender. O pergaminho se desfaz ao ser usado',
+    category: 'Pergaminhos de Jutsu',
+    houseRule: true,
+  },
+  {
+    name: 'Pergaminho de Ninjutsu (Rank-B)',
+    cost: '1500 ryo',
+    effect: 'Estudo de 8 horas: aprende um jutsu Rank-B que você já poderia aprender. O pergaminho se desfaz ao ser usado',
+    category: 'Pergaminhos de Jutsu',
+    houseRule: true,
+  },
+  {
+    name: 'Pergaminho de Ninjutsu (Rank-A)',
+    cost: '3000 ryo',
+    effect: 'Estudo de 8 horas: aprende um jutsu Rank-A que você já poderia aprender. O pergaminho se desfaz ao ser usado',
+    category: 'Pergaminhos de Jutsu',
+    houseRule: true,
+  },
+  {
+    name: 'Pergaminho de Ninjutsu (Rank-S)',
+    cost: '6000 ryo',
+    effect: 'Estudo de 8 horas: aprende um jutsu Rank-S que você já poderia aprender. O pergaminho se desfaz ao ser usado',
+    category: 'Pergaminhos de Jutsu',
+    houseRule: true,
+  },
 ]
 
 export const EQUIPMENT_PACKS: { name: string; contents: string }[] = [

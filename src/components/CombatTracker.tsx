@@ -9,9 +9,13 @@ import {
   setCombatOrder,
   startCombat,
   updateCharacterDirect,
+  updateCompanion,
   updateNPC,
 } from '../lib/store'
-import type { ActiveCondition, Character, CombatParticipant, GameTable, NPC } from '../types'
+import type { ActiveCondition, Character, CombatParticipant, Companion, GameTable, NPC } from '../types'
+
+/** Quem pode entrar na ordem de combate: ficha, NPC ou ficha temporária. */
+type Combatente = Character | NPC | Companion
 
 /**
  * Rastreador de combate.
@@ -24,7 +28,18 @@ import type { ActiveCondition, Character, CombatParticipant, GameTable, NPC } fr
  * as condições com prazo perdem uma rodada e as que zeram caem sozinhas (ver
  * store.advanceCombatTurn) — o mestre não precisa varrer a lista toda turno.
  */
-export function CombatTracker({ table, characters, npcs }: { table: GameTable; characters: Character[]; npcs: NPC[] }) {
+export function CombatTracker({
+  table,
+  characters,
+  npcs,
+  companions,
+}: {
+  table: GameTable
+  characters: Character[]
+  npcs: NPC[]
+  /** Clones e invocações também entram na ordem: eles agem no combate. */
+  companions: Companion[]
+}) {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [initiatives, setInitiatives] = useState<Record<string, number>>({})
   const [surprised, setSurprised] = useState<Record<string, boolean>>({})
@@ -34,13 +49,21 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
   const [condRef, setCondRef] = useState<string | null>(null)
 
   const participants = [
-    ...characters.map((c) => ({ ref: `character:${c.id}`, name: c.name, entity: c as Character | NPC })),
-    ...npcs.map((n) => ({ ref: `npc:${n.id}`, name: n.name, entity: n as Character | NPC })),
+    ...characters.map((c) => ({ ref: `character:${c.id}`, name: c.name, entity: c as Combatente })),
+    ...npcs.map((n) => ({ ref: `npc:${n.id}`, name: n.name, entity: n as Combatente })),
+    // O clone age no turno de quem o criou, mas na prática a mesa quer ver a
+    // peça na lista para marcar dano e condição nela.
+    ...companions.map((c) => ({
+      ref: `companion:${c.id}`,
+      name: `${c.name} (de ${c.ownerName})`,
+      entity: c as Combatente,
+    })),
   ]
 
-  function entidadeDe(ref: string) {
+  function entidadeDe(ref: string): Combatente | undefined {
     const [kind, id] = ref.split(':')
     if (kind === 'character') return characters.find((c) => c.id === id)
+    if (kind === 'companion') return companions.find((c) => c.id === id)
     return npcs.find((n) => n.id === id)
   }
 
@@ -50,7 +73,10 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
     return entidadeDe(p.ref)?.name ?? p.name
   }
 
-  function rollFor(ref: string, entity: Character | NPC) {
+  function rollFor(ref: string, entity: Combatente) {
+    // Personagem rola pela regra da classe; NPC e clone rolam o d20 seco —
+    // o clone é comandado no turno do dono, então a iniciativa dele é só
+    // para a mesa ter uma ordem.
     const value = 'classId' in entity ? rollInitiative(entity) : 1 + Math.floor(Math.random() * 20)
     setInitiatives((prev) => ({ ...prev, [ref]: value }))
     setSelected((prev) => ({ ...prev, [ref]: true }))
@@ -114,6 +140,8 @@ export function CombatTracker({ table, characters, npcs }: { table: GameTable; c
     const [kind, id] = ref.split(':')
     if (kind === 'character') {
       await updateCharacterDirect(table.id, id, { hp: { ...alvo.hp, current: novo }, ...(novo === 0 ? { isAlive: false } : {}) })
+    } else if (kind === 'companion') {
+      await updateCompanion(table.id, id, { hp: { ...alvo.hp, current: novo } })
     } else {
       await updateNPC(table.id, id, { hp: { ...alvo.hp, current: novo } })
     }

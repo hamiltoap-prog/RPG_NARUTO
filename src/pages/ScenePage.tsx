@@ -28,6 +28,7 @@ import {
   cleanupOldPings,
   deleteSceneLibraryItem,
   listenCharacters,
+  listenCompanions,
   listenNPCs,
   listenScene,
   listenSceneLibrary,
@@ -42,6 +43,7 @@ import { CREATURE_SIZES, DEFAULT_STAGE_ASPECT, PING_LIFETIME_MS, SCENE_TOKEN_LAB
 import type {
   Character,
   GameTable,
+  Companion,
   NPC,
   Scene,
   SceneFog,
@@ -100,6 +102,7 @@ export function ScenePage() {
   const [sceneState, setSceneState] = useState<Scene | null | undefined>(undefined)
   const [characters, setCharacters] = useState<Character[]>([])
   const [npcs, setNpcs] = useState<NPC[]>([])
+  const [companions, setCompanions] = useState<Companion[]>([])
   const [pings, setPings] = useState<ScenePing[]>([])
   const [library, setLibrary] = useState<SceneLibraryItem[]>([])
 
@@ -136,6 +139,7 @@ export function ScenePage() {
 
   useEffect(() => listenCharacters(tableId, setCharacters), [tableId])
   useEffect(() => listenNPCs(tableId, setNpcs), [tableId])
+  useEffect(() => listenCompanions(tableId, setCompanions), [tableId])
   useEffect(() => listenScenePings(tableId, setPings), [tableId])
 
   const isGM = Boolean(uid && table && table.gmUid === uid)
@@ -228,7 +232,18 @@ export function ScenePage() {
     if (tool !== 'mover') return false
     if (isGM) return true
     if (!table?.playersMoveTokens) return false
-    return t.refType === 'character' && Boolean(myCharacter) && t.refId === myCharacter?.id
+    return ehMinha(t)
+  }
+
+  /** A peça é do jogador que está olhando? Vale para a ficha dele e para os
+   * clones e invocações que ele criou — o clone age no turno dele. */
+  function ehMinha(t: SceneToken) {
+    if (!myCharacter) return false
+    if (t.refType === 'character') return t.refId === myCharacter.id
+    if (t.refType === 'companion') {
+      return companions.some((c) => c.id === t.refId && c.ownerCharacterId === myCharacter.id)
+    }
+    return false
   }
 
   function onTokenPointerDown(e: React.PointerEvent, token: SceneToken) {
@@ -372,12 +387,34 @@ export function ScenePage() {
   const boardTokens = scene.tokens.filter((t) => t.onBoard !== false)
   const stagedTokens = scene.tokens.filter((t) => t.onBoard === false)
 
+  /** A ficha por trás da peça: personagem, NPC ou ficha temporária. */
+  function fichaDaPeca(t: SceneToken): { name: string; hp: { current: number; max: number } } | undefined {
+    if (t.refType === 'character') return characters.find((c) => c.id === t.refId)
+    if (t.refType === 'npc') return npcs.find((n) => n.id === t.refId)
+    if (t.refType === 'companion') return companions.find((c) => c.id === t.refId)
+    return undefined
+  }
+
   /** A peça guarda o nome de quando foi criada; se a ficha foi renomeada
    * depois, quem manda é o nome de agora. */
   function rotuloDe(t: SceneToken) {
-    const ficha = t.refType === 'character' ? characters.find((c) => c.id === t.refId) : npcs.find((n) => n.id === t.refId)
-    return ficha?.name ?? t.label
+    return fichaDaPeca(t)?.name ?? t.label
   }
+
+  /**
+   * Faxina das peças temporárias: clone desfeito (ou que chegou a 0 PV) some
+   * do mapa. Só o mestre escreve a cena, então só ele faz a limpeza — os
+   * outros clientes recebem pelo snapshot.
+   */
+  useEffect(() => {
+    if (!isGM || !sceneState) return
+    const vivas = new Set(companions.map((c) => c.id))
+    const sobrando = (sceneState.tokens ?? []).filter(
+      (t) => t.refType === 'companion' && t.refId && !vivas.has(t.refId),
+    )
+    if (sobrando.length === 0) return
+    void saveSceneTokens(tableId, (sceneState.tokens ?? []).filter((t) => !sobrando.includes(t)))
+  }, [isGM, companions, sceneState, tableId])
 
   const litTokens = boardTokens.filter((t) => {
     if (t.refType !== 'character') return false
@@ -391,7 +428,7 @@ export function ScenePage() {
    * os seus estão. O terreno não explorado esconde qualquer peça — menos a
    * sua própria, que é como o jogador se localiza. */
   function hiddenInTheDark(t: SceneToken) {
-    const isMine = t.refType === 'character' && Boolean(myCharacter) && t.refId === myCharacter?.id
+    const isMine = ehMinha(t)
     if (fog?.enabled && !isMine && !isRevealed(fog, t.x, t.y)) return true
     if (t.kind !== 'monster' && t.kind !== 'boss') return false
     if (locationLit) return false
@@ -584,7 +621,7 @@ export function ScenePage() {
             {/* 3. Peças */}
             {visibleTokens.map((t) => {
               const width = tokenWidth(t, columns)
-              const ref = t.refType === 'character' ? characters.find((c) => c.id === t.refId) : npcs.find((n) => n.id === t.refId)
+              const ref = fichaDaPeca(t)
               const hp = ref?.hp
               const combatRef = t.refType && t.refId ? `${t.refType}:${t.refId}` : undefined
               const isActive = Boolean(activeCombatant && combatRef && activeCombatant === combatRef)
@@ -599,9 +636,14 @@ export function ScenePage() {
                   title={rotuloDe(t)}
                 >
                   <div
-                    className={`relative aspect-square overflow-hidden rounded-full border-2 ${
-                      isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-[#ffffff]/70'
-                    } ${t.kind === 'boss' || naLuta?.boss ? 'ring-2 ring-red-500/80' : ''}`}
+                    className={`relative aspect-square overflow-hidden rounded-full ${
+                      // Clone e invocação usam borda tracejada: no meio de uma
+                      // luta com quatro clones iguais, é o que diz de longe
+                      // qual peça é o original.
+                      t.temporary ? 'border-2 border-dashed' : 'border-2'
+                    } ${isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-[#ffffff]/70'} ${
+                      t.kind === 'boss' || naLuta?.boss ? 'ring-2 ring-red-500/80' : ''
+                    }`}
                     style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
                   >
                     {t.imageUrl ? (
@@ -849,7 +891,10 @@ function GMPanel({
                       timeOfDay: scene.timeOfDay,
                       locationLit: scene.locationLit,
                       fog: scene.fog,
-                      tokens: scene.tokens,
+                      // Clone e invocação valem para a cena de agora: o
+                      // retrato guardado sai sem eles, então carregar esta
+                      // cena depois não ressuscita ninguém.
+                      tokens: scene.tokens.filter((t) => !t.temporary),
                     },
                   })
                   setLibLabel('')
@@ -1019,7 +1064,9 @@ function GMPanel({
             <Input placeholder="Nome da peça" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="w-40" />
             <Input placeholder="URL da imagem" value={customUrl} onChange={(e) => setCustomUrl(e.target.value)} className="w-56" />
             <Select value={customKind} onChange={(e) => setCustomKind(e.target.value as SceneTokenKind)} className="w-32">
-              {(Object.keys(SCENE_TOKEN_LABELS) as SceneTokenKind[]).map((k) => (
+              {/* "companion" não entra aqui: clone e invocação nascem do
+                  jutsu, na ficha de quem lançou, não à mão. */}
+              {(Object.keys(SCENE_TOKEN_LABELS) as SceneTokenKind[]).filter((k) => k !== 'companion').map((k) => (
                 <option key={k} value={k}>
                   {SCENE_TOKEN_LABELS[k]}
                 </option>

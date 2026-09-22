@@ -23,6 +23,7 @@ import {
   deleteCharacter,
   listenCharacters,
   listenMissions,
+  listenCompanions,
   listenNPCs,
   listenPendingRequests,
   listenPendingChakraGifts,
@@ -32,7 +33,7 @@ import {
   updateTable,
 } from '../lib/store'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
-import type { Character, GameTable, Mission, NPC, RequestableField } from '../types'
+import type { Character, Companion, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
 type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 'som' | 'sobrevivencia' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
@@ -40,6 +41,7 @@ type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [npcs, setNpcs] = useState<NPC[]>([])
+  const [companions, setCompanions] = useState<Companion[]>([])
   const [missions, setMissions] = useState<Mission[]>([])
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingRolls, setPendingRolls] = useState(0)
@@ -63,6 +65,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
   useEffect(() => listenCharacters(table.id, setCharacters), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
+  useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
   useEffect(() => listenMissions(table.id, setMissions), [table.id])
   useEffect(() => listenPendingRequests(table.id, (reqs) => setPendingCount(reqs.length)), [table.id])
   useEffect(() => listenPendingRollRequests(table.id, (reqs) => setPendingRolls(reqs.length)), [table.id])
@@ -217,7 +220,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
         </div>
       )}
 
-      {tab === 'combate' && <CombatTracker table={table} characters={characters} npcs={npcs} />}
+      {tab === 'combate' && <CombatTracker table={table} characters={characters} npcs={npcs} companions={companions} />}
 
       {tab === 'npcs' && <NpcManager
           tableId={table.id}
