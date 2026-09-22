@@ -96,9 +96,15 @@ export function CompanionCard({
 
   const entrada = useMemo(() => (jutsuClone ? findCatalogEntry(jutsuClone) : undefined), [jutsuClone])
   const leitura = useMemo(() => (entrada ? readClone(entrada) : null), [entrada])
+  // Ao escolher o jutsu, já vem o máximo que o chakra da ficha PAGA — não o
+  // máximo que o jutsu permite. Um genin com 12 de chakra escolhendo um jutsu
+  // de 4 clones a 6 cada via o botão nascer desligado, sem dizer por quê.
   useEffect(() => {
-    if (leitura) setQuantos(Math.max(1, leitura.maxClones))
-  }, [leitura])
+    if (!leitura) return
+    const porClone = leitura.costPerClone ?? 0
+    const cabem = porClone > 0 ? Math.floor(character.chakra.current / porClone) : leitura.maxClones
+    setQuantos(Math.max(1, Math.min(leitura.maxClones, cabem)))
+  }, [leitura, character.chakra.current])
 
   const custoClone = leitura
     ? (leitura.costPerClone ?? Number((entrada?.cost ?? '').match(/\d+/)?.[0] ?? 0)) * (leitura.costPerClone ? quantos : 1)
