@@ -96,6 +96,38 @@ export function mapTransform(map?: SceneMap): string {
 
 export const EMPTY_MAP: SceneMap = { rotation: 0, zoom: 1, offsetX: 0, offsetY: 0, fit: 'contain' }
 
+/**
+ * Até onde o mapa precisa poder escorregar para a borda dele aparecer.
+ *
+ * O `transform` monta `translate(...) rotate(...) scale(...)`, e nessa ordem o
+ * translate é o de FORA: a porcentagem vale sobre o tamanho de layout da
+ * imagem, o de antes do zoom. Então com zoom 3 a imagem tem 3× a largura do
+ * palco, sobra uma largura inteira de cada lado, e mover "50%" move meia
+ * largura de palco — não chega nem perto da borda.
+ *
+ * A conta: com zoom `z`, sobra `(z − 1) / 2` de imagem para cada lado, e é
+ * exatamente esse o deslocamento que traz a borda para dentro. Girado, o
+ * retângulo ocupa mais espaço no eixo — `|cos| + |sin|` é o quanto a caixa
+ * dele cresce, de 1 (reto) a √2 (45°).
+ *
+ * Sobra uma folga de 0,15 para o mestre poder passar um pouco da borda (às
+ * vezes a cena interessante está no canto e uma tarja preta não incomoda), e
+ * um piso de 0,5 para o controle continuar útil com zoom 1 ou menos.
+ */
+export function mapOffsetLimit(map?: SceneMap): number {
+  const { zoom = 1, rotation = 0 } = map ?? {}
+  const r = (rotation * Math.PI) / 180
+  const caixa = Math.abs(Math.cos(r)) + Math.abs(Math.sin(r))
+  return Math.max(0.5, (zoom * caixa - 1) / 2 + 0.15)
+}
+
+/** Prende o deslocamento ao que o zoom de agora permite. */
+export function clampMapOffsets(map: SceneMap): SceneMap {
+  const limite = mapOffsetLimit(map)
+  const preso = (v: number) => Math.max(-limite, Math.min(limite, v))
+  return { ...map, offsetX: preso(map.offsetX ?? 0), offsetY: preso(map.offsetY ?? 0) }
+}
+
 /* ---------------------------------------------------------------------------
  * Mexer no mapa sem descolar a névoa e as peças.
  *

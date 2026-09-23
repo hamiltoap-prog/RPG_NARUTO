@@ -216,3 +216,32 @@ marcado como caído para sempre, e ninguém entendia por quê.
 Na lista de combate, o selo de caído de um **personagem** segue o status, não o
 PV: se o mestre pôs alguém de pé com 0 PV, a linha não pode continuar dizendo
 que ele está caído. NPC e ficha temporária não têm status, então ali vale o PV.
+
+---
+
+## Enquadrar o mapa
+
+O `transform` da imagem é `translate(...) rotate(...) scale(...)`, e nessa
+ordem o `translate` é o de **fora**: a porcentagem vale sobre o tamanho de
+layout da imagem, o de antes do zoom. Com zoom 3 a imagem tem 3× a largura do
+palco, sobra uma largura inteira de cada lado, e mover "50%" move meia largura
+de palco — não chega nem perto da borda.
+
+Por isso o curso de **X** e **Y** acompanha o zoom em vez de ser fixo:
+
+| zoom | alcance de X e Y |
+|---|---|
+| 1 (ou menos) | ±0,50 (piso, para o controle seguir útil) |
+| 3 | ±1,15 |
+| 6 (o máximo) | ±2,65 |
+
+A conta é `(zoom × caixa − 1) / 2`, onde `caixa` é `|cos giro| + |sin giro|` —
+o quanto o retângulo cresce no eixo ao girar, de 1 (reto) a √2 (45°). Sobra
+uma folga de 0,15 para passar um pouco da borda quando a cena interessante
+está no canto.
+
+**Diminuir o zoom prende o deslocamento de volta.** Sem isso, um
+enquadramento feito com zoom alto ficaria gravado, e ao voltar para zoom 1 o
+mapa sumiria do palco com o controle já no fim do curso, sem jeito de trazer
+de volta. O botão **centralizar** zera os dois eixos sem mexer no zoom nem no
+giro.

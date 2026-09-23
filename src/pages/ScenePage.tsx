@@ -21,6 +21,8 @@ import {
   distanceInSquares,
   fitStage,
   gridColumns,
+  clampMapOffsets,
+  mapOffsetLimit,
   mapTransform,
   remapTokens,
   snapToGrid,
@@ -817,6 +819,7 @@ function GMPanel({
   const [libLabel, setLibLabel] = useState('')
 
   const map = scene.map ?? EMPTY_MAP
+  const limiteDoMapa = mapOffsetLimit(map)
   const aspect = stageAspect(scene)
 
   /** Mesma regra do palco: ficha renomeada manda no rótulo da peça. */
@@ -850,7 +853,10 @@ function GMPanel({
 
   function ajustarMapa(patch: Partial<SceneMap>) {
     const base = baseAjuste.current ?? { map: scene.map, fog: scene.fog, tokens: scene.tokens }
-    const proximo = { ...(base.map ?? EMPTY_MAP), ...patch }
+    // Diminuir o zoom encolhe o quanto o mapa pode escorregar: sem prender
+    // aqui, um deslocamento grande ficaria gravado e a imagem sairia do palco
+    // com o controle já no fim do curso, sem jeito de trazer de volta.
+    const proximo = clampMapOffsets({ ...(base.map ?? EMPTY_MAP), ...patch })
     persist({
       ...scene,
       map: proximo,
@@ -976,12 +982,15 @@ function GMPanel({
                 onChange={(e) => ajustarMapa({ rotation: Number(e.target.value) })}
               />
             </label>
-            <label className="flex items-center gap-1">
+            {/* O alcance de X e Y acompanha o zoom: com a imagem 3× maior que
+                o palco, sobra uma largura inteira de cada lado, e um curso
+                fixo de ±50% nunca chegaria à borda. */}
+            <label className="flex items-center gap-1" title={`alcance atual: ±${limiteDoMapa.toFixed(2)} de palco`}>
               X
               <input
                 type="range"
-                min={-0.5}
-                max={0.5}
+                min={-limiteDoMapa}
+                max={limiteDoMapa}
                 step={0.01}
                 value={map.offsetX ?? 0}
                 onPointerDown={comecarAjuste}
@@ -990,13 +999,16 @@ function GMPanel({
                 onKeyUp={terminarAjuste}
                 onChange={(e) => ajustarMapa({ offsetX: Number(e.target.value) })}
               />
+              <span className="w-10 text-right font-mono text-[10px] text-orange-400/60">
+                {((map.offsetX ?? 0) * 100).toFixed(0)}%
+              </span>
             </label>
-            <label className="flex items-center gap-1">
+            <label className="flex items-center gap-1" title={`alcance atual: ±${limiteDoMapa.toFixed(2)} de palco`}>
               Y
               <input
                 type="range"
-                min={-0.5}
-                max={0.5}
+                min={-limiteDoMapa}
+                max={limiteDoMapa}
                 step={0.01}
                 value={map.offsetY ?? 0}
                 onPointerDown={comecarAjuste}
@@ -1005,7 +1017,18 @@ function GMPanel({
                 onKeyUp={terminarAjuste}
                 onChange={(e) => ajustarMapa({ offsetY: Number(e.target.value) })}
               />
+              <span className="w-10 text-right font-mono text-[10px] text-orange-400/60">
+                {((map.offsetY ?? 0) * 100).toFixed(0)}%
+              </span>
             </label>
+            <Button
+              variant="ghost"
+              className="px-2 py-0.5 text-[11px]"
+              title="Volta o mapa para o centro, sem mexer no zoom nem no giro"
+              onClick={() => ajustarMapa({ offsetX: 0, offsetY: 0 })}
+            >
+              centralizar
+            </Button>
             <label className="flex items-center gap-1">
               quadrados de largura
               <Input

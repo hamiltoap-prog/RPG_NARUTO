@@ -1,4 +1,4 @@
-import { applyMapTransform, invertMapTransform, remapPoint, snapToGrid, spotsAround } from '../sceneGeometry'
+import { MAX_MAP_ZOOM, applyMapTransform, clampMapOffsets, invertMapTransform, mapOffsetLimit, remapPoint, snapToGrid, spotsAround } from '../sceneGeometry'
 
 const aspect = 16 / 9
 const pontos = [
@@ -107,3 +107,52 @@ console.log('OK: a névoa acompanha o mapa e volta com ele')
 }
 
 console.log('OK: checagens de posicionamento de clones passaram')
+
+// ---------------------------------------------------------------------------
+// Alcance de X e Y: o mapa tem que poder chegar na própria borda
+//
+// O transform é `translate(...) rotate(...) scale(...)`, e nessa ordem o
+// translate é o de FORA: a porcentagem vale sobre o tamanho de layout da
+// imagem, o de antes do zoom. Com zoom 3 a imagem tem 3× a largura do palco,
+// sobra uma largura inteira de cada lado, e o curso fixo de ±0,5 que existia
+// antes parava no meio do caminho.
+{
+  const okg = (c: boolean, m: string) => {
+    if (!c) throw new Error('FALHOU: ' + m)
+  }
+
+  // Sem zoom não há o que alcançar: fica o piso, para o controle seguir útil.
+  okg(mapOffsetLimit({ zoom: 1 }) === 0.5, `zoom 1 devia manter o piso 0,5, veio ${mapOffsetLimit({ zoom: 1 })}`)
+  okg(mapOffsetLimit({ zoom: 0.4 }) === 0.5, 'zoom menor que 1 também fica no piso')
+  okg(mapOffsetLimit(undefined) === 0.5, 'mapa sem ajuste nenhum fica no piso')
+
+  // Com zoom, o alcance cobre a sobra de imagem: (z − 1) / 2 de cada lado.
+  for (const z of [2, 3, 4, 6]) {
+    const precisa = (z - 1) / 2
+    const limite = mapOffsetLimit({ zoom: z })
+    okg(limite >= precisa, `zoom ${z} precisa de ±${precisa}, o controle só vai a ±${limite}`)
+  }
+  okg(mapOffsetLimit({ zoom: MAX_MAP_ZOOM }) >= (MAX_MAP_ZOOM - 1) / 2, 'o zoom máximo também alcança a borda')
+
+  // Girado, a imagem ocupa mais espaço no eixo e precisa de mais curso.
+  okg(mapOffsetLimit({ zoom: 3, rotation: 45 }) > mapOffsetLimit({ zoom: 3, rotation: 0 }), 'girado a 45° precisa de mais alcance')
+  okg(
+    Math.abs(mapOffsetLimit({ zoom: 3, rotation: 90 }) - mapOffsetLimit({ zoom: 3, rotation: 0 })) < 1e-9,
+    'girado a 90° a caixa é a mesma, o alcance também',
+  )
+  okg(
+    Math.abs(mapOffsetLimit({ zoom: 3, rotation: 225 }) - mapOffsetLimit({ zoom: 3, rotation: 45 })) < 1e-9,
+    'giro é simétrico: 225° pede o mesmo alcance que 45°',
+  )
+
+  // Diminuir o zoom não pode deixar deslocamento gravado fora do curso.
+  const longe = clampMapOffsets({ zoom: 6, rotation: 0, offsetX: 3, offsetY: -3 })
+  okg(Math.abs(longe.offsetX!) <= mapOffsetLimit(longe), 'X preso ao alcance do zoom')
+  const voltou = clampMapOffsets({ ...longe, zoom: 1 })
+  okg(voltou.offsetX === 0.5 && voltou.offsetY === -0.5, `ao voltar para zoom 1, o deslocamento vem junto, veio ${voltou.offsetX}/${voltou.offsetY}`)
+  const dentro = clampMapOffsets({ zoom: 4, offsetX: 0.3, offsetY: -0.2 })
+  okg(dentro.offsetX === 0.3 && dentro.offsetY === -0.2, 'o que já cabe não é mexido')
+
+  console.log(`alcance do mapa: zoom 1 -> ±0,50 · zoom 3 -> ±${mapOffsetLimit({ zoom: 3 }).toFixed(2)} · zoom ${MAX_MAP_ZOOM} -> ±${mapOffsetLimit({ zoom: MAX_MAP_ZOOM }).toFixed(2)}`)
+  console.log('OK: o mapa alcança a própria borda em qualquer zoom')
+}
