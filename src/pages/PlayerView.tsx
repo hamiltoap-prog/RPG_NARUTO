@@ -15,6 +15,7 @@ import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
 import { efeitoDaCondicao } from '../lib/conditions'
+import { normalizeImageUrl } from '../lib/imageUrl'
 import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
@@ -268,7 +269,7 @@ function HeaderCard({
                   <Button
                     className="flex-1"
                     onClick={async () => {
-                      await onSubmit({ imageUrl: imageDraft.trim() }, 'Alterar imagem do personagem')
+                      await onSubmit({ imageUrl: normalizeImageUrl(imageDraft) ?? '' }, 'Alterar imagem do personagem')
                       setEditingImage(false)
                     }}
                   >

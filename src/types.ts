@@ -265,6 +265,9 @@ export interface Character {
   /** Condição única, como a ficha sempre teve. Continua valendo para o
    * seletor da ficha; as várias com prazo vivem em `conditions`. */
   condition: string
+  /** Peça no mapa: PNG sem fundo e qual imagem está valendo (só o mestre). */
+  tokenUrl?: string
+  tokenMode?: TokenMode
   /**
    * Condições pegando na criatura, com o prazo de cada uma.
    *
@@ -350,6 +353,9 @@ export interface NPC {
    * testes do Kuchiyose ("1d4 + atributo bruto contra o próprio PR"). */
   summonSize?: SummonSizeKey
   attributes?: Attributes
+  /** Peça no mapa — ver TokenArt. */
+  tokenUrl?: string
+  tokenMode?: TokenMode
   /** Condições pegando na criatura — ver Character.conditions. */
   conditions?: ActiveCondition[]
 }
@@ -429,6 +435,12 @@ export interface PuppetSpec {
   jutsus: PuppetJutsu[]
   /** Itens acoplados e seus efeitos, em texto livre. */
   gearText?: string
+  /** Retrato da marionete, por link. Marionete é objeto: sem imagem, a peça
+   * no mapa fica com as iniciais do nome, que não diz nada. */
+  imageUrl?: string
+  /** Peça no mapa — ver TokenArt. */
+  tokenUrl?: string
+  tokenMode?: TokenMode
 }
 
 export type CompanionKind = 'clone' | 'summon' | 'puppet'
@@ -490,6 +502,12 @@ export interface Companion {
   weapons?: Weapon[]
   /** O clone pode atacar desarmado, como qualquer pessoa. */
   unarmedDamage?: number
+  /**
+   * Peça no mapa — ver TokenArt. O clone nasce com as duas imagens do dono,
+   * porque um clone é a cara do original; a marionete traz as da forja.
+   */
+  tokenUrl?: string
+  tokenMode?: TokenMode
   /** Condições pegando na ficha — ver Character.conditions. */
   conditions?: ActiveCondition[]
 }
@@ -630,6 +648,28 @@ export const CREATURE_SIZES = [
   { key: 'enorme', label: 'Enorme', size: 0.17, squares: 3 },
   { key: 'colossal', label: 'Colossal', size: 0.26, squares: 4 },
 ] as const
+
+/**
+ * A peça no mapa pode ser o retrato da ficha ou um PNG sem fundo.
+ *
+ * O retrato redondo serve para reconhecer a pessoa na lista; em cima do mapa,
+ * um PNG recortado fica muito melhor — e é como as mesas de verdade jogam. As
+ * duas imagens convivem: a ficha guarda as duas e diz qual está valendo.
+ *
+ * Quem põe a imagem de peça e quem troca de uma para a outra é SÓ O MESTRE,
+ * em qualquer ficha — personagem, NPC, criatura ou marionete. Por isso
+ * `tokenUrl` e `tokenMode` não entram em REQUESTABLE_FIELDS: não há pedido de
+ * jogador que mexa neles.
+ */
+export type TokenMode = 'ficha' | 'png'
+
+/** O que toda ficha que vira peça no mapa carrega de imagem. */
+export interface TokenArt {
+  /** PNG sem fundo, por link, para usar em cima do mapa. */
+  tokenUrl?: string
+  /** Qual imagem está valendo na peça. Ausente = o retrato da ficha. */
+  tokenMode?: TokenMode
+}
 
 export interface SceneToken {
   id: string

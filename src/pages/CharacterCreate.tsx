@@ -5,6 +5,8 @@ import { CLASSES } from '../data/classes'
 import { JUTSU_CATALOG } from '../data/jutsus'
 import { effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { averageStartingWealth, calculateDerivedStats, totalAttributes } from '../lib/characterMath'
+import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
+import { AvisoDoDrive } from '../components/AvisoDoDrive'
 import {
   applyStartingPicks,
   armorClassFor,
@@ -293,7 +295,7 @@ export function CharacterCreate({
         jutsus,
         proficiencies: [...clan.skillProficiencies],
         condition: 'Normal',
-        imageUrl: imageUrl.trim(),
+        imageUrl: normalizeImageUrl(imageUrl) ?? '',
         ryo: averageStartingWealth(charClass.startingWealth),
         notes: '',
         createdAt: now,
@@ -894,7 +896,13 @@ export function CharacterCreate({
           <SectionTitle>Imagem e Resumo</SectionTitle>
           <div className="flex items-center gap-3">
             <Avatar url={imageUrl} name={characterName} size={64} />
-            <Input placeholder="Cole a URL de uma imagem (opcional)" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+            <Input
+              placeholder="Cole a URL de uma imagem (opcional)"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              onBlur={() => setImageUrl(normalizeImageUrl(imageUrl) ?? '')}
+            />
+            {ehLinkDoDrive(imageUrl) && <AvisoDoDrive />}
           </div>
           <div className="grid gap-2 text-sm text-orange-200 sm:grid-cols-2">
             <p>

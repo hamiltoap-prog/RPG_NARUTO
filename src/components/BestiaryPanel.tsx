@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Textarea } from './ui'
 import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from '../lib/id'
+import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
+import { AvisoDoDrive } from './AvisoDoDrive'
 import { createNPC, deleteBestiaryEntry, listenBestiary, saveBestiaryEntry } from '../lib/store'
 import { summonSize } from '../lib/summon'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CREATURE_KIND_LABELS, SUMMON_RANKS, SUMMON_SIZES } from '../types'
@@ -346,7 +348,13 @@ function FichaCriatura({
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
           URL da arte
-          <Input value={d.imageUrl ?? ''} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://..." />
+          <Input
+            value={d.imageUrl ?? ''}
+            onChange={(e) => set('imageUrl', e.target.value)}
+            onBlur={() => set('imageUrl', normalizeImageUrl(d.imageUrl) ?? '')}
+            placeholder="https://... (link do Drive também serve)"
+          />
+          {ehLinkDoDrive(d.imageUrl) && <AvisoDoDrive />}
         </label>
         {d.imageUrl && <Avatar url={d.imageUrl} name={d.name || '?'} size={44} />}
       </div>

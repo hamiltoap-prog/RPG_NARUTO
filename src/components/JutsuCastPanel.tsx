@@ -82,10 +82,12 @@ export function alvosDaMesa(
     return todos.filter((a) => naLuta.has(a.ref))
   }
 
+  // Sem cena montada não há peça nenhuma no tabuleiro, então não há alvo: a
+  // mesa decidiu que a tela de jogo é o que diz quem está no alcance, e "não
+  // abriu a tela ainda" não vira permissão para mirar em todo mundo.
   const scene = contexto?.scene
-  if (!scene) return todos
   const noTabuleiro = new Set(
-    (scene.tokens ?? [])
+    (scene?.tokens ?? [])
       .filter((t) => t.onBoard !== false && t.refType && t.refId)
       .map((t) => `${t.refType}:${t.refId}`),
   )
@@ -96,7 +98,9 @@ export function alvosDaMesa(
 export function motivoDaListaDeAlvos(asGM: boolean, table?: GameTable | null, scene?: Scene | null): string {
   if (asGM) return ''
   if (table?.combatActive) return 'Em combate, só quem está na ordem de iniciativa pode ser alvo.'
-  if (!scene) return ''
+  if (!scene || (scene.tokens ?? []).filter((t) => t.onBoard !== false).length === 0) {
+    return 'Ninguém tem peça na tela de jogo, então não há alvo — peça ao mestre para pôr as peças no mapa.'
+  }
   return 'Fora de combate, só quem tem peça na tela de jogo pode ser alvo.'
 }
 
@@ -199,7 +203,10 @@ export function JutsuCastCard({
   }, [arma, entrada])
 
   /** A área que o app leu da descrição — só jutsu tem; arma não. */
-  const area = !arma && entrada ? readJutsu(entrada).area : undefined
+  const lidoDoJutsu = !arma && entrada ? readJutsu(entrada) : undefined
+  const area = lidoDoJutsu?.area
+  /** Jutsu que cura em vez de ferir: o app diz o dado, mas não mexe em PV. */
+  const cura = lidoDoJutsu?.healing
 
   const alvos = alvosDaMesa(mesa, `character:${character.id}`, asGM, { table, scene })
   const motivoAlvos = motivoDaListaDeAlvos(asGM, table, scene)
@@ -413,6 +420,12 @@ export function JutsuCastCard({
               {alvo.name}: CA {alvo.armorClass} · PR {alvo.resistancePoints} · PV {alvo.hp.current}/{alvo.hp.max}
             </p>
           )}
+          {cura && (
+            <p className="text-xs text-emerald-300/80">
+              Este jutsu cura {cura} — cura não é dano. O app não mexe em PV de ninguém aqui: role o dado e peça ao
+              mestre para aplicar.
+            </p>
+          )}
           {entrada && <p className="line-clamp-3 text-xs leading-relaxed text-orange-300/50">{entrada.description}</p>}
         </div>
       )}
@@ -608,7 +621,9 @@ export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: Mesa
       const pecas = await addCompanionTokens(table.id, ficha.id, fichas)
       avisoDasFichas =
         ` — ${fichas.length} ficha(s) temporária(s) criada(s)` +
-        (pecas > 0 ? ` e ${pecas} peça(s) no mapa` : ' (o personagem não está na tela de jogo, então nenhuma peça entrou)')
+        (pecas > 0
+          ? ` e ${pecas} peça(s) no mapa`
+          : ' — as peças ficaram na bandeja da tela de jogo, porque o personagem não está no tabuleiro')
     }
   }
 

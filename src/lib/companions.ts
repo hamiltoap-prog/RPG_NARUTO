@@ -222,7 +222,11 @@ export function buildClones(input: BuildCloneInput): Companion[] {
     unarmedDamage: reading.noActions ? 0 : Math.max(1, 1 + owner.modifiers.strength),
     halfDamage: reading.halfDamage,
     duration: reading.duration,
+    // Clone é a cara do original: leva o retrato E o PNG de peça do dono, para
+    // a peça dele no mapa não destoar da peça de quem o criou.
     imageUrl: owner.imageUrl || undefined,
+    tokenUrl: owner.tokenUrl,
+    tokenMode: owner.tokenMode,
     notes: '',
     createdAt: Date.now(),
   }))
@@ -493,6 +497,11 @@ export function buildPuppet(input: {
     attacks: spec.attacks,
     ownJutsus: spec.jutsus,
     gearText: spec.gearText,
+    // A marionete leva a arte que o mestre pôs na forja: o retrato e, se
+    // houver, o PNG de peça.
+    imageUrl: spec.imageUrl,
+    tokenUrl: spec.tokenUrl,
+    tokenMode: spec.tokenMode,
     halfDamage: false,
     duration: 'Fica em campo até ser guardada ou quebrar',
     usesOwnerChakra: true,

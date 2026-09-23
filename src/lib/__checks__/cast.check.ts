@@ -1,5 +1,5 @@
 import { JUTSU_CATALOG } from '../../data/jutsus'
-import { attackAttribute, effectiveResistance, findCatalogEntry, readJutsu, resolveCast } from '../jutsuCast'
+import { attackAttribute, effectiveResistance, findCatalogEntry, readDamageDie, readHealingDie, readJutsu, resolveCast } from '../jutsuCast'
 import { beatsElement, elementAdvantage } from '../jutsuAccess'
 import type { Character, NPC } from '../../types'
 
@@ -110,6 +110,54 @@ console.log('OK: todas as checagens de lançamento de jutsu passaram')
   console.log(`cobertura da leitura: ${ataque} ataque, ${resistencia} resistência, ${semRolagem} sem rolagem; ${comDano} com dano (de ${t})`)
   ok(ataque + resistencia > t * 0.55, 'devia ler a mecânica de mais da metade do catálogo')
   ok(comDano > t * 0.5, 'devia achar dano em mais da metade')
+}
+
+// --- Dado de dano é só dado de DANO
+//
+// O texto do manual é cheio de NdM que não causam dano nenhum. Pegar o
+// primeiro da descrição enchia jutsu de efeito com dano inventado.
+{
+  const naoEDano: [string, string][] = [
+    ['O alvo recupera 2d4+2 pontos de vida.', 'cura'],
+    ['Role 2d8, curando a criatura alvo pelo total obtido.', 'cura escrita ao contrário'],
+    ['O alvo fica incapaz de moldar chakra por 1d4 rodadas caso falhe.', 'duração'],
+    ['Você pode rolar um 1d4 adicional e adicionar o valor a um teste de perícia.', 'bônus de rolagem'],
+    ['A muralha possui CA igual à sua Inteligência e 8d12 Pontos de Vida.', 'PV de muralha invocada'],
+    ['Você recebe 4d8 de CA temporários até o início do seu próximo turno.', 'CA temporária'],
+    ['Em um acerto, você reduz os pontos de chakra da criatura alvo em 2d8.', 'dreno de chakra'],
+  ]
+  for (const [texto, porque] of naoEDano) {
+    ok(readDamageDie(texto) === undefined, `não devia ler dano em ${porque}: "${texto.slice(0, 50)}..."`)
+  }
+
+  const eDano: [string, string][] = [
+    ['A criatura sofre 4d6 de dano de fogo.', '4d6'],
+    ['Em um acerto, causa 2d10 de dano cortante.', '2d10'],
+    ['O alvo recebe 36 de dano e 3d8 de dano necrótico.', '3d8'],
+    ['O alvo recupera 2d4 pontos de vida e sofre 1d6 de dano necrótico.', '1d6'],
+  ]
+  for (const [texto, esperado] of eDano) {
+    ok(readDamageDie(texto) === esperado, `devia ler ${esperado} em "${texto}", veio ${readDamageDie(texto)}`)
+  }
+
+  ok(readHealingDie('O alvo recupera 1d10 pontos de vida.') === '1d10', 'lê o dado de cura')
+  ok(readHealingDie('A criatura sofre 4d6 de dano.') === undefined, 'dano não é cura')
+
+  // A leitura inteira: jutsu de cura não pode sair com dano.
+  const curativo = readJutsu({ description: 'O alvo recupera 2d8 pontos de vida.', cost: '3 Chakras', classification: 'Ninjutsu' })
+  ok(curativo.damage === undefined, 'jutsu de cura não tem dano')
+  ok(curativo.healing === '2d8', 'jutsu de cura mostra o dado de cura')
+
+  // E no catálogo de verdade: nenhum jutsu com "recupera ... pontos de vida"
+  // logo antes do dado pode estar contando aquele dado como dano.
+  const curasComDano = JUTSU_CATALOG.filter((j) => {
+    const r = readJutsu(j)
+    if (!r.damage) return false
+    const i = (j.description ?? '').indexOf(r.damage)
+    return /\b(recupera|cura|regenera|restaura)\b/i.test((j.description ?? '').slice(Math.max(0, i - 30), i))
+  })
+  ok(curasComDano.length === 0, `cura virando dano em: ${curasComDano.map((j) => j.name).join(', ')}`)
+  console.log('dado de dano: cura, duração, bônus, PV de invocação e dreno de chakra ficam de fora')
 }
 
 // --- Vantagem Elemental (ciclo Fogo > Vento > Raio > Terra > Água > Fogo)

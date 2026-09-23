@@ -228,6 +228,33 @@ export async function setCombatOrder(tableId: string, order: CombatParticipant[]
   await updateTable(tableId, { combatOrder: order })
 }
 
+/** Aponta a vez para um lugar da ordem — usado quando alguém sai da luta. */
+export async function advanceTurnIndex(tableId: string, index: number) {
+  await updateTable(tableId, { combatTurnIndex: Math.max(0, index) })
+}
+
+/**
+ * Entra no meio da luta.
+ *
+ * Briga não começa com todo mundo na sala: chega reforço, o NPC escondido se
+ * revela, o clone nasce no turno de alguém. O que não pode é a chegada
+ * atropelar a vez de quem está jogando — então a lista é reordenada pela
+ * iniciativa e o índice do turno é remendado para continuar apontando para a
+ * MESMA pessoa que estava agindo.
+ */
+export async function addCombatants(tableId: string, table: GameTable, novos: CombatParticipant[]) {
+  const jaEstao = new Set(table.combatOrder.map((p) => p.ref))
+  const entram = novos.filter((p) => !jaEstao.has(p.ref))
+  if (entram.length === 0) return
+
+  const deQuemEraAVez = table.combatOrder[table.combatTurnIndex]?.ref
+  const order = [...table.combatOrder, ...entram].sort(
+    (a, b) => Number(a.surprised) - Number(b.surprised) || b.initiative - a.initiative,
+  )
+  const turno = deQuemEraAVez ? Math.max(0, order.findIndex((p) => p.ref === deQuemEraAVez)) : table.combatTurnIndex
+  await updateTable(tableId, { combatOrder: order, combatTurnIndex: turno })
+}
+
 /**
  * Passa a vez. Ao voltar ao primeiro da lista, fecha a rodada — e é aí que as
  * condições com prazo perdem uma rodada e as que zeram caem sozinhas.
@@ -546,12 +573,17 @@ export async function addCompanionTokens(
   const scene = snap.data() as Scene
   const tokens = scene.tokens ?? []
   const dono = tokens.find((t) => t.refType === 'character' && t.refId === ownerCharacterId && t.onBoard !== false)
-  if (!dono) return 0
 
   const colunas = gridColumns(scene)
   const aspecto = stageAspect(scene)
   const ocupadas = tokens.filter((t) => t.onBoard !== false).map((t) => ({ x: t.x, y: t.y }))
-  const vagas = spotsAround({ x: dono.x, y: dono.y }, companions.length, ocupadas, colunas, aspecto)
+  // Com o dono no tabuleiro, as peças nascem ao lado dele. Sem o dono, elas
+  // não somem: vão para a bandeja do mestre, prontas para entrar. Antes disto
+  // uma marionete criada fora da cena simplesmente não virava peça nenhuma, e
+  // o jeito de pôr ela no mapa era não existir.
+  const vagas = dono
+    ? spotsAround({ x: dono.x, y: dono.y }, companions.length, ocupadas, colunas, aspecto)
+    : companions.map(() => ({ x: 0.5, y: 0.5 }))
 
   const novas: SceneToken[] = companions.map((c, i) => ({
     id: newId(),
@@ -560,15 +592,15 @@ export async function addCompanionTokens(
     imageUrl: c.imageUrl,
     x: vagas[i].x,
     y: vagas[i].y,
-    size: dono.size,
+    size: dono?.size ?? 0.06,
     squares: 1,
     refType: 'companion',
     refId: c.id,
     temporary: true,
-    onBoard: true,
+    onBoard: Boolean(dono),
   }))
   await saveSceneTokens(tableId, [...tokens, ...novas])
-  return novas.length
+  return dono ? novas.length : 0
 }
 
 /** Tira do mapa as peças das fichas temporárias que sumiram. */

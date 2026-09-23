@@ -4,7 +4,9 @@ import { CONDITIONS } from '../data/conditions'
 import { rollInitiative } from '../lib/characterMath'
 import {
   addLogEntry,
+  addCombatants,
   advanceCombatTurn,
+  advanceTurnIndex,
   endCombat,
   setCombatOrder,
   startCombat,
@@ -192,8 +194,49 @@ export function CombatTracker({
     await addLogEntry(table.id, { actorName: table.gmName, actorType: 'gm', kind: 'combat', summary: aviso })
   }
 
+  /**
+   * Entra no meio da luta. Quem chega rola a iniciativa como qualquer um e
+   * cai no lugar dele na ordem; a vez de quem estava agindo não se mexe.
+   */
+  async function entrarNaLuta(ref: string, iniciativa: number, surpreso: boolean) {
+    const p = participants.find((x) => x.ref === ref)
+    if (!p) return
+    await addCombatants(table.id, table, [
+      { ref: p.ref, name: p.name, initiative: iniciativa, surprised: surpreso, boss: false, conditions: [] },
+    ])
+    await addLogEntry(table.id, {
+      actorName: table.gmName,
+      actorType: 'gm',
+      kind: 'combat',
+      summary: `${nomeDe(p)} entrou no combate com iniciativa ${iniciativa}${surpreso ? ' (surpreso)' : ''}.`,
+    })
+  }
+
+  /** Sai da luta: morreu, fugiu, ou entrou por engano. */
+  async function sairDaLuta(ref: string) {
+    const quem = table.combatOrder.find((p) => p.ref === ref)
+    if (!quem) return
+    const deQuemEraAVez = table.combatOrder[table.combatTurnIndex]?.ref
+    const order = table.combatOrder.filter((p) => p.ref !== ref)
+    if (order.length === 0) {
+      await endCombat(table.id)
+    } else {
+      const i = order.findIndex((p) => p.ref === deQuemEraAVez)
+      await setCombatOrder(table.id, order)
+      // Quem estava agindo saiu: a vez passa para quem ficou naquele lugar.
+      await advanceTurnIndex(table.id, i >= 0 ? i : Math.min(table.combatTurnIndex, order.length - 1))
+    }
+    await addLogEntry(table.id, {
+      actorName: table.gmName,
+      actorType: 'gm',
+      kind: 'combat',
+      summary: `${nomeDe(quem)} saiu do combate.`,
+    })
+  }
+
   if (table.combatActive) {
     const rodada = table.combatRound ?? 1
+    const foraDaLuta = participants.filter((p) => !table.combatOrder.some((x) => x.ref === p.ref))
     return (
       <Card className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -300,6 +343,13 @@ export function CombatTracker({
                     >
                       {p.boss ? 'não é chefe' : 'marcar chefe'}
                     </button>
+                    <button
+                      className="text-[11px] text-red-400/70 hover:text-red-300"
+                      title="Tira da ordem de iniciativa (a ficha continua na mesa)"
+                      onClick={() => sairDaLuta(p.ref)}
+                    >
+                      sair da luta
+                    </button>
                   </div>
                 )}
 
@@ -344,6 +394,10 @@ export function CombatTracker({
             )
           })}
         </div>
+
+        {/* Briga não começa com todo mundo na sala: chega reforço, o NPC
+            escondido se revela, o clone nasce no turno de alguém. */}
+        <EntrarNaLuta foraDaLuta={foraDaLuta} onEntrar={entrarNaLuta} />
       </Card>
     )
   }
@@ -440,6 +494,89 @@ function AdicionarCondicao({ onAdd }: { onAdd: (nome: string, rodadas?: number) 
         aplicar
       </Button>
       <span className="text-[11px] text-orange-400/60">em branco = sem prazo</span>
+    </div>
+  )
+}
+
+/**
+ * Quem entra na luta já começada.
+ *
+ * Rola a iniciativa pela regra da classe (ou d20 seco, para criatura e ficha
+ * temporária), aceita um valor digitado, e marca surpresa — quem chega pego
+ * de surpresa vai para o fim da ordem, como quem começou surpreso.
+ */
+function EntrarNaLuta({
+  foraDaLuta,
+  onEntrar,
+}: {
+  foraDaLuta: { ref: string; name: string; entity: Combatente }[]
+  onEntrar: (ref: string, iniciativa: number, surpreso: boolean) => Promise<void>
+}) {
+  const [ref, setRef] = useState('')
+  const [valor, setValor] = useState('')
+  const [surpreso, setSurpreso] = useState(false)
+
+  if (foraDaLuta.length === 0) {
+    return <p className="border-t border-[color:var(--line)] pt-2 text-[11px] text-orange-400/50">Todo mundo da mesa já está na luta.</p>
+  }
+
+  const escolhido = foraDaLuta.find((p) => p.ref === ref)
+
+  function rolar() {
+    if (!escolhido) return
+    const e = escolhido.entity
+    const v = 'classId' in e ? rollInitiative(e) : 1 + Math.floor(Math.random() * 20)
+    setValor(String(v))
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-[color:var(--line)] pt-2">
+      <p className="text-[11px] uppercase tracking-wide text-orange-400/60">Entrar no combate</p>
+      <div className="flex flex-wrap items-end gap-1.5">
+        <Select
+          value={ref}
+          onChange={(e) => {
+            setRef(e.target.value)
+            setValor('')
+          }}
+          className="min-w-0 flex-1 px-2 py-0.5 text-xs"
+        >
+          <option value="">Quem entra...</option>
+          {foraDaLuta.map((p) => (
+            <option key={p.ref} value={p.ref}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+        <Button variant="secondary" className="px-2 py-0.5 text-[11px]" disabled={!escolhido} onClick={rolar}>
+          rolar iniciativa
+        </Button>
+        <Input
+          type="number"
+          placeholder="iniciativa"
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          className="w-24 px-2 py-0.5 text-xs"
+        />
+        <label className="flex items-center gap-1.5 pb-1 text-[11px] text-orange-200">
+          <input type="checkbox" checked={surpreso} onChange={(e) => setSurpreso(e.target.checked)} />
+          surpreso
+        </label>
+        <Button
+          variant="primary"
+          className="px-2 py-0.5 text-[11px]"
+          disabled={!escolhido || valor === ''}
+          onClick={() =>
+            onEntrar(ref, Number(valor) || 0, surpreso).then(() => {
+              setRef('')
+              setValor('')
+              setSurpreso(false)
+            })
+          }
+        >
+          entrar
+        </Button>
+      </div>
     </div>
   )
 }

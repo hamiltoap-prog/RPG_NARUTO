@@ -42,6 +42,8 @@ export interface JutsuReading {
   damageType?: string
   /** Custo em chakra, já em número. */
   cost: number
+  /** Dado de cura, quando o jutsu recupera PV em vez de causar dano. */
+  healing?: string
   /**
    * Condições que a descrição diz impor. O manual escreve isso em texto
    * corrido, então a leitura é um palpite — quem lança confirma na tela antes
@@ -186,6 +188,59 @@ export function readConditions(description: string): string[] {
   return achadas
 }
 
+/**
+ * O dado de dano — e só ele.
+ *
+ * O texto do manual é cheio de NdM que não são dano: cura ("recupera 2d4
+ * pontos de vida"), duração ("por 1d4 rodadas"), bônus de rolagem ("role 1d6
+ * e some ao ataque"), dreno de chakra, PV de uma muralha invocada, PV/CA
+ * temporários. Pegar o primeiro NdM da descrição, como era antes, enchia 51
+ * jutsus de efeito com dano que eles não causam.
+ *
+ * Então o dado só conta como dano quando a palavra "dano" está colada nele, e
+ * nenhum dos sinais de que ele é outra coisa aparece por perto.
+ *
+ * O que fica de fora de propósito: jutsu em que o dado é de outra coisa e só
+ * uma PARTE dele vira dano ("reduz o chakra em 6d6 e causa metade disso como
+ * dano"). Preencher 6d6 ali seria o dobro do certo — melhor deixar em branco
+ * e o mestre escrever o que a mesa combinou.
+ */
+const NAO_E_DANO_ANTES = /\b(recupera|recuperar|recuperando|cura|curando|curar|regenera|regenerando|restaura)\b/
+const NAO_E_DANO_PERTO = /\b(pontos? de vida|pv|ca) tempor/
+
+export function readDamageDie(description: string): string | undefined {
+  const plano = semAcento(description)
+  for (const m of plano.matchAll(/(\d+d\d+)/g)) {
+    const i = m.index ?? 0
+    const fim = i + m[1].length
+    const antes = plano.slice(Math.max(0, i - 30), i)
+    const depois = plano.slice(fim, fim + 45)
+    if (!/\bdanos?\b/.test(antes + ' ' + depois)) continue
+    if (NAO_E_DANO_ANTES.test(antes)) continue
+    if (NAO_E_DANO_PERTO.test(antes + ' ' + depois)) continue
+    return description.slice(i, fim)
+  }
+  return undefined
+}
+
+/**
+ * O dado de CURA, quando o texto fala em recuperar pontos de vida.
+ *
+ * O app não cura ninguém sozinho — quem mexe em PV de ficha alheia é o
+ * mestre. Isto existe para a tela poder dizer "este jutsu cura 2d8" em vez de
+ * ficar muda, agora que o dado de cura deixou de ser confundido com dano.
+ */
+export function readHealingDie(description: string): string | undefined {
+  const plano = semAcento(description)
+  for (const m of plano.matchAll(/(\d+d\d+)/g)) {
+    const i = m.index ?? 0
+    const antes = plano.slice(Math.max(0, i - 40), i)
+    const depois = plano.slice(i + m[1].length, i + m[1].length + 40)
+    if (NAO_E_DANO_ANTES.test(antes) || /\bcurando\b/.test(depois)) return description.slice(i, i + m[1].length)
+  }
+  return undefined
+}
+
 /** Lê da descrição o que der: ataque ou resistência, dado de dano e custo. */
 export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' | 'classification'>): JutsuReading {
   const d = entry.description ?? ''
@@ -200,7 +255,7 @@ export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
   const resist = d.match(
     /(?:resist[êe]ncia|teste|jogada)\s+de\s+(For[çc]a|Destreza|Constitui[çc][ãa]o|Intelig[êe]ncia|Sabedoria|Carisma)/i,
   )
-  const dano = d.match(/(\d+d\d+)/)
+  const dano = readDamageDie(d)
   // O tipo do dano vem logo depois de "dano", mas nem sempre: o texto do
   // manual escreve "3d6 de dano", "3d6 de dano cortante" e "3d6 de dano de
   // fogo". Pegar a primeira palavra depois de "dano" trazia preposição
@@ -214,9 +269,10 @@ export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
     // faz um teste de Constituição ou fica Sangrando").
     mode: pedeAtaque ? 'attack' : resist ? 'save' : 'none',
     saveAttribute: resist ? ATRIBUTO_POR_NOME[semAcento(resist[1])] : undefined,
-    damage: dano?.[1],
+    damage: dano,
     damageType: tipo?.[1]?.toLowerCase(),
     cost: Number((entry.cost ?? '').match(/\d+/)?.[0] ?? 0),
+    healing: dano ? undefined : readHealingDie(d),
     conditions: readConditions(d),
     conditionRounds: leRodadas(plano),
     area: readArea(d),

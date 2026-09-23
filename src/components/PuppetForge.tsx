@@ -1,5 +1,6 @@
-import { Button, Input, Select, Textarea } from './ui'
+import { Avatar, Button, Input, Select, Textarea } from './ui'
 import { newId } from '../lib/id'
+import { normalizeImageUrl } from '../lib/imageUrl'
 import { CONDITIONS } from '../data/conditions'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
 import type { AttributeKey, NpcAttack, PuppetJutsu, PuppetSpec } from '../types'
@@ -357,6 +358,42 @@ export function PuppetForge({ spec, onChange }: { spec: PuppetSpec; onChange: (s
           onChange={(e) => mexer({ gearText: e.target.value })}
         />
       </label>
+
+      {/* A cara da marionete. Sem imagem a peça dela no mapa fica com duas
+          letras do nome, que não dizem nada — e marionete é justamente a
+          coisa que a mesa quer ver. */}
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-orange-400/60">
+          retrato (link)
+          <Input
+            value={spec.imageUrl ?? ''}
+            placeholder="https://.../marionete.jpg"
+            onChange={(e) => mexer({ imageUrl: e.target.value || undefined })}
+            onBlur={() => mexer({ imageUrl: normalizeImageUrl(spec.imageUrl) })}
+          />
+        </label>
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-orange-400/60">
+          peça no mapa: PNG sem fundo (link)
+          <Input
+            value={spec.tokenUrl ?? ''}
+            placeholder="https://.../marionete-sem-fundo.png"
+            onChange={(e) =>
+              mexer({
+                tokenUrl: e.target.value || undefined,
+                // Ligar o PNG sem link deixaria a peça invisível.
+                tokenMode: e.target.value ? 'png' : 'ficha',
+              })
+            }
+            onBlur={() => mexer({ tokenUrl: normalizeImageUrl(spec.tokenUrl) })}
+          />
+        </label>
+        {spec.imageUrl && <Avatar url={spec.imageUrl} name="marionete" size={44} />}
+      </div>
+      {spec.tokenUrl && (
+        <p className="text-[11px] text-orange-300/50">
+          A peça dela no mapa vai usar o PNG. Dá para voltar para o retrato na aba Peças da tela de jogo.
+        </p>
+      )}
     </div>
   )
 }

@@ -46,9 +46,73 @@ Três regras, nesta ordem:
 
 Marionete quebrada nunca entra na lista, e ninguém é alvo de si mesmo.
 
-**Mesa que nunca abriu a tela de jogo** não tem restrição: sem cena, não há
-tabuleiro para dizer quem está onde, e travar tudo deixaria o jogo parado. A
-regra 3 passa a valer assim que o mestre monta a primeira cena.
+**Sem peça no tabuleiro não há alvo nenhum** — nem quando a mesa ainda não
+montou cena. A tela de jogo é o que diz quem está no alcance de quem, e "a
+cena ainda não foi montada" não vira licença para mirar em todo mundo. Quando
+a lista sai vazia, a tela explica por quê em vez de só ficar curta.
+
+---
+
+## Entrar no combate já começado
+
+Briga não começa com todo mundo na sala: chega reforço, o NPC escondido se
+revela, o clone nasce no turno de alguém. Quem entra **rola a iniciativa como
+qualquer um** e cai no lugar dele na ordem; quem chega pego de surpresa vai
+para o fim, como quem começou surpreso.
+
+A chegada nunca atropela a vez de quem está jogando: a ordem é refeita e o
+ponteiro do turno é remendado para continuar apontando para a **mesma
+pessoa** que estava agindo. Sair da luta segue a mesma regra — quando quem sai
+era quem estava agindo, a vez passa para quem ficou naquele lugar, e esvaziar
+a ordem encerra o combate.
+
+---
+
+## As duas imagens de cada ficha
+
+Toda ficha que vira peça carrega duas imagens:
+
+- o **retrato**, redondo, que o dono escolhe e serve para reconhecer a pessoa
+  nas listas do app;
+- a **peça**, um PNG sem fundo, que é o que fica bom em cima de um mapa.
+
+**Quem põe o PNG e quem decide qual está valendo é só o mestre**, em qualquer
+ficha da mesa — personagem, NPC, criatura ou marionete. O controle fica num só
+lugar, a aba *Peças* da tela de jogo, porque é ali que se pensa em peça.
+Por isso `tokenUrl` e `tokenMode` não entram nos campos que um jogador pode
+pedir para mudar.
+
+A escolha é lida **na hora de desenhar**, a partir da ficha, e não gravada na
+peça: trocar o PNG de um NPC muda todas as peças dele, em todas as cenas, de
+uma vez. Um PNG ligado é desenhado inteiro, sem moldura nem recorte redondo —
+recortar um PNG recortado jogaria fora justamente o que o torna bom no mapa.
+
+Colar um link vazio desliga o PNG junto, e o botão só liga com link colado:
+modo ligado sem imagem só produziria uma peça invisível.
+
+### Link do Google Drive
+
+O caminho natural de quem joga é subir a arte no Drive, clicar em
+*Compartilhar* e colar o link. **Esse link não é a imagem** — é a página do
+visualizador, em HTML; num `<img>` dá quadro quebrado, e a pessoa fica
+achando que errou o endereço.
+
+O app traduz na entrada, em todo campo de imagem (retrato, peça, mapa,
+criatura, marionete, peça solta): tira o ID do arquivo de qualquer formato de
+link do Drive e monta `drive.google.com/thumbnail?id=...&sz=w1600`, que é o
+que continua servindo a imagem crua hoje. O campo passa a mostrar o endereço
+convertido, para não restar dúvida do que foi gravado. Link que já é imagem
+direta (Imgur, Discord, um `.png` qualquer) passa intacto.
+
+O que o app **não** resolve: o arquivo precisa estar compartilhado como
+*"qualquer pessoa com o link"*. Restrito, ele devolve imagem quebrada por mais
+certo que o endereço esteja — e é por isso que a tela avisa disso na hora da
+conversão, em vez de deixar a mesa procurando defeito no link.
+
+**Clone** nasce com as duas imagens do dono — é a cara do original, e a peça
+dele não destoa da de quem o criou. **Marionete** tem cara própria, escolhida
+na forja pelo mestre; sem imagem, a peça cai nas iniciais do nome em vez de
+emprestar o rosto do titereiro.
 
 ---
 
@@ -93,3 +157,25 @@ A marionete é item forjado pelo mestre: PV, CA, PR, custo de ativação, golpes
 com bônus próprio, jutsus próprios (com condição e prazo escolhidos na
 bancada) e os itens acoplados em texto. Ela vai para a loja como qualquer
 outro item; quem a tem na mochila é quem a controla.
+
+---
+
+## Dado de dano é só dado de dano
+
+O manual escreve tudo em texto corrido, e um `NdM` ali pode ser qualquer
+coisa: cura (*"recupera 2d4 pontos de vida"*), duração (*"por 1d4 rodadas"*),
+bônus de rolagem (*"role 1d6 e some ao ataque"*), dreno de chakra, PV de uma
+muralha invocada, CA temporária. Pegar o primeiro `NdM` da descrição enchia
+**51 jutsus de efeito** com dano que eles não causam.
+
+Agora o dado só conta como dano quando a palavra *dano* está colada nele e
+nenhum sinal de que ele é outra coisa aparece por perto. São 322 jutsus com
+dano, contra 373 da leitura antiga.
+
+Fica de fora de propósito o jutsu em que o dado é de outra coisa e só uma
+**parte** dele vira dano (*"reduz o chakra em 6d6 e causa metade disso como
+dano"*, as 8-Trigramas do Hyūga): preencher `6d6` ali seria o dobro do certo,
+e em branco o mestre escreve o que a mesa combinou.
+
+Quando o jutsu **cura**, a tela diz o dado de cura em vez de ficar muda — mas
+o app não mexe em PV de ninguém por isso: quem aplica cura é o mestre.

@@ -7,6 +7,9 @@ import { useAuthUid } from '../hooks/useAuth'
 import { drawFog, emptyFog, fogRows, isRevealed, paintFog, remapFog, resampleFog, setAll } from '../lib/fog'
 import { newId } from '../lib/id'
 import { condicoesDe, efeitoDaCondicao, selo } from '../lib/conditions'
+import { arteDaPeca, modoDaPeca, podeUsarPng } from '../lib/tokenArt'
+import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
+import { AvisoDoDrive } from '../components/AvisoDoDrive'
 import type { Ficha } from '../lib/conditions'
 import {
   EMPTY_MAP,
@@ -39,6 +42,8 @@ import {
   saveScene,
   saveSceneTokens,
   updateCharacterDirect,
+  updateCompanion,
+  updateNPC,
   updateTable,
 } from '../lib/store'
 import { CREATURE_SIZES, DEFAULT_STAGE_ASPECT, PING_LIFETIME_MS, SCENE_TOKEN_LABELS } from '../types'
@@ -46,6 +51,7 @@ import type {
   Character,
   GameTable,
   Companion,
+  TokenMode,
   NPC,
   Scene,
   SceneFog,
@@ -567,6 +573,7 @@ export function ScenePage() {
           persist={persist}
           characters={characters}
           npcs={npcs}
+          companions={companions}
           library={library}
           tableId={tableId}
           viewportAspect={viewport.width > 0 && viewport.height > 0 ? viewport.width / viewport.height : DEFAULT_STAGE_ASPECT}
@@ -632,6 +639,9 @@ export function ScenePage() {
               // fora dele — um jutsu que cega alguém no meio da conversa marca
               // a peça do mesmo jeito.
               const condicoes = condicoesDe(ref, table)
+              // A arte vem da FICHA, não da peça: trocar o PNG de um NPC muda
+              // todas as peças dele de uma vez, e o clone acompanha o dono.
+              const arte = arteDaPeca(ref, t)
               return (
                 <div
                   key={t.id}
@@ -640,25 +650,45 @@ export function ScenePage() {
                   style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%`, width: `${width * 100}%` }}
                   title={rotuloDe(t)}
                 >
-                  <div
-                    className={`relative aspect-square overflow-hidden rounded-full ${
-                      // Clone e invocação usam borda tracejada: no meio de uma
-                      // luta com quatro clones iguais, é o que diz de longe
-                      // qual peça é o original.
-                      t.temporary ? 'border-2 border-dashed' : 'border-2'
-                    } ${isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-[#ffffff]/70'} ${
-                      t.kind === 'boss' || naLuta?.boss ? 'ring-2 ring-red-500/80' : ''
-                    }`}
-                    style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
-                  >
-                    {t.imageUrl ? (
-                      <img src={t.imageUrl} alt={rotuloDe(t)} draggable={false} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-raised)] font-display text-white">
-                        <span style={{ fontSize: `${Math.max(10, width * stage.width * 0.35)}px` }}>{rotuloDe(t).slice(0, 2).toUpperCase()}</span>
-                      </div>
-                    )}
-                  </div>
+                  {arte.recortado ? (
+                    // PNG sem fundo: desenha inteiro, sem moldura nem recorte
+                    // redondo — recortar um PNG recortado joga fora justamente
+                    // o que faz ele ficar bom em cima do mapa. Quem está na
+                    // vez e quem é chefe continuam marcados, por baixo.
+                    <div
+                      className={`relative aspect-square ${
+                        isActive ? 'animate-ember rounded-full ring-2 ring-[color:var(--orange)]' : ''
+                      } ${t.kind === 'boss' || naLuta?.boss ? 'rounded-full ring-2 ring-red-500/80' : ''}`}
+                    >
+                      <img
+                        src={arte.url}
+                        alt={rotuloDe(t)}
+                        draggable={false}
+                        className={`h-full w-full object-contain ${t.temporary ? 'opacity-80' : ''}`}
+                        style={{ filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.85))' }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={`relative aspect-square overflow-hidden rounded-full ${
+                        // Clone e invocação usam borda tracejada: no meio de uma
+                        // luta com quatro clones iguais, é o que diz de longe
+                        // qual peça é o original.
+                        t.temporary ? 'border-2 border-dashed' : 'border-2'
+                      } ${isActive ? 'animate-ember border-[color:var(--orange)]' : 'border-[#ffffff]/70'} ${
+                        t.kind === 'boss' || naLuta?.boss ? 'ring-2 ring-red-500/80' : ''
+                      }`}
+                      style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
+                    >
+                      {arte.url ? (
+                        <img src={arte.url} alt={rotuloDe(t)} draggable={false} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-raised)] font-display text-white">
+                          <span style={{ fontSize: `${Math.max(10, width * stage.width * 0.35)}px` }}>{rotuloDe(t).slice(0, 2).toUpperCase()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {condicoes.length > 0 && (
                     <div className="pointer-events-none absolute -top-1 left-1/2 flex -translate-x-1/2 -translate-y-full gap-0.5">
                       {condicoes.slice(0, 4).map((c) => (
@@ -750,6 +780,7 @@ function GMPanel({
   persist,
   characters,
   npcs,
+  companions,
   library,
   tableId,
   viewportAspect,
@@ -766,6 +797,7 @@ function GMPanel({
   persist: (s: Scene) => void
   characters: Character[]
   npcs: NPC[]
+  companions: Companion[]
   library: SceneLibraryItem[]
   tableId: string
   viewportAspect: number
@@ -862,18 +894,19 @@ function GMPanel({
           <SectionTitle>Mapa</SectionTitle>
           <div className="flex flex-wrap items-center gap-2">
             <Input
-              placeholder="URL da imagem do mapa"
+              placeholder="URL da imagem do mapa (link do Drive também serve)"
               value={mapUrl}
               onChange={(e) => {
                 setTouchedUrl(true)
                 setMapUrl(e.target.value)
               }}
+              onBlur={() => setMapUrl(normalizeImageUrl(mapUrl) ?? '')}
               className="w-80"
             />
             <Button
               variant="primary"
               onClick={() => {
-                useMap(mapUrl)
+                useMap(normalizeImageUrl(mapUrl) ?? '')
                 setTouchedUrl(false)
               }}
             >
@@ -1067,9 +1100,17 @@ function GMPanel({
             ))}
           </div>
 
+          <ArteDasPecas tableId={tableId} characters={characters} npcs={npcs} companions={companions} />
+
           <div className="flex flex-wrap items-end gap-2">
             <Input placeholder="Nome da peça" value={customLabel} onChange={(e) => setCustomLabel(e.target.value)} className="w-40" />
-            <Input placeholder="URL da imagem" value={customUrl} onChange={(e) => setCustomUrl(e.target.value)} className="w-56" />
+            <Input
+              placeholder="URL da imagem"
+              value={customUrl}
+              onChange={(e) => setCustomUrl(e.target.value)}
+              onBlur={() => setCustomUrl(normalizeImageUrl(customUrl) ?? '')}
+              className="w-56"
+            />
             <Select value={customKind} onChange={(e) => setCustomKind(e.target.value as SceneTokenKind)} className="w-32">
               {/* "companion" não entra aqui: clone e invocação nascem do
                   jutsu, na ficha de quem lançou, não à mão. */}
@@ -1090,7 +1131,7 @@ function GMPanel({
               variant="primary"
               disabled={!customLabel.trim()}
               onClick={() => {
-                addToken({ label: customLabel.trim(), kind: customKind, imageUrl: customUrl.trim() || undefined, squares: customSquares })
+                addToken({ label: customLabel.trim(), kind: customKind, imageUrl: normalizeImageUrl(customUrl), squares: customSquares })
                 setCustomLabel('')
                 setCustomUrl('')
               }}
@@ -1205,5 +1246,112 @@ function GMPanel({
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * A arte das peças — só do mestre.
+ *
+ * Uma ficha carrega duas imagens: o retrato redondo, que o dono escolhe e
+ * serve para reconhecer a pessoa nas listas, e o PNG sem fundo, que é o que
+ * fica bom em cima do mapa. Quem põe o PNG e quem decide qual está valendo é
+ * o mestre, em qualquer ficha da mesa — inclusive nas dos jogadores.
+ *
+ * Fica aqui, na aba de Peças, porque é aqui que se pensa em peça. Espalhar
+ * este controle por quatro editores diferentes (ficha, NPC rápido, criatura,
+ * forja) daria quatro lugares para procurar e quatro para esquecer.
+ */
+function ArteDasPecas({
+  tableId,
+  characters,
+  npcs,
+  companions,
+}: {
+  tableId: string
+  characters: Character[]
+  npcs: NPC[]
+  companions: Companion[]
+}) {
+  const [aberto, setAberto] = useState(false)
+  const [rascunho, setRascunho] = useState<Record<string, string>>({})
+
+  type Linha = { ref: string; nome: string; ficha: { imageUrl?: string; tokenUrl?: string; tokenMode?: TokenMode } }
+  const linhas: Linha[] = [
+    ...characters.map((c) => ({ ref: `character:${c.id}`, nome: c.name + (c.isNPC ? ' (NPC)' : ''), ficha: c })),
+    ...npcs.map((n) => ({ ref: `npc:${n.id}`, nome: n.name, ficha: n })),
+    ...companions.map((c) => ({ ref: `companion:${c.id}`, nome: `${c.name} (de ${c.ownerName})`, ficha: c })),
+  ]
+
+  async function gravar(ref: string, patch: { tokenUrl?: string; tokenMode?: TokenMode }) {
+    const [kind, id] = ref.split(':')
+    if (kind === 'character') await updateCharacterDirect(tableId, id, patch)
+    else if (kind === 'npc') await updateNPC(tableId, id, patch)
+    else await updateCompanion(tableId, id, patch)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        className="flex items-center gap-2 text-left text-xs uppercase tracking-wide text-orange-400/60 hover:text-[color:var(--orange)]"
+        onClick={() => setAberto(!aberto)}
+      >
+        {aberto ? '▾' : '▸'} Arte das peças ({linhas.length}) — PNG sem fundo para o mapa
+      </button>
+
+      {aberto && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] leading-relaxed text-orange-300/50">
+            Cole o link de um PNG sem fundo e ligue o <b className="text-orange-200">PNG</b> para a peça daquela ficha
+            usar ele no mapa, inteiro, sem o recorte redondo. O retrato da ficha continua onde está — dá para voltar
+            para ele a qualquer hora. Só você vê e mexe neste quadro.
+          </p>
+          {linhas.map((l) => {
+            const modo = modoDaPeca(l.ficha)
+            const temPng = podeUsarPng(l.ficha)
+            const valor = rascunho[l.ref] ?? l.ficha.tokenUrl ?? ''
+            return (
+              <div key={l.ref} className="well flex min-w-0 flex-wrap items-center gap-2 rounded-sm p-2 text-xs">
+                <span className="min-w-0 flex-1 break-words text-orange-100">{l.nome}</span>
+                <Input
+                  placeholder="link do PNG sem fundo"
+                  value={valor}
+                  className="min-w-0 flex-[2] px-2 py-0.5 text-[11px]"
+                  onChange={(e) => setRascunho((p) => ({ ...p, [l.ref]: e.target.value }))}
+                  onBlur={() => {
+                    // Link do Drive vira endereço servível aqui, antes de gravar.
+                    const limpo = normalizeImageUrl(valor) ?? ''
+                    if (limpo !== valor) setRascunho((p) => ({ ...p, [l.ref]: limpo }))
+                    if (limpo === (l.ficha.tokenUrl ?? '')) return
+                    // Apagar o link desliga o PNG junto: deixar o modo ligado
+                    // sem imagem só produziria uma peça invisível.
+                    void gravar(l.ref, { tokenUrl: limpo || undefined, ...(limpo ? {} : { tokenMode: 'ficha' as TokenMode }) })
+                  }}
+                />
+                <span className="flex shrink-0 gap-1">
+                  <Button
+                    variant={modo === 'ficha' ? 'primary' : 'ghost'}
+                    className="px-2 py-0.5 text-[11px]"
+                    onClick={() => gravar(l.ref, { tokenMode: 'ficha' })}
+                  >
+                    retrato
+                  </Button>
+                  <Button
+                    variant={modo === 'png' ? 'primary' : 'ghost'}
+                    className="px-2 py-0.5 text-[11px]"
+                    disabled={!temPng}
+                    title={temPng ? 'Usar o PNG sem fundo no mapa' : 'Cole um link primeiro'}
+                    onClick={() => gravar(l.ref, { tokenMode: 'png' })}
+                  >
+                    PNG
+                  </Button>
+                </span>
+              </div>
+            )
+          })}
+          {linhas.some((l) => ehLinkDoDrive(l.ficha.tokenUrl)) && <AvisoDoDrive />}
+          {linhas.length === 0 && <p className="text-xs text-orange-300/50">Nenhuma ficha na mesa ainda.</p>}
+        </div>
+      )}
+    </div>
   )
 }
