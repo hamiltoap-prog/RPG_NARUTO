@@ -10,6 +10,8 @@ import { condicoesDe, efeitoDaCondicao, selo } from '../lib/conditions'
 import { arteDaPeca, modoDaPeca, podeUsarPng } from '../lib/tokenArt'
 import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
 import { AvisoDoDrive } from '../components/AvisoDoDrive'
+import { SceneLibraryPanel } from '../components/SceneLibraryPanel'
+import { SEM_PASTA, pastasDa } from '../lib/sceneLibrary'
 import type { Ficha } from '../lib/conditions'
 import {
   EMPTY_MAP,
@@ -33,7 +35,7 @@ import {
   addScenePing,
   addSceneLibraryItem,
   cleanupOldPings,
-  deleteSceneLibraryItem,
+  updateSceneLibraryItem,
   listenCharacters,
   listenCompanions,
   listenNPCs,
@@ -817,6 +819,35 @@ function GMPanel({
   const [customKind, setCustomKind] = useState<SceneTokenKind>('monster')
   const [customSquares, setCustomSquares] = useState(1)
   const [libLabel, setLibLabel] = useState('')
+  const [libFolder, setLibFolder] = useState('')
+  const [avisoBiblioteca, setAvisoBiblioteca] = useState('')
+  /** O aviso de "guardada"/"atualizada" some sozinho: é recado, não estado. */
+  function avisar(texto: string) {
+    setAvisoBiblioteca(texto)
+    window.setTimeout(() => setAvisoBiblioteca(''), 4000)
+  }
+
+  /** O item da biblioteca que está aberto em jogo, quando há um. */
+  const cenaAberta = library.find((i) => i.id === scene.fromLibraryId)
+
+  /**
+   * O retrato da cena de agora: enquadramento, grade, luz, névoa e peças.
+   *
+   * Clone e invocação valem para a cena de agora, então o retrato sai sem
+   * eles — carregar esta cena depois não ressuscita ninguém.
+   */
+  function retratoDaCena() {
+    return {
+      backgroundUrl: scene.backgroundUrl,
+      map: scene.map,
+      gridColumns: scene.gridColumns,
+      showGrid: scene.showGrid,
+      timeOfDay: scene.timeOfDay,
+      locationLit: scene.locationLit,
+      fog: scene.fog,
+      tokens: scene.tokens.filter((t) => !t.temporary),
+    }
+  }
 
   const map = scene.map ?? EMPTY_MAP
   const limiteDoMapa = mapOffsetLimit(map)
@@ -876,8 +907,10 @@ function GMPanel({
    */
   function useMap(url: string) {
     const clean = url.trim()
+    // Trocar a imagem de fundo é começar outra cena: o vínculo com o item da
+    // biblioteca cai, senão "Atualizar" gravaria um mapa por cima de outro.
     if (!clean) {
-      persist({ ...scene, backgroundUrl: '' })
+      persist({ ...scene, backgroundUrl: '', fromLibraryId: undefined })
       return
     }
     const img = new Image()
@@ -886,10 +919,11 @@ function GMPanel({
       persist({
         ...scene,
         backgroundUrl: clean,
+        fromLibraryId: undefined,
         map: { ...map, fit: 'cover', aspect: Number.isFinite(aspect) && aspect > 0.1 && aspect < 10 ? aspect : map.aspect },
       })
     }
-    img.onerror = () => persist({ ...scene, backgroundUrl: clean })
+    img.onerror = () => persist({ ...scene, backgroundUrl: clean, fromLibraryId: undefined })
     img.src = clean
   }
 
@@ -919,37 +953,70 @@ function GMPanel({
               Usar mapa
             </Button>
             {scene.backgroundUrl && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  addSceneLibraryItem(tableId, {
-                    kind: 'map',
-                    label: libLabel.trim() || 'Cena sem nome',
-                    imageUrl: scene.backgroundUrl,
-                    createdAt: Date.now(),
-                    // A cena inteira, não só a imagem: enquadramento, grade,
-                    // luz, névoa e as peças em jogo.
-                    snapshot: {
-                      backgroundUrl: scene.backgroundUrl,
-                      map: scene.map,
-                      gridColumns: scene.gridColumns,
-                      showGrid: scene.showGrid,
-                      timeOfDay: scene.timeOfDay,
-                      locationLit: scene.locationLit,
-                      fog: scene.fog,
-                      // Clone e invocação valem para a cena de agora: o
-                      // retrato guardado sai sem eles, então carregar esta
-                      // cena depois não ressuscita ninguém.
-                      tokens: scene.tokens.filter((t) => !t.temporary),
-                    },
-                  })
-                  setLibLabel('')
-                }}
-              >
-                Guardar cena na biblioteca
-              </Button>
+              <>
+                {/* Cena aberta da biblioteca grava por cima: mexer no
+                    enquadramento de um mapa guardado não pode obrigar a
+                    acumular cópias dele. */}
+                {cenaAberta && (
+                  <Button
+                    variant="primary"
+                    title={`Grava por cima de "${cenaAberta.label}", sem criar outra entrada`}
+                    onClick={async () => {
+                      await updateSceneLibraryItem(tableId, cenaAberta.id, {
+                        ...(libLabel.trim() ? { label: libLabel.trim() } : {}),
+                        imageUrl: scene.backgroundUrl,
+                        snapshot: retratoDaCena(),
+                      })
+                      setLibLabel('')
+                      avisar(`"${libLabel.trim() || cenaAberta.label}" foi atualizada.`)
+                    }}
+                  >
+                    Atualizar "{cenaAberta.label}"
+                  </Button>
+                )}
+                <Button
+                  variant={cenaAberta ? 'secondary' : 'primary'}
+                  onClick={async () => {
+                    const item = await addSceneLibraryItem(tableId, {
+                      kind: 'map',
+                      label: libLabel.trim() || 'Cena sem nome',
+                      imageUrl: scene.backgroundUrl,
+                      folder: libFolder.trim() || undefined,
+                      createdAt: Date.now(),
+                      snapshot: retratoDaCena(),
+                    })
+                    // Guardou: a cena em jogo passa a ser ESTA entrada, para o
+                    // próximo ajuste já poder gravar por cima.
+                    persist({ ...scene, fromLibraryId: item.id })
+                    setLibLabel('')
+                    avisar(`"${item.label}" guardada${item.folder ? ` em ${item.folder}` : ''}.`)
+                  }}
+                >
+                  {cenaAberta ? 'Guardar como nova' : 'Guardar cena na biblioteca'}
+                </Button>
+              </>
             )}
-            <Input placeholder="nome da cena guardada" value={libLabel} onChange={(e) => setLibLabel(e.target.value)} className="w-48" />
+            <Input
+              placeholder={cenaAberta ? 'renomear (opcional)' : 'nome da cena guardada'}
+              value={libLabel}
+              onChange={(e) => setLibLabel(e.target.value)}
+              className="w-44"
+            />
+            <Input
+              placeholder="pasta (opcional)"
+              value={libFolder}
+              list="pastas-da-biblioteca"
+              onChange={(e) => setLibFolder(e.target.value)}
+              className="w-36"
+            />
+            <datalist id="pastas-da-biblioteca">
+              {pastasDa(library)
+                .filter((p) => p !== SEM_PASTA)
+                .map((p) => (
+                  <option key={p} value={p} />
+                ))}
+            </datalist>
+            {avisoBiblioteca && <span className="text-[11px] text-emerald-300">{avisoBiblioteca}</span>}
           </div>
 
           <div className="flex flex-wrap items-center gap-4 text-xs text-orange-200">
@@ -1216,57 +1283,7 @@ function GMPanel({
       )}
 
       {panel === 'biblioteca' && (
-        <div className="flex flex-col gap-2">
-          <SectionTitle>Biblioteca</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            {library.map((item) => (
-              <div key={item.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
-                {item.imageUrl && <img src={normalizeImageUrl(item.imageUrl)} alt="" className="h-8 w-12 rounded object-cover" />}
-                <span className="text-orange-100">{item.label}</span>
-                {item.kind === 'map' ? (
-                  <Button
-                    variant="secondary"
-                    className="px-2 py-0.5 text-[11px]"
-                    onClick={() => {
-                      const s = item.snapshot
-                      if (!s) {
-                        // Item antigo, guardado quando a biblioteca só tinha a
-                        // imagem: troca só o mapa e deixa o resto como está.
-                        persist({ ...scene, backgroundUrl: item.imageUrl ?? '' })
-                        return
-                      }
-                      persist({
-                        ...scene,
-                        backgroundUrl: s.backgroundUrl,
-                        map: s.map,
-                        gridColumns: s.gridColumns,
-                        showGrid: s.showGrid,
-                        timeOfDay: s.timeOfDay,
-                        locationLit: s.locationLit,
-                        fog: s.fog,
-                        tokens: s.tokens,
-                      })
-                    }}
-                  >
-                    {item.snapshot ? 'abrir cena' : 'usar mapa'}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    className="px-2 py-0.5 text-[11px]"
-                    onClick={() => addToken({ label: item.label, kind: item.tokenKind ?? 'monster', imageUrl: item.imageUrl })}
-                  >
-                    criar peça
-                  </Button>
-                )}
-                <button className="text-[11px] text-red-400 hover:text-red-200" onClick={() => deleteSceneLibraryItem(tableId, item.id)}>
-                  remover
-                </button>
-              </div>
-            ))}
-            {library.length === 0 && <p className="text-xs text-orange-300/50">A biblioteca está vazia. Monte um encontro e guarde pela aba "Mapa" — volta inteiro depois.</p>}
-          </div>
-        </div>
+        <SceneLibraryPanel tableId={tableId} library={library} scene={scene} persist={persist} addToken={addToken} />
       )}
     </Card>
   )

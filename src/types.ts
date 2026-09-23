@@ -754,6 +754,14 @@ export interface Scene {
   gridColumns?: number
   showGrid?: boolean
   fog?: SceneFog
+  /**
+   * De qual item da biblioteca esta cena veio.
+   *
+   * É o que permite ao mestre abrir uma cena guardada, mexer nela e **gravar
+   * por cima**, em vez de acumular cópias do mesmo mapa. Fica no documento da
+   * cena, e não na tela, para sobreviver a um recarregar de página.
+   */
+  fromLibraryId?: string
 }
 
 /**
@@ -770,8 +778,16 @@ export interface SceneLibraryItem {
   label: string
   imageUrl?: string
   tokenKind?: SceneTokenKind
+  /**
+   * Pasta em que o item está, por nome. Pasta aqui não é documento: é só um
+   * rótulo repetido nos itens. Renomear é reescrever o rótulo em todos, e uma
+   * pasta deixa de existir quando o último item sai dela — que é o que uma
+   * mesa espera de "pasta" sem precisar administrar nada.
+   */
   folder?: string
   createdAt: number
+  /** Quando foi gravado por cima pela última vez. */
+  updatedAt?: number
   /** Retrato da cena no momento de guardar (só em itens de mapa). */
   snapshot?: SceneSnapshot
 }

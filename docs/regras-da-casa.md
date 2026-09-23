@@ -245,3 +245,32 @@ enquadramento feito com zoom alto ficaria gravado, e ao voltar para zoom 1 o
 mapa sumiria do palco com o controle já no fim do curso, sem jeito de trazer
 de volta. O botão **centralizar** zera os dois eixos sem mexer no zoom nem no
 giro.
+
+---
+
+## Biblioteca de cenas
+
+Guardar um encontro guarda a cena inteira, não só a imagem: enquadramento,
+grade, luz, névoa e as peças em jogo. Clone e invocação ficam de fora do
+retrato — carregar a cena depois não ressuscita ninguém.
+
+**Gravar por cima.** A cena em jogo lembra de qual item da biblioteca veio
+(`Scene.fromLibraryId`), então mexer no enquadramento de um mapa guardado não
+obriga a acumular cópias dele: com uma cena aberta, aparecem *Atualizar
+"nome"* e *Guardar como nova*, lado a lado. Guardar uma cena nova também passa
+a apontar para ela, para o ajuste seguinte já poder gravar por cima.
+
+O vínculo cai quando a imagem de fundo muda — trocar o mapa é começar outra
+cena, e sem isso *Atualizar* gravaria um mapa por cima de outro.
+
+**Pastas.** Pasta aqui **não é documento**: é um nome repetido nos itens.
+
+- some sozinha quando o último item sai dela;
+- renomear é reescrever o nome em todos os itens de uma vez;
+- item sem pasta aparece agrupado em *Sem pasta*, que é rótulo de tela e não
+  um valor gravado;
+- nome com espaços em volta é o mesmo nome (`"Konoha"` e `" Konoha "` são uma
+  pasta só).
+
+É menos maquinário do que pasta de verdade — nada para criar, nada para
+limpar quando esvazia — e dá à mesa o que ela espera de pasta.

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "tsx src/lib/__checks__/geo.check.ts && tsx src/lib/__checks__/jutsu.check.ts && tsx src/lib/__checks__/cast.check.ts && tsx src/lib/__checks__/yt.check.ts && tsx src/lib/__checks__/equip.check.ts && tsx src/lib/__checks__/summon.check.ts && tsx src/lib/__checks__/companion.check.ts && tsx src/lib/__checks__/condicao.check.ts && tsx src/lib/__checks__/peca.check.ts && tsx src/lib/__checks__/combate.check.ts && tsx src/lib/__checks__/imagem.check.ts"
+    "check": "tsx src/lib/__checks__/geo.check.ts && tsx src/lib/__checks__/jutsu.check.ts && tsx src/lib/__checks__/cast.check.ts && tsx src/lib/__checks__/yt.check.ts && tsx src/lib/__checks__/equip.check.ts && tsx src/lib/__checks__/summon.check.ts && tsx src/lib/__checks__/companion.check.ts && tsx src/lib/__checks__/condicao.check.ts && tsx src/lib/__checks__/peca.check.ts && tsx src/lib/__checks__/combate.check.ts && tsx src/lib/__checks__/imagem.check.ts && tsx src/lib/__checks__/biblioteca.check.ts"
   },
   "dependencies": {
     "firebase": "^12.18.0",

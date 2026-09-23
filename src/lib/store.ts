@@ -683,6 +683,33 @@ export async function addSceneLibraryItem(tableId: string, item: Omit<SceneLibra
   return full
 }
 
+/** Grava por cima de um item guardado: a cena mexida volta para o mesmo lugar. */
+export async function updateSceneLibraryItem(tableId: string, itemId: string, patch: Partial<SceneLibraryItem>) {
+  await updateDoc(doc(sceneLibraryCol(tableId), itemId), stripUndefined({ ...patch, updatedAt: Date.now() }))
+}
+
+/**
+ * Renomear pasta é reescrever o rótulo em todos os itens dela.
+ *
+ * Pasta não é documento nesta mesa — é um nome repetido nos itens. Sai mais
+ * barato (nada para criar, nada para limpar quando esvazia) ao custo desta
+ * varredura, que acontece só quando alguém renomeia.
+ */
+export async function renameSceneLibraryFolder(
+  tableId: string,
+  itens: readonly SceneLibraryItem[],
+  de: string | undefined,
+  para: string | undefined,
+) {
+  const alvos = itens.filter((i) => (i.folder ?? '') === (de ?? ''))
+  if (alvos.length === 0) return
+  const batch = writeBatch(requireDb())
+  for (const i of alvos) {
+    batch.update(doc(sceneLibraryCol(tableId), i.id), stripUndefined({ folder: para || undefined }))
+  }
+  await batch.commit()
+}
+
 export async function deleteSceneLibraryItem(tableId: string, itemId: string) {
   await deleteDoc(doc(sceneLibraryCol(tableId), itemId))
 }
