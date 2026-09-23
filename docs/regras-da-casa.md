@@ -97,12 +97,25 @@ O caminho natural de quem joga é subir a arte no Drive, clicar em
 visualizador, em HTML; num `<img>` dá quadro quebrado, e a pessoa fica
 achando que errou o endereço.
 
-O app traduz na entrada, em todo campo de imagem (retrato, peça, mapa,
-criatura, marionete, peça solta): tira o ID do arquivo de qualquer formato de
-link do Drive e monta `drive.google.com/thumbnail?id=...&sz=w1600`, que é o
-que continua servindo a imagem crua hoje. O campo passa a mostrar o endereço
-convertido, para não restar dúvida do que foi gravado. Link que já é imagem
-direta (Imgur, Discord, um `.png` qualquer) passa intacto.
+O app traduz sozinho: tira o ID do arquivo de qualquer formato de link do
+Drive e monta `lh3.googleusercontent.com/d/<id>`, que é o endereço que serve a
+imagem crua e que a mesa testou. Link que já é imagem direta (Imgur, Discord,
+um `.png` qualquer) passa intacto.
+
+```
+https://drive.google.com/file/d/1TtnE0xmmyIZC8Ua9Iw1L-pNJy_8WnhUQ/view?usp=drive_link
+                          ↓
+https://lh3.googleusercontent.com/d/1TtnE0xmmyIZC8Ua9Iw1L-pNJy_8WnhUQ
+```
+
+A tradução acontece **duas vezes**, de propósito:
+
+- **ao digitar**, em todo campo de imagem (retrato, peça, mapa, criatura,
+  marionete, peça solta) — o campo passa a mostrar o endereço convertido, para
+  não restar dúvida do que foi gravado;
+- **ao desenhar**, no retrato e na peça — assim vale também para o que já
+  estava gravado antes desta regra existir e para o que entrar por fora do
+  app.
 
 O que o app **não** resolve: o arquivo precisa estar compartilhado como
 *"qualquer pessoa com o link"*. Restrito, ele devolve imagem quebrada por mais

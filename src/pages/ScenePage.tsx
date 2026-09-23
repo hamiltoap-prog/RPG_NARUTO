@@ -607,7 +607,7 @@ export function ScenePage() {
             {/* 1. Mapa */}
             {scene.backgroundUrl && (
               <img
-                src={scene.backgroundUrl}
+                src={normalizeImageUrl(scene.backgroundUrl)}
                 alt=""
                 draggable={false}
                 className="pointer-events-none absolute inset-0 h-full w-full select-none"
@@ -1198,7 +1198,7 @@ function GMPanel({
           <div className="flex flex-wrap gap-2">
             {library.map((item) => (
               <div key={item.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
-                {item.imageUrl && <img src={item.imageUrl} alt="" className="h-8 w-12 rounded object-cover" />}
+                {item.imageUrl && <img src={normalizeImageUrl(item.imageUrl)} alt="" className="h-8 w-12 rounded object-cover" />}
                 <span className="text-orange-100">{item.label}</span>
                 {item.kind === 'map' ? (
                   <Button

@@ -1,3 +1,4 @@
+import { normalizeImageUrl } from './imageUrl'
 import type { SceneToken, TokenArt, TokenMode } from '../types'
 
 /**
@@ -29,9 +30,12 @@ type ComArte = TokenArt & { imageUrl?: string }
  * ficha), o link que foi digitado na própria peça.
  */
 export function arteDaPeca(ficha: ComArte | undefined, token?: Pick<SceneToken, 'imageUrl'>): ArteDaPeca {
-  if (ficha?.tokenMode === 'png' && ficha.tokenUrl) return { url: ficha.tokenUrl, recortado: true }
+  // O link do Drive é traduzido na hora de desenhar, e não só na hora de
+  // digitar: assim vale para o que já estava gravado e para o que entrou por
+  // fora do app.
+  if (ficha?.tokenMode === 'png' && ficha.tokenUrl) return { url: normalizeImageUrl(ficha.tokenUrl), recortado: true }
   const retrato = ficha?.imageUrl || token?.imageUrl
-  return { url: retrato || undefined, recortado: false }
+  return { url: normalizeImageUrl(retrato), recortado: false }
 }
 
 /** O modo que vale hoje, com o padrão explícito. */

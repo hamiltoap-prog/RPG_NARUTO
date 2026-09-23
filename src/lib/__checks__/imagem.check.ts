@@ -5,7 +5,7 @@ const ok = (c: boolean, m: string) => {
 }
 
 const ID = '1A2b3C4d5E6f7G8h9I0jKlMnOpQrStUv'
-const SERVIDO = `https://drive.google.com/thumbnail?id=${ID}&sz=w1600`
+const SERVIDO = `https://lh3.googleusercontent.com/d/${ID}`
 
 // --- As formas em que o link do Drive chega colado
 {
@@ -26,7 +26,7 @@ const SERVIDO = `https://drive.google.com/thumbnail?id=${ID}&sz=w1600`
     ok(normalizeImageUrl(f) === SERVIDO, `devia traduzir "${f.trim()}"`)
     ok(ehLinkDoDrive(f), 'e reconhecer como link do Drive')
   }
-  console.log(`link do Drive traduzido em ${formas.length} formatos -> thumbnail?id=...&sz=w1600`)
+  console.log(`link do Drive traduzido em ${formas.length} formatos -> lh3.googleusercontent.com/d/<id>`)
 }
 
 // --- Link que já é imagem passa intacto
@@ -46,6 +46,18 @@ const SERVIDO = `https://drive.google.com/thumbnail?id=${ID}&sz=w1600`
 // --- Traduzir de novo não estraga (a pessoa cola o que o app já converteu)
 {
   ok(normalizeImageUrl(SERVIDO) === SERVIDO, 'link já traduzido continua igual')
+  // Endereço do Drive que o app usou antes, ou que veio de outro lugar:
+  // também cai no formato de hoje, em vez de ficar meio convertido.
+  ok(normalizeImageUrl(`https://drive.google.com/thumbnail?id=${ID}&sz=w1600`) === SERVIDO, 'thumbnail antigo vira o formato de hoje')
+  ok(normalizeImageUrl(`https://drive.google.com/uc?export=view&id=${ID}`) === SERVIDO, 'uc?export=view vira o formato de hoje')
+}
+
+// --- O link exato que a mesa usa
+{
+  const daMesa = 'https://drive.google.com/file/d/1TtnE0xmmyIZC8Ua9Iw1L-pNJy_8WnhUQ/view?usp=drive_link'
+  const esperado = 'https://lh3.googleusercontent.com/d/1TtnE0xmmyIZC8Ua9Iw1L-pNJy_8WnhUQ'
+  ok(normalizeImageUrl(daMesa) === esperado, `o link da mesa devia virar ${esperado}, veio ${normalizeImageUrl(daMesa)}`)
+  console.log('link da mesa:', daMesa, '->', normalizeImageUrl(daMesa))
 }
 
 // --- Vazio, espaços e ausente

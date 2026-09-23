@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, PropsWithChildren, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { normalizeImageUrl } from '../lib/imageUrl'
 
 export function Card({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
   return <div className={`plaque rounded-lg ${className}`}>{children}</div>
@@ -115,20 +116,23 @@ export function TabChip({
 
 export function Avatar({ url, name, size = 40 }: { url?: string; name: string; size?: number }) {
   const [broken, setBroken] = useState(false)
+  // Link do Drive também é traduzido AQUI, e não só na hora de digitar: pega
+  // o que já estava gravado de antes e o que for colado por fora do app.
+  const src = normalizeImageUrl(url)
   const initials = name
     .trim()
     .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join('')
-  const showImage = Boolean(url) && !broken
+  const showImage = Boolean(src) && !broken
   return (
     <div
       className="portrait-ring flex shrink-0 items-center justify-center overflow-hidden rounded-sm bg-[color:var(--surface-raised)] font-display font-semibold text-white"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {showImage ? (
-        <img src={url} alt={name} className="h-full w-full object-cover" onError={() => setBroken(true)} />
+        <img src={src} alt={name} className="h-full w-full object-cover" onError={() => setBroken(true)} />
       ) : (
         <span>{initials || '?'}</span>
       )}

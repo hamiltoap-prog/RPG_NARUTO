@@ -41,10 +41,10 @@ export function driveFileId(url: string): string | undefined {
 /**
  * Traduz o link para um que o `<img>` carrega.
  *
- * O endereço escolhido é o `thumbnail` do Drive: é o que continua servindo a
- * imagem crua hoje (o antigo `uc?export=view` passou a devolver página de
- * aviso em arquivo grande) e aceita um tamanho. `sz=w1600` dá resolução de
- * sobra para retrato e peça sem puxar o arquivo inteiro.
+ * O endereço é o `lh3.googleusercontent.com/d/<id>`: é o que serve a imagem
+ * crua, na resolução do arquivo, sem página de aviso no meio. Os outros
+ * endereços do Drive (`uc?export=view`, `thumbnail?id=`) ou já caíram ou
+ * servem uma redução — este é o que a mesa testou e viu funcionar.
  */
 export function normalizeImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined
@@ -52,7 +52,7 @@ export function normalizeImageUrl(url: string | undefined): string | undefined {
   if (!limpo) return undefined
   const id = driveFileId(limpo)
   if (!id) return limpo
-  return `https://drive.google.com/thumbnail?id=${id}&sz=w1600`
+  return `https://lh3.googleusercontent.com/d/${id}`
 }
 
 /** O link é do Drive e foi (ou seria) traduzido? Para a tela poder avisar. */
