@@ -11,6 +11,7 @@ import { CompanionCard } from '../components/CompanionPanel'
 import { SurvivalHud } from '../components/SurvivalPanel'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Help } from '../components/Help'
+import { TokenArtEditor } from '../components/TokenArtEditor'
 import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
@@ -47,6 +48,7 @@ import {
   listenRequestsForCharacter,
   listenScene,
   listenShop,
+  updateCharacterDirect,
 } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CHAKRA_DONOR_CLASS_ID, REQUESTABLE_FIELD_LABELS } from '../types'
 import type {
@@ -146,7 +148,16 @@ export function PlayerView({
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 pb-16 lg:grid lg:grid-cols-[1fr_340px] lg:items-start">
       <div className="flex flex-col gap-4">
-        <HeaderCard character={character} clanName={clan?.name} className={charClass?.name} tableCode={table.code} onSubmit={submit} pendingFields={pendingFields} />
+        <HeaderCard
+          table={table}
+          character={character}
+          clanName={clan?.name}
+          className={charClass?.name}
+          tableCode={table.code}
+          onSubmit={submit}
+          pendingFields={pendingFields}
+          asGM={asGM}
+        />
         <VitalsCard character={character} party={allCharacters} onSubmit={submit} pendingFields={pendingFields} />
         <SurvivalHud table={table} character={character} />
         <ActionRoller
@@ -221,13 +232,17 @@ function PendingNote({ fields, pending }: { fields: RequestableField[]; pending:
 // ---------- Cabeçalho ----------
 
 function HeaderCard({
+  table,
   character,
   clanName,
   className,
   tableCode,
   onSubmit,
   pendingFields,
+  asGM,
 }: {
+  table: GameTable
+  asGM: boolean
   character: Character
   clanName?: string
   className?: string
@@ -259,9 +274,22 @@ function HeaderCard({
           <div className="flex flex-col items-center gap-1">
             <Avatar url={character.imageUrl} name={character.name} size={64} />
             {!editingImage ? (
-              <button className="text-[11px] text-orange-400 hover:text-orange-200" disabled={blocked} onClick={() => setEditingImage(true)}>
-                trocar imagem
-              </button>
+              <>
+                <button className="text-[11px] text-orange-400 hover:text-orange-200" disabled={blocked} onClick={() => setEditingImage(true)}>
+                  trocar imagem
+                </button>
+                {/* A peça no mapa é do mestre — vale para a ficha do jogador e
+                    para o NPC de ficha completa, que é onde se procura a
+                    imagem dele. O mesmo controle está na aba Peças da tela de
+                    jogo, para resolver a mesa inteira de uma vez. */}
+                {asGM && (
+                  <TokenArtEditor
+                    ficha={character}
+                    compacto
+                    onGravar={(patch) => updateCharacterDirect(table.id, character.id, patch)}
+                  />
+                )}
+              </>
             ) : (
               <div className="flex w-40 flex-col gap-1">
                 <Input value={imageDraft} onChange={(e) => setImageDraft(e.target.value)} placeholder="URL da imagem" className="text-xs" />
@@ -337,6 +365,23 @@ function HeaderCard({
           </Link>
           <ThemeToggle />
           {!character.isAlive && <Badge tone="bad">Caído</Badge>}
+          {/* Cair é consequência de chegar a 0 PV, mas levantar é decisão de
+              mesa: estabilizou, um aliado socorreu, a cena mudou. Quem decide
+              é o mestre, e ele decide sem precisar mexer nos PV. */}
+          {asGM && (
+            <Button
+              variant={character.isAlive ? 'ghost' : 'good'}
+              className="px-2 py-0.5 text-[11px]"
+              title={
+                character.isAlive
+                  ? 'Marcar como caído (não mexe nos PV)'
+                  : 'Tirar o caído (não mexe nos PV: continua com o que tem)'
+              }
+              onClick={() => updateCharacterDirect(table.id, character.id, { isAlive: !character.isAlive })}
+            >
+              {character.isAlive ? 'marcar caído' : 'de pé'}
+            </Button>
+          )}
           <PendingNote fields={['imageUrl']} pending={pendingFields} />
         </div>
       </div>

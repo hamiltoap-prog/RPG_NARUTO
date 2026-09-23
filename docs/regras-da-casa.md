@@ -77,10 +77,14 @@ Toda ficha que vira peça carrega duas imagens:
 - a **peça**, um PNG sem fundo, que é o que fica bom em cima de um mapa.
 
 **Quem põe o PNG e quem decide qual está valendo é só o mestre**, em qualquer
-ficha da mesa — personagem, NPC, criatura ou marionete. O controle fica num só
-lugar, a aba *Peças* da tela de jogo, porque é ali que se pensa em peça.
-Por isso `tokenUrl` e `tokenMode` não entram nos campos que um jogador pode
-pedir para mudar.
+ficha da mesa — personagem, NPC, criatura ou marionete. Por isso `tokenUrl` e
+`tokenMode` não entram nos campos que um jogador pode pedir para mudar.
+
+O controle aparece em **dois lugares**, de propósito: no quadro da aba *Peças*
+da tela de jogo, para resolver a mesa inteira de uma vez, e **na própria
+ficha**, ao lado de "trocar imagem", que é onde quem está olhando um NPC de
+ficha completa procura a imagem dele. Um controle só, no lugar "certo", vira
+um controle que ninguém acha. Marionete tem o dela na forja.
 
 A escolha é lida **na hora de desenhar**, a partir da ficha, e não gravada na
 peça: trocar o PNG de um NPC muda todas as peças dele, em todas as cenas, de
@@ -192,3 +196,23 @@ e em branco o mestre escreve o que a mesa combinou.
 
 Quando o jutsu **cura**, a tela diz o dado de cura em vez de ficar muda — mas
 o app não mexe em PV de ninguém por isso: quem aplica cura é o mestre.
+
+---
+
+## Caído
+
+Chegar a 0 PV derruba: o app marca `isAlive: false` sozinho, porque isso é
+consequência de conta e não escolha de ninguém.
+
+**Levantar é decisão de mesa**, e por isso é do mestre: estabilizou, um aliado
+socorreu, a cena virou. O botão fica na ficha (ao lado do nome) e na linha do
+combate, e **não mexe nos PV** — dá para estar de pé com 0 PV se a mesa quiser,
+e dá para marcar alguém como caído sem zerar nada.
+
+A única automação além da queda é o caminho de volta óbvio: curar alguém de 0
+para acima de 0 tira o caído junto. Antes disso, um personagem curado ficava
+marcado como caído para sempre, e ninguém entendia por quê.
+
+Na lista de combate, o selo de caído de um **personagem** segue o status, não o
+PV: se o mestre pôs alguém de pé com 0 PV, a linha não pode continuar dizendo
+que ele está caído. NPC e ficha temporária não têm status, então ali vale o PV.

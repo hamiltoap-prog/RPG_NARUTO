@@ -148,7 +148,14 @@ export function CombatTracker({
     const novo = Math.max(0, Math.min(alvo.hp.max, atual + delta))
     const [kind, id] = ref.split(':')
     if (kind === 'character') {
-      await updateCharacterDirect(table.id, id, { hp: { ...alvo.hp, current: novo }, ...(novo === 0 ? { isAlive: false } : {}) })
+      // Cai a 0 PV e levanta ao voltar de 0: quem foi curado acima de zero não
+      // fica marcado como caído para sempre. Fora esse vaivém, quem decide é o
+      // mestre, no botão da ficha e na linha daqui.
+      const levantou = novo > 0 && alvo.hp.current === 0
+      await updateCharacterDirect(table.id, id, {
+        hp: { ...alvo.hp, current: novo },
+        ...(novo === 0 ? { isAlive: false } : levantou ? { isAlive: true } : {}),
+      })
     } else if (kind === 'companion') {
       // Ficha temporária a 0 PV sai de jogo (a marionete quebra), e a peça
       // dela some do mapa junto.
@@ -263,7 +270,12 @@ export function CombatTracker({
             const atual = i === table.combatTurnIndex
             const alvo = entidadeDe(p.ref)
             const pct = alvo && alvo.hp.max > 0 ? Math.max(0, (alvo.hp.current / alvo.hp.max) * 100) : 0
-            const caido = alvo?.hp.current === 0
+            // Para personagem, quem manda é o status: o mestre pode ter
+            // posto de pé alguém com 0 PV (estabilizado, socorrido), e a linha
+            // não pode continuar dizendo que ele está caído. NPC e ficha
+            // temporária não têm status, então vale o PV.
+            const caido =
+              alvo && 'isAlive' in alvo ? !(alvo as Character).isAlive : alvo?.hp.current === 0
             return (
               <div
                 key={p.ref}
@@ -343,6 +355,23 @@ export function CombatTracker({
                     >
                       {p.boss ? 'não é chefe' : 'marcar chefe'}
                     </button>
+                    {p.ref.startsWith('character:') && (
+                      <button
+                        className="text-[11px] text-orange-400/60 hover:text-[color:var(--orange)]"
+                        title={
+                          (alvo as Character).isAlive
+                            ? 'Marcar como caído (não mexe nos PV)'
+                            : 'Tirar o caído (não mexe nos PV)'
+                        }
+                        onClick={() =>
+                          updateCharacterDirect(table.id, p.ref.split(':')[1], {
+                            isAlive: !(alvo as Character).isAlive,
+                          })
+                        }
+                      >
+                        {(alvo as Character).isAlive ? 'marcar caído' : 'de pé'}
+                      </button>
+                    )}
                     <button
                       className="text-[11px] text-red-400/70 hover:text-red-300"
                       title="Tira da ordem de iniciativa (a ficha continua na mesa)"
