@@ -21,6 +21,7 @@ import {
   attackAttribute,
   companionAsCaster,
   findCatalogEntry,
+  npcAsCaster,
   readJutsu,
   resolveCast,
 } from '../lib/jutsuCast'
@@ -509,8 +510,9 @@ function montarCompanions(cast: JutsuCast, caster: Character): Companion[] {
 export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: MesaViva, gmName: string) {
   const ficha = mesa.characters.find((c) => c.id === cast.casterId)
   const temporaria = cast.casterKind === 'companion' ? mesa.companions.find((c) => c.id === cast.casterId) : undefined
+  const criatura = cast.casterKind === 'npc' ? mesa.npcs.find((n) => n.id === cast.casterId) : undefined
   const dono = temporaria ? mesa.characters.find((c) => c.id === temporaria.ownerCharacterId) : undefined
-  const quemAge = temporaria ? companionAsCaster(temporaria, dono) : ficha
+  const quemAge = temporaria ? companionAsCaster(temporaria, dono) : criatura ? npcAsCaster(criatura) : ficha
   if (!quemAge) throw new Error('Quem lançou não está mais na mesa.')
 
   // Jutsu de área pega mais de um. Quem lançou marcou na tela quem está
@@ -599,7 +601,9 @@ export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: Mesa
     ? temporaria.usesOwnerChakra && dono
       ? { kind: 'character', id: dono.id, chakra: dono.chakra }
       : { kind: 'companion', id: temporaria.id, chakra: temporaria.chakra }
-    : { kind: 'character', id: ficha!.id, chakra: ficha!.chakra, weapons: ficha!.weapons }
+    : criatura
+      ? { kind: 'npc', id: criatura.id, chakra: criatura.chakra ?? { current: 0, max: 0 }, weapons: criatura.weapons }
+      : { kind: 'character', id: ficha!.id, chakra: ficha!.chakra, weapons: ficha!.weapons }
 
   await applyJutsuCast(table.id, cast, pagador, golpes, resumo)
 
@@ -629,8 +633,8 @@ export async function resolverCast(table: GameTable, cast: JutsuCast, mesa: Mesa
 
   await addLogEntry(table.id, {
     actorName: cast.casterName,
-    actorType: 'player',
-    characterId: temporaria ? temporaria.ownerCharacterId : cast.casterId,
+    actorType: criatura ? 'gm' : 'player',
+    characterId: temporaria ? temporaria.ownerCharacterId : criatura ? undefined : cast.casterId,
     kind: 'combat',
     summary: `${fora.summary}${cast.chakraCost ? ` (−${cast.chakraCost} chakra)` : ''}${avisoDasFichas}`,
     dice: fora.dice,

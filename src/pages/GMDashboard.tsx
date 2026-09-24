@@ -16,10 +16,11 @@ import { SurvivalPanel } from '../components/SurvivalPanel'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Help } from '../components/Help'
 import { ChakraGiftPanel } from '../components/ChakraGiftPanel'
-import { JutsuCastQueue } from '../components/JutsuCastPanel'
+import { JutsuCastQueue, resolverCast } from '../components/JutsuCastPanel'
+import { CriaturaEmJogo } from '../components/CriaturaEmJogo'
 import { GMRoller } from '../components/GMRoller'
 import { RollRequestsPanel } from '../components/RollRequestsPanel'
-import { Avatar, Badge, Button, Card, Input, SectionTitle, TabChip } from '../components/ui'
+import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip } from '../components/ui'
 import {
   deleteCharacter,
   listenCharacters,
@@ -31,13 +32,14 @@ import {
   listenPendingJutsuCasts,
   listenCustomClans,
   listenPendingRollRequests,
+  listenScene,
   rememberGMTable,
   updateTable,
 } from '../lib/store'
 import { allClans } from '../lib/clans'
 import { useTableJutsus } from '../hooks/useTableJutsus'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
-import type { Character, Clan, Companion, GameTable, Mission, NPC, RequestableField } from '../types'
+import type { Character, Clan, Companion, GameTable, Mission, NPC, RequestableField, Scene } from '../types'
 import { PlayerView } from './PlayerView'
 
 type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'jutsus' | 'loja' | 'som' | 'sobrevivencia' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
@@ -68,6 +70,11 @@ export function GMDashboard({ table }: { table: GameTable }) {
   }, [table])
 
   const customJutsus = useTableJutsus(table.id)
+  /** A criatura que o mestre está jogando agora, na aba NPCs. */
+  const [emJogoId, setEmJogoId] = useState('')
+  const emJogo = npcs.find((n) => n.id === emJogoId)
+  const [scene, setScene] = useState<Scene | null>(null)
+  useEffect(() => listenScene(table.id, setScene), [table.id])
   const [customClans, setCustomClans] = useState<Clan[]>([])
   useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
   useEffect(() => listenCharacters(table.id, setCharacters), [table.id])
@@ -230,15 +237,53 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'combate' && <CombatTracker table={table} characters={characters} npcs={npcs} companions={companions} />}
 
-      {tab === 'npcs' && <NpcManager
-          tableId={table.id}
-          npcs={npcs}
-          npcCharacters={characters.filter((c) => c.isNPC)}
-          onOpenCharacter={(id) => {
-            setSelectedId(id)
-            setTab('personagens')
-          }}
-        />}
+      {tab === 'npcs' && (
+        <div className="flex flex-col gap-3">
+          {/* Jogar com a criatura vem antes de editá-la: no meio da cena o
+              mestre quer agir com ela, não mexer nos números dela. */}
+          {npcs.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <SectionTitle>Jogar com uma criatura</SectionTitle>
+                <Select
+                  value={emJogoId}
+                  onChange={(e) => setEmJogoId(e.target.value)}
+                  className="w-56 px-2 py-0.5 text-xs"
+                >
+                  <option value="">Escolha a criatura...</option>
+                  {npcs.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.name} · PV {n.hp.current}/{n.hp.max}
+                      {n.visible ? '' : ' · oculta'}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {emJogo && (
+                <CriaturaEmJogo
+                  table={table}
+                  npc={emJogo}
+                  mesa={{ characters, npcs, companions }}
+                  scene={scene}
+                  onResolveNow={(cast) =>
+                    resolverCast(table, cast, { characters, npcs, companions }, table.gmName).then(() => undefined)
+                  }
+                />
+              )}
+            </div>
+          )}
+
+          <NpcManager
+            tableId={table.id}
+            npcs={npcs}
+            npcCharacters={characters.filter((c) => c.isNPC)}
+            onOpenCharacter={(id) => {
+              setSelectedId(id)
+              setTab('personagens')
+            }}
+          />
+        </div>
+      )}
 
       {tab === 'missoes' && <MissionBoard tableId={table.id} missions={missions} asGM />}
 

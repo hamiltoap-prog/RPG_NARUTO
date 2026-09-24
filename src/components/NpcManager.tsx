@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from './ui'
-import { allJutsus, tableJutsus } from '../lib/jutsuCatalog'
+import { EscolherJutsu } from './EscolherJutsu'
 import { WEAPONS } from '../data/equipment'
 import { weaponFromCatalog } from '../lib/equipment'
 import { TokenArtEditor } from './TokenArtEditor'
@@ -8,7 +8,7 @@ import { ELEMENTS } from '../lib/jutsuAccess'
 import { newId } from '../lib/id'
 import { createNPC, deleteNPC, updateNPC } from '../lib/store'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from '../types'
-import type { AttributeKey, Character, Jutsu, NPC, NpcAttack } from '../types'
+import type { AttributeKey, Character, NPC, NpcAttack } from '../types'
 
 const emptyDraft = { name: '', armorClass: '12', hp: '10', resistancePoints: '13', attacksText: '', notes: '' }
 
@@ -214,20 +214,12 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
   const [bonus, setBonus] = useState(4)
   const [dano, setDano] = useState('1d6')
   const [tipo, setTipo] = useState('')
-  const [jutsuNome, setJutsuNome] = useState('')
-  const [busca, setBusca] = useState('')
 
   const ataques = npc.attacks ?? []
   const jutsus = npc.jutsus ?? []
   const armas = npc.weapons ?? []
   const [armaNome, setArmaNome] = useState('')
   const [tralha, setTralha] = useState(npc.gearText ?? '')
-  // Sem busca, a lista mostra os jutsus DA CASA: são poucos e são os que o
-  // mestre acabou de escrever, então é o que ele procura aqui. O catálogo do
-  // manual tem 631 e só faz sentido com busca.
-  const achados = busca.trim()
-    ? allJutsus().filter((j) => j.name.toLowerCase().includes(busca.trim().toLowerCase())).slice(0, 30)
-    : tableJutsus()
 
   async function addAtaque() {
     if (!nome.trim()) return
@@ -236,19 +228,6 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
     setNome('')
   }
 
-  async function addJutsu() {
-    const cat = allJutsus().find((j) => j.name === jutsuNome)
-    if (!cat || jutsus.some((j) => j.name === cat.name)) return
-    const novo: Jutsu = {
-      id: newId(),
-      name: cat.name,
-      chakraCost: cat.cost,
-      details: `${cat.classification} · ${cat.rank} · ${cat.description}`,
-    }
-    await updateNPC(tableId, npc.id, { jutsus: [...jutsus, novo] })
-    setJutsuNome('')
-    setBusca('')
-  }
 
   return (
     <div className="well flex flex-col gap-2 rounded-sm p-2.5">
@@ -300,22 +279,18 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
           </button>
         </div>
       ))}
-      <div className="flex flex-wrap items-end gap-1.5">
-        <Input placeholder="buscar jutsu..." value={busca} onChange={(e) => setBusca(e.target.value)} className="w-40 px-2 py-0.5 text-xs" />
-        {achados.length > 0 && (
-          <Select value={jutsuNome} onChange={(e) => setJutsuNome(e.target.value)} className="w-56 px-2 py-0.5 text-xs">
-            <option value="">escolha...</option>
-            {achados.map((j) => (
-              <option key={j.name + j.rank} value={j.name}>
-                {j.name} ({j.rank})
-              </option>
-            ))}
-          </Select>
-        )}
-        <Button variant="secondary" className="px-2 py-0.5 text-[11px]" disabled={!jutsuNome} onClick={addJutsu}>
-          + jutsu
-        </Button>
-      </div>
+      <EscolherJutsu
+        jaTem={jutsus.map((j) => j.name)}
+        rotuloBotao="+ jutsu"
+        onEscolher={(cat) =>
+          updateNPC(tableId, npc.id, {
+            jutsus: [
+              ...jutsus,
+              { id: newId(), name: cat.name, details: `${cat.classification} · ${cat.rank}`, chakraCost: cat.cost },
+            ],
+          })
+        }
+      />
 
       {/* Armas e tralha: a criatura usa o que carrega, e o grupo saqueia o
           resto. Editável aqui também para o mestre ajustar no meio da cena,

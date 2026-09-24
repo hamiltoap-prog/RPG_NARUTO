@@ -6,7 +6,7 @@ import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
 import { AvisoDoDrive } from './AvisoDoDrive'
 import { createNPC, deleteBestiaryEntry, listenBestiary, saveBestiaryEntry } from '../lib/store'
 import { summonSize } from '../lib/summon'
-import { allJutsus, ehDaCasa } from '../lib/jutsuCatalog'
+import { EscolherJutsu } from './EscolherJutsu'
 import { ELEMENTS } from '../lib/jutsuAccess'
 import { WEAPONS } from '../data/equipment'
 import { weaponFromCatalog } from '../lib/equipment'
@@ -517,36 +517,11 @@ function FichaCriatura({
  * histórias diferentes — um bicho com jutsu e zero de chakra não lança nada.
  */
 function FichaDaCriatura({ ficha, onChange }: { ficha: BestiaryEntry; onChange: (e: BestiaryEntry) => void }) {
-  const [jutsuBusca, setJutsuBusca] = useState('')
-  const [jutsuNome, setJutsuNome] = useState('')
   const [armaNome, setArmaNome] = useState('')
 
   const jutsus = ficha.jutsus ?? []
   const armas = ficha.weapons ?? []
-  // Sem memo de propósito: um `useMemo` preso à busca não reagiria ao catálogo
-  // da mesa chegar depois (ele vem por listen), e o mestre veria a lista sem os
-  // jutsus que ele mesmo escreveu. Filtrar 631 itens por render não custa nada.
-  const catalogo = (() => {
-    const t = jutsuBusca.trim().toLowerCase()
-    const todos = allJutsus()
-    const achados = t ? todos.filter((j) => j.name.toLowerCase().includes(t)) : todos
-    // Os da casa primeiro: são os que a mesa escreveu e os que ela procura.
-    const daCasa = achados.filter((j) => ehDaCasa(j.name))
-    const doManual = achados.filter((j) => !ehDaCasa(j.name))
-    return [...daCasa, ...doManual].slice(0, 40)
-  })()
-
   const semChakra = jutsus.length > 0 && (ficha.chakra?.max ?? 0) === 0
-
-  function addJutsu() {
-    const cat = allJutsus().find((j) => j.name === jutsuNome)
-    if (!cat || jutsus.some((j) => j.name === cat.name)) return
-    onChange({
-      ...ficha,
-      jutsus: [...jutsus, { id: newId(), name: cat.name, details: `${cat.classification} · ${cat.rank}`, chakraCost: cat.cost }],
-    })
-    setJutsuNome('')
-  }
 
   function addArma() {
     const cat = WEAPONS.find((w) => w.name === armaNome)
@@ -578,29 +553,19 @@ function FichaDaCriatura({ ficha, onChange }: { ficha: BestiaryEntry; onChange: 
             </button>
           </div>
         ))}
-        <div className="flex flex-wrap items-end gap-1.5">
-          <Input
-            placeholder="procurar jutsu"
-            value={jutsuBusca}
-            onChange={(e) => setJutsuBusca(e.target.value)}
-            className="w-40 px-2 py-0.5 text-xs"
-          />
-          <Select value={jutsuNome} onChange={(e) => setJutsuNome(e.target.value)} className="min-w-0 flex-1 px-2 py-0.5 text-xs">
-            <option value="">Escolha um jutsu do catálogo...</option>
-            {catalogo
-              .filter((j) => !jutsus.some((x) => x.name === j.name))
-              .map((j) => (
-                <option key={j.name} value={j.name}>
-                  {ehDaCasa(j.name) ? '★ ' : ''}
-                  {j.name} · {j.rank}
-                  {j.cost ? ` · ${j.cost}` : ''}
-                </option>
-              ))}
-          </Select>
-          <Button variant="secondary" className="px-2 py-0.5 text-[11px]" disabled={!jutsuNome} onClick={addJutsu}>
-            dar jutsu
-          </Button>
-        </div>
+        <EscolherJutsu
+          jaTem={jutsus.map((j) => j.name)}
+          rotuloBotao="dar jutsu"
+          onEscolher={(cat) =>
+            onChange({
+              ...ficha,
+              jutsus: [
+                ...jutsus,
+                { id: newId(), name: cat.name, details: `${cat.classification} · ${cat.rank}`, chakraCost: cat.cost },
+              ],
+            })
+          }
+        />
         {semChakra && (
           <p className="text-[11px] text-amber-300/80">
             Esta criatura tem jutsu mas zero de chakra — na mesa ela não vai conseguir lançar nenhum. Ponha chakra

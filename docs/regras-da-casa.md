@@ -325,6 +325,32 @@ barra**. O que ele faz é avisar quando os números se contradizem — uma
 criatura com jutsu e zero de chakra não lança nada, e a tela diz isso em vez
 de deixar a descoberta para o meio da luta.
 
+### Escolher o jutsu dela
+
+O catálogo tem 631 entradas e o arquivo do manual **começa** por 86 jutsus de
+clã. Uma lista cortada nos primeiros N entregava justamente o que menos
+interessa a quem monta uma criatura — bicho não é Aburame. Então o escolhedor
+tem busca (por nome **e** por efeito), filtro de categoria e de rank, e
+**jutsu de clã fica escondido por padrão**, atrás de uma chave para o caso do
+NPC herdeiro de um clã. Os jutsus da casa aparecem primeiro, marcados com ★.
+
+### Jogar com ela
+
+O mestre tinha os números da criatura e um rolador separado; o que faltava era
+**jogar** com ela. O painel *Jogar com uma criatura*, na aba NPCs, dá o que um
+jogador tem: PV e chakra à mão, condições com um clique para tirar, a lista de
+golpes, armas e jutsus, escolha de alvo, condição e área, e teste de atributo.
+
+O ponto que faz diferença é o caminho: a criatura age pela **mesma fila de
+lançamentos** do jogador, e não por um atalho do mestre. É isso que lhe dá os
+dados animados na tela de todo mundo, a linha no registro da mesa, o dano
+caindo na ficha do alvo e a condição grudando. Uma ação, um caminho de
+resolução — o mesmo para personagem, clone, marionete e criatura.
+
+O que sai desse painel é **público** por definição, porque é o que a mesa
+inteira está vendo acontecer. Para rolar escondido (uma emboscada, um teste
+que o grupo não pode ver), o caminho continua sendo a aba Rolagens.
+
 ---
 
 ## Girar a peça

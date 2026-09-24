@@ -1056,9 +1056,13 @@ export interface JutsuCast {
   /**
    * Quem age. Ausente = ficha de personagem, como era antes das fichas
    * temporárias existirem; 'companion' quer dizer que `casterId` é o id de um
-   * clone, invocação ou marionete.
+   * clone, invocação ou marionete; 'npc', que é uma criatura da mesa.
+   *
+   * A criatura passa pelo MESMO caminho do jogador — e não por um atalho do
+   * mestre — porque é isso que lhe dá os dados na tela de todo mundo, o
+   * registro da mesa, o dano aplicado no alvo e a condição grudando.
    */
-  casterKind?: 'character' | 'companion'
+  casterKind?: 'character' | 'companion' | 'npc'
 
   jutsuName: string
   classification: string

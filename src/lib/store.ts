@@ -989,7 +989,7 @@ export function listenMyJutsuCasts(tableId: string, casterId: string, cb: (casts
  */
 /** De onde sai o chakra do lançamento, e de quem é a arma que se gasta. */
 export interface CastChakraSource {
-  kind: 'character' | 'companion'
+  kind: 'character' | 'companion' | 'npc'
   id: string
   chakra: { current: number; max: number }
   /** Só faz sentido para ficha de personagem: armas ficam nela. */
@@ -1045,6 +1045,8 @@ export async function applyJutsuCast(
   if (chakraFrom.kind === 'character') {
     patchConjurador.updatedAt = Date.now()
     batch.update(doc(charactersCol(tableId), chakraFrom.id), patchConjurador)
+  } else if (chakraFrom.kind === 'npc') {
+    batch.update(doc(npcsCol(tableId), chakraFrom.id), patchConjurador)
   } else {
     batch.update(doc(companionsCol(tableId), chakraFrom.id), patchConjurador)
   }
