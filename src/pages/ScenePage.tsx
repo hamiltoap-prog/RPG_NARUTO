@@ -8,6 +8,7 @@ import { drawFog, emptyFog, fogRows, isRevealed, paintFog, remapFog, resampleFog
 import { newId } from '../lib/id'
 import { condicoesDe, efeitoDaCondicao, selo } from '../lib/conditions'
 import { arteDaPeca, modoDaPeca, podeUsarPng } from '../lib/tokenArt'
+import { useTableJutsus } from '../hooks/useTableJutsus'
 import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
 import { AvisoDoDrive } from '../components/AvisoDoDrive'
 import { SceneLibraryPanel } from '../components/SceneLibraryPanel'
@@ -149,6 +150,7 @@ export function ScenePage() {
     return listenScene(tableId, setSceneState)
   }, [tableId])
 
+  useTableJutsus(tableId)
   useEffect(() => listenCharacters(tableId, setCharacters), [tableId])
   useEffect(() => listenNPCs(tableId, setNpcs), [tableId])
   useEffect(() => listenCompanions(tableId, setCompanions), [tableId])
@@ -669,7 +671,10 @@ export function ScenePage() {
                         alt={rotuloDe(t)}
                         draggable={false}
                         className={`h-full w-full object-contain ${t.temporary ? 'opacity-80' : ''}`}
-                        style={{ filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.85))' }}
+                        style={{
+                          filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.85))',
+                          transform: t.rotation ? `rotate(${t.rotation}deg)` : undefined,
+                        }}
                       />
                     </div>
                   ) : (
@@ -685,7 +690,13 @@ export function ScenePage() {
                       style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}
                     >
                       {arte.url ? (
-                        <img src={arte.url} alt={rotuloDe(t)} draggable={false} className="h-full w-full object-cover" />
+                        <img
+                          src={arte.url}
+                          alt={rotuloDe(t)}
+                          draggable={false}
+                          className="h-full w-full object-cover"
+                          style={{ transform: t.rotation ? `rotate(${t.rotation}deg)` : undefined }}
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-raised)] font-display text-white">
                           <span style={{ fontSize: `${Math.max(10, width * stage.width * 0.35)}px` }}>{rotuloDe(t).slice(0, 2).toUpperCase()}</span>
@@ -1269,6 +1280,16 @@ function GMPanel({
                         </option>
                       ))}
                     </Select>
+                    {/* Girar é da peça, não da ficha: a mesma criatura pode
+                        estar deitada numa cena e de pé em outra. */}
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-0.5 text-[11px]"
+                      title={`Gira a peça 90° (agora em ${t.rotation ?? 0}°)`}
+                      onClick={() => updateToken(t.id, { rotation: ((t.rotation ?? 0) + 90) % 360 })}
+                    >
+                      girar {t.rotation ? `${t.rotation}°` : '90°'}
+                    </Button>
                     <Button variant="ghost" className="px-2 py-0.5 text-[11px]" onClick={() => updateToken(t.id, { onBoard: false })}>
                       recolher
                     </Button>

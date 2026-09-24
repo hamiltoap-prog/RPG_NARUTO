@@ -150,6 +150,14 @@ service cloud.firestore {
         allow write: if isGM(tableId);
       }
 
+      // Jutsus da casa: mesmo arranjo dos clãs. O jogador lê (precisa ver o
+      // que pode aprender e o texto do que já sabe), só o mestre escreve —
+      // escrever jutsu é escrever regra, e regra é do mestre.
+      match /customJutsus/{jutsuId} {
+        allow read: if signedIn();
+        allow write: if isGM(tableId);
+      }
+
       // Doação de chakra: o médico pede, só o mestre libera. A transferência
       // em si é feita pelo cliente do mestre, que tem permissão nas duas
       // fichas — por isso o pedido é só um bilhete, e não uma escrita.

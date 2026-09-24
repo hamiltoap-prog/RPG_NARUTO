@@ -274,3 +274,61 @@ cena, e sem isso *Atualizar* gravaria um mapa por cima de outro.
 
 É menos maquinário do que pasta de verdade — nada para criar, nada para
 limpar quando esvazia — e dá à mesa o que ela espera de pasta.
+
+---
+
+## Jutsus da casa
+
+O manual traz 631 jutsus, e nenhuma mesa para aí. A forja (aba *Jutsus da
+casa*) deixa o mestre escrever os seus, com todos os campos do catálogo, e o
+que sai dela entra pela porta da frente: dá para conceder na ficha, lançar
+pelo cartão de ataque, ensinar a um clone, dar a uma criatura e ler no manual.
+
+**O texto é a regra.** O app lê da descrição o modo (ataque, resistência ou
+nada), o dado de dano, a condição e a área — a mesma leitura que usa nos
+jutsus do livro. Por isso a bancada mostra **o que entendeu** enquanto o
+mestre escreve: é a forma honesta de dizer "é isto que vai acontecer na
+mesa", em vez de descobrir no meio do combate que o app leu outra coisa.
+
+**Nome é identidade.** O documento é gravado com o nome como id, porque é o
+nome que liga um jutsu à ficha de quem o conhece. Dois jutsus da casa não
+podem ter o mesmo nome; salvar de novo com o mesmo nome corrige em vez de
+duplicar; e um jutsu da casa com o nome de um do manual **substitui** o do
+manual — é assim que a mesa conserta um texto sem mexer no livro.
+
+**Onde o catálogo vive.** Manual e casa são juntados em `lib/jutsuCatalog`, e
+o resultado fica num registro de módulo que as telas de mesa preenchem por
+`listen`. É estado global mutável, e a escolha se paga só porque o app abre
+uma mesa por aba: o catálogo é lido em mais de uma dúzia de lugares, muitos
+deles fundo de poço (a leitura de ações de um clone, por exemplo), e levar a
+lista por parâmetro até lá atravessaria toda a cadeia com um argumento que
+quase ninguém usa. O registro conta quantas telas estão abertas e só se
+esvazia quando a última sai — sem essa contagem, fechar a ficha que o mestre
+abriu por dentro do painel apagava o catálogo de quem continuava na tela.
+
+---
+
+## Criatura do bestiário
+
+Uma criatura guardada tem ficha, não resumo. Vão junto com ela para a mesa:
+
+- **jutsus**, escolhidos do catálogo (os da casa aparecem primeiro, marcados
+  com ★) — e um chakra próprio, para eles custarem alguma coisa;
+- **armas e ferramentas**, que viram golpe nas Rolagens do mestre, com o dado
+  da arma e o bônus de ataque da criatura;
+- **o que mais ela carrega**, em texto livre, para o grupo saquear;
+- **afinidade elemental**, para a Vantagem Elemental valer nos dois sentidos;
+- **a arte da peça**, retrato e PNG sem fundo.
+
+Quem decide se um bicho tem nível para jutsu ou item é o mestre: o app **não
+barra**. O que ele faz é avisar quando os números se contradizem — uma
+criatura com jutsu e zero de chakra não lança nada, e a tela diz isso em vez
+de deixar a descoberta para o meio da luta.
+
+---
+
+## Girar a peça
+
+O giro é **da peça, não da ficha**: a mesma criatura pode estar deitada numa
+cena e de pé em outra, e um PNG de dragão precisa apontar para onde ele voa.
+O botão fica na aba *Peças* da tela de jogo e anda de 90 em 90 graus.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { marked } from 'marked'
 import { Badge, Card, Input, SectionTitle, Select, TabChip } from './ui'
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus } from '../lib/jutsuCatalog'
 import { RANKS, jutsuElement, normalizeRank } from '../lib/jutsuAccess'
 import type { JutsuCatalogEntry } from '../types'
 
@@ -70,7 +70,7 @@ export function RulesBrowser() {
             Capítulos
           </TabChip>
           <TabChip active={aba === 'jutsus'} className="px-2.5 py-1 text-xs" onClick={() => setAba('jutsus')}>
-            Jutsus ({JUTSU_CATALOG.length})
+            Jutsus ({allJutsus().length})
           </TabChip>
         </div>
       </Card>
@@ -150,11 +150,11 @@ function BuscaJutsus() {
   const [categoria, setCategoria] = useState('')
   const [aberto, setAberto] = useState<string | null>(null)
 
-  const categorias = useMemo(() => [...new Set(JUTSU_CATALOG.map((j) => j.category))].sort(), [])
+  const categorias = useMemo(() => [...new Set(allJutsus().map((j) => j.category))].sort(), [])
 
   const achados = useMemo(() => {
     const t = busca.trim().toLowerCase()
-    return JUTSU_CATALOG.filter((j) => {
+    return allJutsus().filter((j) => {
       if (rank && normalizeRank(j.rank) !== rank) return false
       if (categoria && j.category !== categoria) return false
       if (!t) return true

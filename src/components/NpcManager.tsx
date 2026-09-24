@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, Textarea } from './ui'
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus, tableJutsus } from '../lib/jutsuCatalog'
+import { WEAPONS } from '../data/equipment'
+import { weaponFromCatalog } from '../lib/equipment'
+import { TokenArtEditor } from './TokenArtEditor'
 import { ELEMENTS } from '../lib/jutsuAccess'
 import { newId } from '../lib/id'
 import { createNPC, deleteNPC, updateNPC } from '../lib/store'
@@ -216,9 +219,15 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
 
   const ataques = npc.attacks ?? []
   const jutsus = npc.jutsus ?? []
+  const armas = npc.weapons ?? []
+  const [armaNome, setArmaNome] = useState('')
+  const [tralha, setTralha] = useState(npc.gearText ?? '')
+  // Sem busca, a lista mostra os jutsus DA CASA: são poucos e são os que o
+  // mestre acabou de escrever, então é o que ele procura aqui. O catálogo do
+  // manual tem 631 e só faz sentido com busca.
   const achados = busca.trim()
-    ? JUTSU_CATALOG.filter((j) => j.name.toLowerCase().includes(busca.trim().toLowerCase())).slice(0, 30)
-    : []
+    ? allJutsus().filter((j) => j.name.toLowerCase().includes(busca.trim().toLowerCase())).slice(0, 30)
+    : tableJutsus()
 
   async function addAtaque() {
     if (!nome.trim()) return
@@ -228,7 +237,7 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
   }
 
   async function addJutsu() {
-    const cat = JUTSU_CATALOG.find((j) => j.name === jutsuNome)
+    const cat = allJutsus().find((j) => j.name === jutsuNome)
     if (!cat || jutsus.some((j) => j.name === cat.name)) return
     const novo: Jutsu = {
       id: newId(),
@@ -307,6 +316,65 @@ function EditorDeGolpes({ tableId, npc }: { tableId: string; npc: NPC }) {
           + jutsu
         </Button>
       </div>
+
+      {/* Armas e tralha: a criatura usa o que carrega, e o grupo saqueia o
+          resto. Editável aqui também para o mestre ajustar no meio da cena,
+          sem ter que voltar ao bestiário. */}
+      <p className="mt-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">
+        Armas e ferramentas
+        <span className="ml-1 normal-case tracking-normal text-orange-400/40">— viram golpe nas Rolagens do mestre</span>
+      </p>
+      {armas.map((w) => (
+        <div key={w.id} className="flex items-center gap-2 text-xs text-orange-200">
+          <span className="flex-1">
+            {w.name} <span className="text-orange-400/60">· {w.damage}</span>
+          </span>
+          <button
+            className="text-red-400 hover:text-red-200"
+            onClick={() => updateNPC(tableId, npc.id, { weapons: armas.filter((x) => x.id !== w.id) })}
+          >
+            remover
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-end gap-1.5">
+        <Select value={armaNome} onChange={(e) => setArmaNome(e.target.value)} className="w-56 px-2 py-0.5 text-xs">
+          <option value="">escolha uma arma...</option>
+          {WEAPONS.map((w) => (
+            <option key={w.name} value={w.name}>
+              {w.name} · {w.damage} {w.damageType}
+            </option>
+          ))}
+        </Select>
+        <Button
+          variant="secondary"
+          className="px-2 py-0.5 text-[11px]"
+          disabled={!armaNome}
+          onClick={async () => {
+            const cat = WEAPONS.find((w) => w.name === armaNome)
+            if (!cat) return
+            await updateNPC(tableId, npc.id, {
+              weapons: [...armas, { ...weaponFromCatalog(cat), id: newId(), equipped: true }],
+            })
+            setArmaNome('')
+          }}
+        >
+          + arma
+        </Button>
+      </div>
+      <label className="flex flex-col gap-1 text-[11px] text-orange-400/60">
+        o que mais ela carrega
+        <Input
+          value={tralha}
+          placeholder="Pergaminho selado, 200 ryo, um frasco de veneno"
+          className="px-2 py-0.5 text-xs"
+          onChange={(e) => setTralha(e.target.value)}
+          onBlur={() => updateNPC(tableId, npc.id, { gearText: tralha })}
+        />
+      </label>
+
+      <p className="mt-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Peça no mapa</p>
+      <TokenArtEditor ficha={npc} onGravar={(patch) => updateNPC(tableId, npc.id, patch)} />
 
       <p className="mt-1 font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">Para conjurar e resistir</p>
       <div className="flex flex-wrap items-end gap-1.5">

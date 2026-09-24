@@ -6,6 +6,11 @@ import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
 import { AvisoDoDrive } from './AvisoDoDrive'
 import { createNPC, deleteBestiaryEntry, listenBestiary, saveBestiaryEntry } from '../lib/store'
 import { summonSize } from '../lib/summon'
+import { allJutsus, ehDaCasa } from '../lib/jutsuCatalog'
+import { ELEMENTS } from '../lib/jutsuAccess'
+import { WEAPONS } from '../data/equipment'
+import { weaponFromCatalog } from '../lib/equipment'
+import { TokenArtEditor } from './TokenArtEditor'
 import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, CREATURE_KIND_LABELS, SUMMON_RANKS, SUMMON_SIZES } from '../types'
 import type {
   AttributeKey,
@@ -59,6 +64,7 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
       skills: '',
       specialFeatures: '',
       notes: '',
+      chakra: { current: 0, max: 0 },
       createdAt: Date.now(),
       ...base,
     }
@@ -146,9 +152,26 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
       // faz os próprios testes ("1d4 + atributo bruto contra o próprio PR").
       summonSize: e.kind === 'summon' ? (e.size ?? 'M') : undefined,
       attributes: e.attributes,
+      // A ficha inteira vai junto: jutsus, armas, tralha, chakra, afinidade e
+      // a arte da peça. Antes disto a criatura chegava como um resumo e o
+      // mestre remontava tudo à mão a cada encontro.
+      jutsus: e.jutsus,
+      weapons: e.weapons,
+      gearText: e.gearText,
+      chakra: e.chakra,
+      modifiers: e.modifiers,
+      elements: e.elements,
+      level: e.level,
+      tokenUrl: e.tokenUrl,
+      tokenMode: e.tokenMode,
     })
+    const levou = [
+      `${golpes.length || 1} golpe(s)`,
+      (e.jutsus ?? []).length > 0 ? `${e.jutsus!.length} jutsu(s)` : '',
+      (e.weapons ?? []).length > 0 ? `${e.weapons!.length} arma(s)` : '',
+    ].filter(Boolean)
     setAviso(
-      `${e.name} entrou na mesa como NPC, oculto e com ${golpes.length || 1} golpe(s) pronto(s). ` +
+      `${e.name} entrou na mesa como NPC, oculto, com ${levou.join(', ')}. ` +
         'Marque "visível" na aba NPCs quando o grupo encontrar a criatura.',
     )
   }
@@ -383,6 +406,28 @@ function FichaCriatura({
             }}
           />
         </label>
+        <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+          nível
+          <Input
+            type="number"
+            min={0}
+            value={d.level ?? ''}
+            placeholder="—"
+            onChange={(e) => set('level', e.target.value === '' ? undefined : Number(e.target.value) || 0)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+          chakra
+          <Input
+            type="number"
+            min={0}
+            value={d.chakra?.max ?? 0}
+            onChange={(e) => {
+              const max = Number(e.target.value) || 0
+              set('chakra', { current: max, max })
+            }}
+          />
+        </label>
       </div>
 
       <div className="well flex flex-col gap-2 rounded-sm p-3">
@@ -433,6 +478,8 @@ function FichaCriatura({
         </div>
       </div>
 
+      <FichaDaCriatura ficha={d} onChange={setD} />
+
       {(
         [
           ['description', 'Descrição'],
@@ -457,5 +504,184 @@ function FichaCriatura({
         </Button>
       </div>
     </Card>
+  )
+}
+
+/**
+ * O que faz a criatura ter ficha, e não só números: jutsus, armas, tralha,
+ * afinidade e a peça do mapa.
+ *
+ * Tudo aqui vai junto quando o mestre põe a criatura na mesa. O app **não
+ * barra** por nível: quem decide se um bicho sabe jutsu é o mestre, não uma
+ * regra de tela. O que ele faz é avisar quando o nível e o chakra contam
+ * histórias diferentes — um bicho com jutsu e zero de chakra não lança nada.
+ */
+function FichaDaCriatura({ ficha, onChange }: { ficha: BestiaryEntry; onChange: (e: BestiaryEntry) => void }) {
+  const [jutsuBusca, setJutsuBusca] = useState('')
+  const [jutsuNome, setJutsuNome] = useState('')
+  const [armaNome, setArmaNome] = useState('')
+
+  const jutsus = ficha.jutsus ?? []
+  const armas = ficha.weapons ?? []
+  // Sem memo de propósito: um `useMemo` preso à busca não reagiria ao catálogo
+  // da mesa chegar depois (ele vem por listen), e o mestre veria a lista sem os
+  // jutsus que ele mesmo escreveu. Filtrar 631 itens por render não custa nada.
+  const catalogo = (() => {
+    const t = jutsuBusca.trim().toLowerCase()
+    const todos = allJutsus()
+    const achados = t ? todos.filter((j) => j.name.toLowerCase().includes(t)) : todos
+    // Os da casa primeiro: são os que a mesa escreveu e os que ela procura.
+    const daCasa = achados.filter((j) => ehDaCasa(j.name))
+    const doManual = achados.filter((j) => !ehDaCasa(j.name))
+    return [...daCasa, ...doManual].slice(0, 40)
+  })()
+
+  const semChakra = jutsus.length > 0 && (ficha.chakra?.max ?? 0) === 0
+
+  function addJutsu() {
+    const cat = allJutsus().find((j) => j.name === jutsuNome)
+    if (!cat || jutsus.some((j) => j.name === cat.name)) return
+    onChange({
+      ...ficha,
+      jutsus: [...jutsus, { id: newId(), name: cat.name, details: `${cat.classification} · ${cat.rank}`, chakraCost: cat.cost }],
+    })
+    setJutsuNome('')
+  }
+
+  function addArma() {
+    const cat = WEAPONS.find((w) => w.name === armaNome)
+    if (!cat) return
+    onChange({ ...ficha, weapons: [...armas, { ...weaponFromCatalog(cat), id: newId(), equipped: true }] })
+    setArmaNome('')
+  }
+
+  return (
+    <div className="well flex flex-col gap-3 rounded-sm p-3">
+      <p className="font-display text-[11px] uppercase tracking-[0.12em] text-orange-400/60">
+        Ficha da criatura — vai junto quando ela entrar na mesa
+      </p>
+
+      {/* Jutsus */}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-xs text-orange-400/60">
+          Jutsus {ficha.level ? `(nível ${ficha.level})` : ''}
+        </p>
+        {jutsus.map((j) => (
+          <div key={j.id} className="flex flex-wrap items-center gap-2 rounded-sm border border-[color:var(--line)] px-2 py-1 text-xs">
+            <span className="min-w-0 flex-1 break-words text-orange-100">{j.name}</span>
+            {j.chakraCost && <span className="shrink-0 text-[11px] text-orange-400/60">{j.chakraCost}</span>}
+            <button
+              className="shrink-0 text-[11px] text-red-400 hover:text-red-200"
+              onClick={() => onChange({ ...ficha, jutsus: jutsus.filter((x) => x.id !== j.id) })}
+            >
+              tirar
+            </button>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-end gap-1.5">
+          <Input
+            placeholder="procurar jutsu"
+            value={jutsuBusca}
+            onChange={(e) => setJutsuBusca(e.target.value)}
+            className="w-40 px-2 py-0.5 text-xs"
+          />
+          <Select value={jutsuNome} onChange={(e) => setJutsuNome(e.target.value)} className="min-w-0 flex-1 px-2 py-0.5 text-xs">
+            <option value="">Escolha um jutsu do catálogo...</option>
+            {catalogo
+              .filter((j) => !jutsus.some((x) => x.name === j.name))
+              .map((j) => (
+                <option key={j.name} value={j.name}>
+                  {ehDaCasa(j.name) ? '★ ' : ''}
+                  {j.name} · {j.rank}
+                  {j.cost ? ` · ${j.cost}` : ''}
+                </option>
+              ))}
+          </Select>
+          <Button variant="secondary" className="px-2 py-0.5 text-[11px]" disabled={!jutsuNome} onClick={addJutsu}>
+            dar jutsu
+          </Button>
+        </div>
+        {semChakra && (
+          <p className="text-[11px] text-amber-300/80">
+            Esta criatura tem jutsu mas zero de chakra — na mesa ela não vai conseguir lançar nenhum. Ponha chakra
+            acima, ou deixe assim de propósito se a mesa quiser que ela lance uma vez só.
+          </p>
+        )}
+      </div>
+
+      {/* Armas e tralha */}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-xs text-orange-400/60">Armas e ferramentas — viram golpe na hora de agir</p>
+        {armas.map((w) => (
+          <div key={w.id} className="flex flex-wrap items-center gap-2 rounded-sm border border-[color:var(--line)] px-2 py-1 text-xs">
+            <span className="min-w-0 flex-1 break-words text-orange-100">
+              {w.name} <span className="text-orange-400/60">· {w.damage}</span>
+            </span>
+            <button
+              className="shrink-0 text-[11px] text-red-400 hover:text-red-200"
+              onClick={() => onChange({ ...ficha, weapons: armas.filter((x) => x.id !== w.id) })}
+            >
+              tirar
+            </button>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-end gap-1.5">
+          <Select value={armaNome} onChange={(e) => setArmaNome(e.target.value)} className="min-w-0 flex-1 px-2 py-0.5 text-xs">
+            <option value="">Escolha uma arma do catálogo...</option>
+            {WEAPONS.map((w) => (
+              <option key={w.name} value={w.name}>
+                {w.name} · {w.damage} {w.damageType}
+              </option>
+            ))}
+          </Select>
+          <Button variant="secondary" className="px-2 py-0.5 text-[11px]" disabled={!armaNome} onClick={addArma}>
+            dar arma
+          </Button>
+        </div>
+        <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+          o que mais ela carrega (espólio, tralha)
+          <Textarea
+            rows={2}
+            value={ficha.gearText ?? ''}
+            placeholder="Pergaminho selado, 200 ryo, um frasco de veneno"
+            onChange={(e) => onChange({ ...ficha, gearText: e.target.value })}
+          />
+        </label>
+      </div>
+
+      {/* Afinidade e peça */}
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="text-xs text-orange-400/60">Afinidade elemental (Vantagem Elemental vale nos dois sentidos)</p>
+          <div className="flex flex-wrap gap-1">
+            {ELEMENTS.map((el) => {
+              const tem = (ficha.elements ?? []).includes(el)
+              return (
+                <button
+                  key={el}
+                  className={`rounded-sm border px-2 py-0.5 font-display text-[10px] uppercase tracking-[0.08em] ${
+                    tem
+                      ? 'border-[color:var(--orange)] text-[color:var(--orange)]'
+                      : 'border-[color:var(--line)] text-orange-400/50 hover:text-orange-200'
+                  }`}
+                  onClick={() =>
+                    onChange({
+                      ...ficha,
+                      elements: tem ? (ficha.elements ?? []).filter((x) => x !== el) : [...(ficha.elements ?? []), el],
+                    })
+                  }
+                >
+                  {el}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col gap-1">
+          <p className="text-xs text-orange-400/60">Peça no mapa</p>
+          <TokenArtEditor ficha={ficha} compacto onGravar={(patch) => onChange({ ...ficha, ...patch })} />
+        </div>
+      </div>
+    </div>
   )
 }

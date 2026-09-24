@@ -231,12 +231,16 @@ function CriaturaAge({
   const npc = npcs.find((n) => n.id === npcId)
   const ataques = npc?.attacks ?? []
   const jutsus = npc?.jutsus ?? []
+  // A criatura também usa o que carrega: uma arma da ficha dela vira golpe,
+  // com o dado da arma e o bônus de ataque da criatura.
+  const armas = (npc?.weapons ?? []).filter((w) => (w.quantity ?? 1) > 0)
   // Clone, invocação e marionete também levam golpe da criatura do mestre.
   const alvos = alvosDaMesa({ characters, npcs, companions }, `npc:${npcId}`, true)
   const alvo = alvoRef ? acharAlvo(alvoRef, { characters, npcs, companions }) : undefined
 
   const ataqueEscolhido = ataques.find((a) => a.id === acaoId)
   const jutsuEscolhido = jutsus.find((j) => j.id === acaoId)
+  const armaEscolhida = armas.find((w) => `arma:${w.id}` === acaoId)
 
   // Vantagem Elemental do manual, do lado da criatura: o app confere o
   // elemento do jutsu contra as afinidades do alvo (ficha + clã) e sugere.
@@ -289,18 +293,26 @@ function CriaturaAge({
         }
       : {
           caster,
-          jutsuName: ataqueEscolhido?.name ?? 'Ataque',
-          classification: 'Taijutsu',
+          jutsuName: armaEscolhida?.name ?? ataqueEscolhido?.name ?? 'Ataque',
+          classification: armaEscolhida ? 'Bukijutsu' : 'Taijutsu',
           mode: 'attack' as const,
           attackAttribute: 'strength' as const,
           proficient: false,
-          damage: ataqueEscolhido?.damage ?? danoAvulso,
-          damageType: ataqueEscolhido?.damageType,
+          damage: armaEscolhida?.damage ?? ataqueEscolhido?.damage ?? danoAvulso,
+          damageType: armaEscolhida?.damageType ?? ataqueEscolhido?.damageType,
           target: alvo,
         }
 
     // Golpe pronto tem bônus próprio; a conta soma esse número e mais nada.
-    const bonus = ataqueEscolhido ? ataqueEscolhido.bonus : jutsuEscolhido ? undefined : bonusAvulso
+    // A arma da criatura rola com o bônus de ataque dela — a arma dá o dado,
+    // a criatura dá a mão que a segura.
+    const bonus = ataqueEscolhido
+      ? ataqueEscolhido.bonus
+      : armaEscolhida
+        ? (npc.attacks?.[0]?.bonus ?? bonusAvulso)
+        : jutsuEscolhido
+          ? undefined
+          : bonusAvulso
     const casterAjustado =
       bonus === undefined
         ? caster
@@ -443,6 +455,16 @@ function CriaturaAge({
                 ))}
               </optgroup>
             )}
+            {armas.length > 0 && (
+              <optgroup label="Armas que ela carrega">
+                {armas.map((w) => (
+                  <option key={w.id} value={`arma:${w.id}`}>
+                    {w.name} · {w.damage}
+                    {(w.quantity ?? 1) > 1 ? ` (${w.quantity})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
             {jutsus.length > 0 && (
               <optgroup label="Jutsus">
                 {jutsus.map((j) => (
@@ -456,7 +478,7 @@ function CriaturaAge({
         </label>
       )}
 
-      {npc && !ataqueEscolhido && !jutsuEscolhido && (
+      {npc && !ataqueEscolhido && !jutsuEscolhido && !armaEscolhida && (
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs text-orange-400/60">
             bônus

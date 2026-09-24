@@ -8,6 +8,7 @@ import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
 import { CharacterCreate } from './CharacterCreate'
 import { BestiaryPanel } from '../components/BestiaryPanel'
 import { ClanManager } from '../components/ClanManager'
+import { JutsuForge } from '../components/JutsuForge'
 import { ItemForge } from '../components/ItemForge'
 import { GiftPanel } from '../components/GiftPanel'
 import { SoundBoard } from '../components/TableSound'
@@ -28,15 +29,18 @@ import {
   listenPendingRequests,
   listenPendingChakraGifts,
   listenPendingJutsuCasts,
+  listenCustomClans,
   listenPendingRollRequests,
   rememberGMTable,
   updateTable,
 } from '../lib/store'
+import { allClans } from '../lib/clans'
+import { useTableJutsus } from '../hooks/useTableJutsus'
 import { REQUESTABLE_FIELDS, REQUESTABLE_FIELD_LABELS } from '../types'
-import type { Character, Companion, GameTable, Mission, NPC, RequestableField } from '../types'
+import type { Character, Clan, Companion, GameTable, Mission, NPC, RequestableField } from '../types'
 import { PlayerView } from './PlayerView'
 
-type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'loja' | 'som' | 'sobrevivencia' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
+type Tab = 'personagens' | 'combate' | 'npcs' | 'bestiario' | 'clas' | 'jutsus' | 'loja' | 'som' | 'sobrevivencia' | 'missoes' | 'rolagens' | 'pedidos' | 'config'
 
 export function GMDashboard({ table }: { table: GameTable }) {
   const [characters, setCharacters] = useState<Character[]>([])
@@ -63,6 +67,9 @@ export function GMDashboard({ table }: { table: GameTable }) {
     })
   }, [table])
 
+  const customJutsus = useTableJutsus(table.id)
+  const [customClans, setCustomClans] = useState<Clan[]>([])
+  useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
   useEffect(() => listenCharacters(table.id, setCharacters), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
   useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
@@ -116,6 +123,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
             ['npcs', `NPCs (${npcs.length})`],
             ['bestiario', 'Bestiário'],
             ['clas', 'Clãs'],
+            ['jutsus', `Jutsus da casa (${customJutsus.length})`],
             ['loja', 'Loja'],
             ['som', 'Som'],
             ['sobrevivencia', 'Fome e sede'],
@@ -237,6 +245,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
       {tab === 'bestiario' && <BestiaryPanel table={table} />}
 
       {tab === 'clas' && <ClanManager table={table} />}
+      {tab === 'jutsus' && <JutsuForge tableId={table.id} custom={customJutsus} clans={allClans(customClans)} />}
 
       {tab === 'loja' && (
         <div className="flex flex-col gap-4">

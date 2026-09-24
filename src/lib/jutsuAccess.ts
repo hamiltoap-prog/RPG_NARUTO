@@ -1,4 +1,4 @@
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus } from './jutsuCatalog'
 import type { CharClass, Clan, JutsuCatalogEntry } from '../types'
 
 /**
@@ -159,5 +159,5 @@ export function canLearn(entry: JutsuCatalogEntry, ctx: LearnerContext): Blocker
 
 /** Os jutsus que o personagem pode aprender agora, em ordem alfabética. */
 export function eligibleJutsus(ctx: LearnerContext): JutsuCatalogEntry[] {
-  return JUTSU_CATALOG.filter((j) => canLearn(j, ctx).ok).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  return allJutsus().filter((j) => canLearn(j, ctx).ok).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }

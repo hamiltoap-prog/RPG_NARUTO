@@ -1,5 +1,5 @@
 import { CONDITIONS } from '../data/conditions'
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus } from './jutsuCatalog'
 import { applyCriticalMultiplier, rollD20, rollDice } from './dice'
 import type { Edge } from './dice'
 import type { AttributeKey, Character, Companion, JutsuCatalogEntry, Modifiers, NPC } from '../types'
@@ -282,7 +282,7 @@ export function readJutsu(entry: Pick<JutsuCatalogEntry, 'description' | 'cost' 
 /** Acha no catálogo o jutsu que está na ficha, pelo nome. */
 export function findCatalogEntry(name: string): JutsuCatalogEntry | undefined {
   const alvo = semAcento(name).trim()
-  return JUTSU_CATALOG.find((j) => semAcento(j.name).trim() === alvo)
+  return allJutsus().find((j) => semAcento(j.name).trim() === alvo)
 }
 
 /**

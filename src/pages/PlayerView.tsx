@@ -12,13 +12,15 @@ import { SurvivalHud } from '../components/SurvivalPanel'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Help } from '../components/Help'
 import { TokenArtEditor } from '../components/TokenArtEditor'
+import { JutsuDetalhe } from '../components/JutsuDetalhe'
 import { allClans } from '../lib/clans'
 import { CLASSES } from '../data/classes'
 import { CONDITIONS } from '../data/conditions'
 import { efeitoDaCondicao } from '../lib/conditions'
+import { useTableJutsus } from '../hooks/useTableJutsus'
 import { normalizeImageUrl } from '../lib/imageUrl'
 import { ARMORS, GEAR, WEAPONS } from '../data/equipment'
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus } from '../lib/jutsuCatalog'
 import { ELEMENTS, clanElements, effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { calculateDerivedStats } from '../lib/characterMath'
 import {
@@ -63,6 +65,7 @@ import type {
   GearItem,
   InventoryItem,
   Jutsu,
+  JutsuCatalogEntry,
   Mission,
   NPC,
   RequestableField,
@@ -104,6 +107,9 @@ export function PlayerView({
 
   useEffect(() => listenCharacters(table.id, setAllCharacters), [table.id])
   useEffect(() => listenCustomClans(table.id, setCustomClans), [table.id])
+  // O catálogo da mesa (manual + jutsus da casa) precisa estar carregado para
+  // a ficha mostrar o texto certo e o cartão de lançar achar o jutsu.
+  useTableJutsus(table.id)
   useEffect(() => listenShop(table.id, setShopItems), [table.id])
   useEffect(() => listenNPCs(table.id, setNpcs), [table.id])
   useEffect(() => listenCompanions(table.id, setCompanions), [table.id])
@@ -1035,7 +1041,7 @@ function ElementsCard({
 
 // ---------- Jutsus ----------
 
-function formatCatalogJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
+function formatCatalogJutsuDetails(entry: JutsuCatalogEntry): string {
   return [
     `${entry.classification} · ${entry.rank}`,
     `Tempo: ${entry.castingTime} · Alcance: ${entry.range} · Duração: ${entry.duration}`,
@@ -1073,7 +1079,7 @@ function JutsusCard({
   const maxRank = maxRankForLevel(charClass, character.level)
   const limiteJutsus = jutsusKnownForLevel(charClass, character.level)
   const listaElegivel = eligibleJutsus({ clanId: character.clanId, elements: afinidades, maxRank })
-  const selectableJutsus = asGM ? JUTSU_CATALOG : listaElegivel
+  const selectableJutsus = asGM ? allJutsus() : listaElegivel
   const noLimite = !asGM && limiteJutsus > 0 && jutsus.length >= limiteJutsus
 
   function startEdit() {
@@ -1148,7 +1154,7 @@ function JutsusCard({
                 </button>
               )}
             </div>
-            {j.details && <p className="mt-0.5 whitespace-pre-line text-xs text-orange-300/60">{j.details}</p>}
+            <JutsuDetalhe jutsu={j} />
           </div>
         ))}
         {editing && (

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, SectionTitle, Select, TabChip, Textarea } from '../components/ui'
 
 import { CLASSES } from '../data/classes'
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus } from '../lib/jutsuCatalog'
 import { effectiveElements, eligibleJutsus, jutsusKnownForLevel, maxRankForLevel } from '../lib/jutsuAccess'
 import { averageStartingWealth, calculateDerivedStats, totalAttributes } from '../lib/characterMath'
 import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
@@ -26,6 +26,7 @@ import type {
   GameTable,
   InventoryItem,
   Jutsu,
+  JutsuCatalogEntry,
 } from '../types'
 import { newId } from '../lib/id'
 import { allClans, clanIdFromName, emptyClan } from '../lib/clans'
@@ -34,7 +35,7 @@ import { xpForLevel } from '../data/xpTable'
 import { SHINOBI_RANKS, suggestedRank } from '../data/ranks'
 import { ELEMENTS, clanElements } from '../lib/jutsuAccess'
 
-function formatJutsuDetails(entry: (typeof JUTSU_CATALOG)[number]): string {
+function formatJutsuDetails(entry: JutsuCatalogEntry): string {
   return [
     `${entry.classification} · ${entry.rank}`,
     `Tempo: ${entry.castingTime} · Alcance: ${entry.range} · Duração: ${entry.duration}`,
@@ -588,7 +589,7 @@ export function CharacterCreate({
 
           <p className="text-xs text-orange-400/60">
             Jutsus elegíveis com esta escolha: <b className="text-white">{listaElegivel.length}</b> de{' '}
-            {JUTSU_CATALOG.length}. O mestre pode conceder mais afinidades depois.
+            {allJutsus().length}. O mestre pode conceder mais afinidades depois.
           </p>
         </Card>
       )}

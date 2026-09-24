@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase'
+import { jutsuDocId } from './jutsuCatalog'
 import type {
   ActiveCondition,
   Companion,
@@ -28,6 +29,7 @@ import type {
   ShopItem,
   GMRoll,
   GameTable,
+  JutsuCatalogEntry,
   LogEntry,
   Mission,
   NPC,
@@ -830,6 +832,40 @@ export async function deleteCustomClan(tableId: string, id: string) {
 
 export function listenCustomClans(tableId: string, cb: (clans: Clan[]) => void) {
   return onSnapshot(clansCol(tableId), (snap) => cb(snap.docs.map((d) => d.data() as Clan)), defaultOnError('clãs da mesa'))
+}
+
+/* ---------------------------------------------------------------------------
+ * Jutsus da casa: os que o mestre escreveu.
+ *
+ * Mesmo arranjo dos clãs da casa — todos leem (o jogador precisa ver o que
+ * pode aprender e lançar), só o mestre escreve. O id do documento é o NOME
+ * normalizado, e não um id sorteado: é o nome que liga um jutsu à ficha de
+ * quem o conhece, então dois jutsus da casa não podem ter o mesmo nome, e
+ * salvar de novo com o mesmo nome corrige em vez de duplicar.
+ * ------------------------------------------------------------------------- */
+
+export function customJutsusCol(tableId: string) {
+  return collection(requireDb(), 'tables', tableId, 'customJutsus')
+}
+
+export async function saveCustomJutsu(tableId: string, jutsu: JutsuCatalogEntry, idAntigo?: string) {
+  const id = jutsuDocId(jutsu.name)
+  // Renomear é mudar o id do documento: grava no novo e apaga o antigo, para
+  // não ficarem dois jutsus onde a mesa enxerga um.
+  await setDoc(doc(customJutsusCol(tableId), id), stripUndefined(jutsu))
+  if (idAntigo && idAntigo !== id) await deleteDoc(doc(customJutsusCol(tableId), idAntigo))
+}
+
+export async function deleteCustomJutsu(tableId: string, id: string) {
+  await deleteDoc(doc(customJutsusCol(tableId), id))
+}
+
+export function listenCustomJutsus(tableId: string, cb: (js: JutsuCatalogEntry[]) => void) {
+  return onSnapshot(
+    customJutsusCol(tableId),
+    (snap) => cb(snap.docs.map((d) => d.data() as JutsuCatalogEntry)),
+    defaultOnError('jutsus da casa'),
+  )
 }
 
 /* ---------------------------------------------------------------------------

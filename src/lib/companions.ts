@@ -1,4 +1,4 @@
-import { JUTSU_CATALOG } from '../data/jutsus'
+import { allJutsus } from './jutsuCatalog'
 import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from './id'
 import { attackAttribute, findCatalogEntry, readArea, readJutsu } from './jutsuCast'
@@ -89,7 +89,7 @@ export interface CloneReading {
 
 /** Todos os jutsus de clone do catálogo. */
 export function cloneJutsus(): JutsuCatalogEntry[] {
-  return JUTSU_CATALOG.filter((j) => /clone/i.test(j.name))
+  return allJutsus().filter((j) => /clone/i.test(j.name))
 }
 
 export function isCloneJutsu(name: string): boolean {

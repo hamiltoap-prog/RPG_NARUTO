@@ -353,6 +353,12 @@ export interface NPC {
    * testes do Kuchiyose ("1d4 + atributo bruto contra o próprio PR"). */
   summonSize?: SummonSizeKey
   attributes?: Attributes
+  /** Armas e ferramentas da criatura: viram golpe na hora de agir. */
+  weapons?: Weapon[]
+  /** O que ela carrega além das armas, em texto livre. */
+  gearText?: string
+  /** Nível/poder, para o mestre se orientar. */
+  level?: number
   /** Peça no mapa — ver TokenArt. */
   tokenUrl?: string
   tokenMode?: TokenMode
@@ -693,6 +699,15 @@ export interface SceneToken {
   temporary?: boolean
   /** Falso = "preparada" na bandeja do mestre, ainda fora do mapa. */
   onBoard?: boolean
+  /**
+   * Giro da peça, em graus (0, 90, 180, 270).
+   *
+   * É da PEÇA, não da ficha: a mesma criatura pode estar deitada numa cena e
+   * de pé em outra, e um PNG de dragão precisa apontar para onde ele voa. Só
+   * faz diferença visível no token em PNG — o retrato redondo gira dentro do
+   * próprio círculo e ninguém nota.
+   */
+  rotation?: number
 }
 
 export type TimeOfDay = 'day' | 'night'
@@ -925,6 +940,33 @@ export interface BestiaryEntry {
    * Relevante" (04b-invocacoes.md).
    */
   attributes?: Attributes
+
+  /* --- O que faz a criatura ter ficha de verdade, e não só números ---
+   *
+   * Tudo abaixo vai junto quando o mestre põe a criatura na mesa: ela chega
+   * sabendo os jutsus que sabe, carregando o que carrega e com a cara que o
+   * mestre escolheu. Antes disto, a criatura guardada era um resumo e o
+   * mestre remontava a ficha à mão a cada encontro. */
+
+  /** Jutsus que a criatura sabe. Quem decide se ela tem nível para isso é o
+   * mestre — o app não barra, só avisa quando o posto sugere que sim. */
+  jutsus?: Jutsu[]
+  /** Chakra próprio, para os jutsus dela custarem alguma coisa. */
+  chakra?: { current: number; max: number }
+  /** Nível/poder, para o mestre se orientar ao dar jutsus e itens. */
+  level?: number
+  /** Modificadores, para a criatura resistir a jutsu como qualquer um. */
+  modifiers?: Modifiers
+  /** Afinidades elementais — a Vantagem Elemental vale nos dois sentidos. */
+  elements?: string[]
+  /** Armas e ferramentas que ela usa: viram golpe na hora de agir. */
+  weapons?: Weapon[]
+  /** O que ela carrega além das armas: espólio, tralha, em texto livre. */
+  gearText?: string
+  /** Peça no mapa — ver TokenArt. */
+  tokenUrl?: string
+  tokenMode?: TokenMode
+
   createdAt: number
 }
 
