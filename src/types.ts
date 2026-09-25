@@ -574,7 +574,6 @@ export interface GameTable {
   /** Fome e sede do grupo — regra da casa, desligada por padrão. */
   survival?: TableSurvival
   /** Faixa no ar para a mesa inteira. */
-  audio?: TableAudio
   /** Loja aberta ao grupo. Fechada, some da ficha. */
   shopOpen?: boolean
   /** Se o catálogo de equipamento do manual está à venda junto com os itens
@@ -805,6 +804,8 @@ export interface SceneLibraryItem {
   updatedAt?: number
   /** Retrato da cena no momento de guardar (só em itens de mapa). */
   snapshot?: SceneSnapshot
+  /** O som que tocava quando a cena foi guardada — abrir a cena traz ele de volta. */
+  audio?: SceneAudio
 }
 
 /** O que é preciso para remontar um encontro: enquadramento, grade, luz,
@@ -1125,40 +1126,80 @@ export interface JutsuCast {
 /* ---------------------------------------------------------------------------
  * Mesa de som
  *
- * A faixa toca do YouTube, no navegador de cada um. O documento da mesa
- * guarda só o que está no ar e desde quando — assim quem chega no meio entra
- * no ponto certo em vez de começar do zero.
+ * Três ideias, nesta ordem:
+ *
+ *  1. A BIBLIOTECA de faixas é separada do QUE ESTÁ TOCANDO. A faixa é um
+ *     cadastro; o que toca é uma referência por id guardada na cena. Trocar de
+ *     música não apaga nada, e a mesa inteira acompanha em tempo real.
+ *  2. O QUE TOCA É DECIDIDO, NÃO LEMBRADO. Uma função pura (`resolveAudioPlan`)
+ *     olha o estado da mesa e diz o que deveria estar no ar. Combate tem
+ *     prioridade maior, e só isso: ele nunca guarda o que tocava antes para
+ *     "devolver" depois. Quando a luta acaba, a função volta a enxergar a
+ *     escolha do mestre — que nunca foi apagada.
+ *  3. CADA CANAL TEM DUAS SAÍDAS. Um `<audio>` para arquivo direto e um player
+ *     do YouTube escondido para vídeo, porque o `<audio>` não toca YouTube.
  * ------------------------------------------------------------------------- */
 
-export type SoundCategory = 'ambiente' | 'clima' | 'combate'
+/**
+ * O papel da faixa. Cada um tem um lugar fixo:
+ *  - `ambience`: som de fundo em laço (floresta, chuva, taverna);
+ *  - `mood`: o clima da cena, tocando JUNTO com a ambientação;
+ *  - `combat`: assume sozinha quando um combate começa;
+ *  - `boss`: a variante do combate de chefe (cai para `combat` se não houver).
+ */
+export type AudioKind = 'ambience' | 'mood' | 'combat' | 'boss'
 
-export const SOUND_CATEGORY_LABELS: Record<SoundCategory, string> = {
-  ambiente: 'Ambientação',
-  clima: 'Clima',
-  combate: 'Combate',
+export const AUDIO_KIND_LABELS: Record<AudioKind, string> = {
+  ambience: 'Ambientação',
+  mood: 'Clima',
+  combat: 'Combate',
+  boss: 'Chefe',
 }
 
-export interface SoundTrack {
+/** De onde o link veio — decide o aviso quando ele não tocar. */
+export type AudioProvider = 'youtube' | 'drive' | 'dropbox' | 'onedrive' | 'github' | 'other'
+
+export interface AudioTrack {
   id: string
   tableId: string
-  category: SoundCategory
+  kind: AudioKind
+  /** Nome amigável: "Taverna à noite". */
   label: string
-  /** Link do YouTube como o mestre colou; o id é extraído na hora de tocar. */
+  /** Endereço já convertido, pronto para tocar. */
   url: string
+  /** O link como a pessoa colou, para mostrar e para abrir. */
+  sourceUrl: string
+  /** Outros endereços, tentados em ordem se o principal falhar. */
+  altUrls?: string[]
+  /** Qual saída do canal toca esta faixa. */
+  source: 'youtube' | 'direct'
+  provider?: AudioProvider
+  youtubeId?: string
   createdAt: number
 }
 
-/** O que está tocando agora, para todo mundo. */
-export interface TableAudio {
-  /** Id do vídeo no YouTube. Vazio = silêncio. */
-  videoId: string
-  label: string
-  /** Quando começou (epoch ms) — é o que deixa a mesa em sincronia. */
-  startedAt: number
-  playing: boolean
-  loop: boolean
-  /** 0 a 100. */
-  volume: number
+/**
+ * O que a cena pediu para tocar, por id, e os volumes por categoria.
+ *
+ * Fica na CENA e não na faixa: é a cena que tem uma ambientação, e é ela que
+ * a mesa inteira acompanha. Volumes valem para todo mundo — quem quiser menos
+ * som silencia na própria aba.
+ *
+ * Mora num documento próprio ao lado da cena (`scene/audio`), e não dentro
+ * dela: a cena é regravada inteira a cada arraste de peça, e um salvamento
+ * atrasado do mapa não pode desfazer a troca de música.
+ */
+export interface SceneAudio {
+  ambienceId?: string
+  moodId?: string
+  /** Qual faixa de combate (e de chefe) vale nas lutas. Sem escolha, a
+   * primeira cadastrada daquele tipo. Só entra no ar quando há combate. */
+  combatId?: string
+  bossId?: string
+  /** 0 a 1. */
+  ambienceVolume?: number
+  moodVolume?: number
+  combatVolume?: number
 }
 
 /* ---------------------------------------------------------------------------

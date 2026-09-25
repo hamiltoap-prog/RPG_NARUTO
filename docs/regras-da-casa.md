@@ -358,3 +358,70 @@ que o grupo não pode ver), o caminho continua sendo a aba Rolagens.
 O giro é **da peça, não da ficha**: a mesma criatura pode estar deitada numa
 cena e de pé em outra, e um PNG de dragão precisa apontar para onde ele voa.
 O botão fica na aba *Peças* da tela de jogo e anda de 90 em 90 graus.
+
+---
+
+## Mesa de som
+
+A mesa de som foi refeita inteira, no modelo do Shadowlords. Quatro ideias:
+
+**1. Biblioteca separada do que está tocando.** As faixas são cadastro
+(`tables/{id}/sound`), cada uma com um papel fixo:
+
+- *Ambientação* — som de fundo em laço; uma por vez;
+- *Clima* — o tom da cena, tocando **junto** com a ambientação;
+- *Combate* — assume sozinha quando o combate começa;
+- *Chefe* — toca no lugar da de combate quando há um chefe na ordem de
+  combate; sem faixa de chefe, vale a de combate.
+
+O que toca é uma referência por id guardada no som da cena
+(`tables/{id}/scene/audio`), junto com o volume de cada categoria. Esse
+documento é **separado** da cena de propósito: a cena é regravada inteira a
+cada arraste de peça, e um salvamento atrasado do mapa não pode desfazer a
+troca de música que o mestre acabou de fazer.
+
+**2. O que toca é decidido, não lembrado.** `resolveAudioPlan` é uma função
+pura: olha a mesa e diz o que deveria estar no ar. Combate tem prioridade
+maior, e só isso — ele nunca guarda a ambientação para "devolver" depois.
+Quando a luta acaba, a função volta a enxergar a escolha do mestre, que nunca
+foi apagada. Combate sem faixa de combate cadastrada não assume nada: a
+ambientação continua, em vez de a mesa ficar muda.
+
+**3. Três canais, cada um com duas saídas.** Um `<audio>` para arquivo direto
+e um player do YouTube escondido para vídeo. Toda entrada, saída e troca passa
+por um fade de ~1,2 s. O YouTube não tem laço para vídeo avulso: o canal
+relança o vídeo quando ele termina.
+
+**4. As armadilhas do navegador.**
+
+- *Autoplay.* Cada pessoa clica em **Ligar o som** uma vez na própria aba. O
+  clique toca um WAV de silêncio em cada canal — o navegador passa a aceitar
+  os `play()` seguintes, que chegam do banco sem gesto nenhum. Não dá para o
+  mestre ligar o som na tela de outra pessoa: é regra do navegador.
+- *A corrida do YouTube.* A faixa só é marcada como tocando **depois** de a
+  chamada de play sair de fato, e o canal torna a tentar assim que o player
+  fica pronto. Se a biblioteca tem vídeo, o player é criado de antemão.
+- *Link que não serve o arquivo.* YouTube, Dropbox, OneDrive e GitHub são
+  convertidos na hora de cadastrar. O **Google Drive não entrega áudio** para
+  outros sites (para imagem funciona, para som não): o app tenta vários
+  endereços do Drive em sequência e, se nenhum servir, diz que é limitação do
+  Drive — e não que o link está errado.
+
+Nada falha em silêncio: a placa de som mostra o que está no ar, e um canal com
+problema fica vermelho, com o motivo e um *tentar de novo*. Um canal quebrado
+não derruba os outros.
+
+**Quem controla o quê.** O som toca só na **tela de jogo** — nas fichas, não.
+Só o mestre escolhe faixas e volumes (na aba *Som* do painel ou na aba *Som*
+da própria tela de jogo), e os volumes valem para a mesa toda. Cada pessoa
+pode baixar o volume ou silenciar **só para si**; essa preferência fica no
+navegador dela e sobrevive a recarregar a página.
+
+**Cena guardada leva o som.** Guardar uma cena na biblioteca guarda o som que
+tocava; abrir a cena depois traz ele de volta — inclusive o silêncio, se ela
+foi guardada sem ambientação. Cenas guardadas antes disto não mexem no som.
+
+**Faixas antigas.** As faixas cadastradas no sistema anterior (só YouTube,
+com categoria ambiente/clima/combate) são lidas e convertidas na hora, sem
+migração no banco. O "tocando agora" antigo não é aproveitado: o mestre
+escolhe de novo o que toca.

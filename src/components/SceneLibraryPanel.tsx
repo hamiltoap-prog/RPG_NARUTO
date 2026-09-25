@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Badge, Button, Input, SectionTitle, Select } from './ui'
-import { deleteSceneLibraryItem, renameSceneLibraryFolder, updateSceneLibraryItem } from '../lib/store'
+import { deleteSceneLibraryItem, renameSceneLibraryFolder, updateSceneAudio, updateSceneLibraryItem } from '../lib/store'
+import { somAoAbrir } from '../lib/audioPlan'
 import { normalizeImageUrl } from '../lib/imageUrl'
 import { SEM_PASTA, agruparPorPasta, pastasDa } from '../lib/sceneLibrary'
 import type { Scene, SceneLibraryItem, SceneToken, SceneTokenKind } from '../types'
@@ -41,6 +42,9 @@ export function SceneLibraryPanel({
 
   /** Abre a cena guardada e lembra de onde ela veio, para poder gravar por cima. */
   function abrir(item: SceneLibraryItem) {
+    // A cena volta com o som que tinha quando foi guardada.
+    const som = somAoAbrir(item.audio)
+    if (som) void updateSceneAudio(tableId, som)
     const s = item.snapshot
     if (!s) {
       // Item antigo, de quando a biblioteca só guardava a imagem: troca o mapa

@@ -1,9 +1,9 @@
 /**
- * Mesa de som via YouTube.
+ * YouTube como saída de som.
  *
- * O vídeo toca escondido: o que interessa é o áudio. A sincronia vem de um
- * único número guardado na mesa — o instante em que a faixa começou. Quem
- * chega no meio da sessão pula para o ponto certo em vez de ouvir do início.
+ * O `<audio>` do navegador não toca vídeo do YouTube — não existe fluxo de
+ * áudio cru exposto. Então o vídeo toca num player escondido, controlado pela
+ * IFrame API, e é tratado pelo canal de som como uma segunda saída.
  */
 
 /** Aceita as formas que o YouTube usa: watch, youtu.be, embed e shorts. */
@@ -34,7 +34,7 @@ export function extractVideoId(url: string): string {
  * ------------------------------------------------------------------------- */
 
 interface YTPlayer {
-  loadVideoById(opts: { videoId: string; startSeconds?: number }): void
+  loadVideoById(opts: { videoId: string; startSeconds?: number } | string): void
   playVideo(): void
   pauseVideo(): void
   stopVideo(): void

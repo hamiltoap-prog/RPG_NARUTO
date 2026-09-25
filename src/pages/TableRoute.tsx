@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { Button, Card, Input } from '../components/ui'
 import { DiceOverlay } from '../components/DiceOverlay'
-import { TableSoundPlayer } from '../components/TableSound'
 import { useAuthUid } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
 import { getStoredName, rememberTable, setStoredName } from '../lib/localMemory'
@@ -85,15 +84,11 @@ export function TableRoute() {
 
   // A animação de dados acompanha a mesa inteira: quem estiver nela vê a
   // rolagem de qualquer um, seja o mestre ou um jogador.
-  const diceOverlay = (
-    <>
-      <DiceOverlay tableId={table.id} />
-      {/* O som da mesa acompanha quem estiver nela, mestre ou jogador. */}
-      <TableSoundPlayer table={table} />
-    </>
-  )
+  // O som NÃO fica aqui: ele toca só na tela de jogo (ver ScenePage), para
+  // não tocar em segundo plano numa aba de ficha.
+  const diceOverlay = <DiceOverlay tableId={table.id} />
 
-  /** Os dados e o som valem para quem estiver na mesa, em qualquer tela dela
+  /** Os dados valem para quem estiver na mesa, em qualquer tela dela
    * — inclusive na entrada e na criação de personagem, que também fazem parte
    * da sessão. */
   function naMesa(conteudo: ReactNode) {

@@ -82,7 +82,7 @@ function criatura(extra: Partial<NPC> = {}): NPC {
   ok(j.saveAttribute === 'dexterity', 'com o atributo que o texto diz')
   ok(j.damage === '3d8', `e o dado, veio ${j.damage}`)
   ok(j.chakraCost === 4, `e o custo, veio ${j.chakraCost}`)
-  ok(j.conditions?.includes('Caído'), 'a condição é lida')
+  ok(Boolean(j.conditions?.includes('Caído')), 'a condição é lida')
   ok(j.area === 'raio de 6 m', `a área é lida, veio ${j.area}`)
   setTableJutsus([])
 }

@@ -12,6 +12,8 @@ import { useTableJutsus } from '../hooks/useTableJutsus'
 import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
 import { AvisoDoDrive } from '../components/AvisoDoDrive'
 import { SceneLibraryPanel } from '../components/SceneLibraryPanel'
+import { SoundBoard, SoundHost, useMesaDeSom } from '../components/TableSound'
+import { somDaCena } from '../lib/audioPlan'
 import { SEM_PASTA, pastasDa } from '../lib/sceneLibrary'
 import type { Ficha } from '../lib/conditions'
 import {
@@ -61,6 +63,7 @@ import type {
   Scene,
   SceneFog,
   SceneLibraryItem,
+  SceneAudio,
   SceneMap,
   ScenePing,
   SceneToken,
@@ -121,7 +124,7 @@ export function ScenePage() {
 
   const [tool, setTool] = useState<Tool>('mover')
   const [brush, setBrush] = useState(4)
-  const [panel, setPanel] = useState<'mapa' | 'pecas' | 'biblioteca' | null>(null)
+  const [panel, setPanel] = useState<'mapa' | 'pecas' | 'biblioteca' | 'som' | null>(null)
   const [ruler, setRuler] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null)
   const [now, setNow] = useState(Date.now())
 
@@ -157,6 +160,8 @@ export function ScenePage() {
   useEffect(() => listenScenePings(tableId, setPings), [tableId])
 
   const isGM = Boolean(uid && table && table.gmUid === uid)
+  // O som toca aqui, e só aqui — nas fichas não.
+  const { tracks, sceneAudio } = useMesaDeSom(tableId)
 
   useEffect(() => {
     if (!isGM) return
@@ -192,7 +197,10 @@ export function ScenePage() {
     return () => observer.disconnect()
   }, [wrapEl])
 
-  const scene = sceneState ?? EMPTY_SCENE
+  // A cena pode existir só com o som: o mestre escolhe música antes de montar
+  // o primeiro mapa, e o documento nasce sem peças nem fundo. Por baixo vai o
+  // padrão, para nada aqui tropeçar num campo que ainda não existe.
+  const scene: Scene = sceneState ? { ...EMPTY_SCENE, ...sceneState, tokens: sceneState.tokens ?? [] } : EMPTY_SCENE
   sceneRef.current = scene
   const aspect = stageAspect(scene)
   const columns = gridColumns(scene)
@@ -490,6 +498,7 @@ export function ScenePage() {
   return (
     <div className="flex h-screen flex-col">
       <DiceOverlay tableId={tableId} />
+      <SoundHost table={table} tracks={tracks} sceneAudio={sceneAudio} />
 
       {/* Barra de comando */}
       <div className="plaque z-20 flex flex-wrap items-center gap-2 rounded-none border-x-0 border-t-0 px-3 py-2">
@@ -562,9 +571,9 @@ export function ScenePage() {
               jogadores movem a própria peça
             </label>
             <div className="ml-auto flex gap-1.5">
-              {(['mapa', 'pecas', 'biblioteca'] as const).map((p) => (
+              {(['mapa', 'pecas', 'biblioteca', 'som'] as const).map((p) => (
                 <TabChip key={p} active={panel === p} className="px-2.5 py-1 text-xs" onClick={() => setPanel(panel === p ? null : p)}>
-                  {p === 'mapa' ? 'Mapa' : p === 'pecas' ? 'Peças' : 'Biblioteca'}
+                  {p === 'mapa' ? 'Mapa' : p === 'pecas' ? 'Peças' : p === 'biblioteca' ? 'Biblioteca' : 'Som'}
                 </TabChip>
               ))}
             </div>
@@ -572,9 +581,16 @@ export function ScenePage() {
         )}
       </div>
 
-      {isGM && panel && (
+      {isGM && panel === 'som' && (
+        <Card className="z-10 flex max-h-[38vh] shrink-0 flex-col gap-3 overflow-y-auto rounded-none border-x-0 p-3">
+          <SoundBoard table={table} tracks={tracks} sceneAudio={sceneAudio} compacto />
+        </Card>
+      )}
+
+      {isGM && panel && panel !== 'som' && (
         <GMPanel
           panel={panel}
+          sceneAudio={sceneAudio}
           scene={scene}
           persist={persist}
           characters={characters}
@@ -791,6 +807,7 @@ export function ScenePage() {
 
 function GMPanel({
   panel,
+  sceneAudio,
   scene,
   persist,
   characters,
@@ -808,6 +825,7 @@ function GMPanel({
   now,
 }: {
   panel: 'mapa' | 'pecas' | 'biblioteca'
+  sceneAudio: SceneAudio | null
   scene: Scene
   persist: (s: Scene) => void
   characters: Character[]
@@ -977,6 +995,7 @@ function GMPanel({
                         ...(libLabel.trim() ? { label: libLabel.trim() } : {}),
                         imageUrl: scene.backgroundUrl,
                         snapshot: retratoDaCena(),
+                        audio: somDaCena(sceneAudio),
                       })
                       setLibLabel('')
                       avisar(`"${libLabel.trim() || cenaAberta.label}" foi atualizada.`)
@@ -995,6 +1014,7 @@ function GMPanel({
                       folder: libFolder.trim() || undefined,
                       createdAt: Date.now(),
                       snapshot: retratoDaCena(),
+                      audio: somDaCena(sceneAudio),
                     })
                     // Guardou: a cena em jogo passa a ser ESTA entrada, para o
                     // próximo ajuste já poder gravar por cima.

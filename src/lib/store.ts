@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -15,8 +16,11 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { jutsuDocId } from './jutsuCatalog'
+import { lerFaixa } from './audioLinks'
 import type {
   ActiveCondition,
+  AudioTrack,
+  SceneAudio,
   Companion,
   CompanionKind,
   Character,
@@ -25,7 +29,6 @@ import type {
   Clan,
   ChakraGift,
   JutsuCast,
-  SoundTrack,
   ShopItem,
   GMRoll,
   GameTable,
@@ -1107,7 +1110,7 @@ export function soundCol(tableId: string) {
   return collection(requireDb(), 'tables', tableId, 'sound')
 }
 
-export async function saveSoundTrack(tableId: string, track: SoundTrack) {
+export async function saveSoundTrack(tableId: string, track: AudioTrack) {
   await setDoc(doc(soundCol(tableId), track.id), stripUndefined(track))
 }
 
@@ -1115,9 +1118,52 @@ export async function deleteSoundTrack(tableId: string, id: string) {
   await deleteDoc(doc(soundCol(tableId), id))
 }
 
-export function listenSoundTracks(tableId: string, cb: (tracks: SoundTrack[]) => void) {
+/**
+ * A biblioteca de faixas. Cada documento passa por `lerFaixa`, que aceita o
+ * formato de antes deste sistema (categoria em português, só YouTube) e o
+ * converte em memória — a biblioteca que a mesa já montou continua valendo sem
+ * migração nenhuma no banco.
+ */
+export function listenSoundTracks(tableId: string, cb: (tracks: AudioTrack[]) => void) {
   const q = query(soundCol(tableId), orderBy('createdAt', 'asc'))
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => d.data() as SoundTrack)), defaultOnError('mesa de som'))
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => lerFaixa(d.data())).filter((t): t is AudioTrack => t !== null)),
+    defaultOnError('mesa de som'),
+  )
+}
+
+/**
+ * Muda só o som da cena, sem regravar o resto dela. Com `merge`, e não
+ * `updateDoc`: a mesa pode escolher música antes de montar o primeiro mapa, e
+ * aí o documento da cena ainda nem existe.
+ */
+/**
+ * O som da cena mora num documento PRÓPRIO, ao lado da cena, e não dentro
+ * dela. A cena é regravada inteira a cada arraste de peça e pincelada de
+ * névoa; se o som vivesse lá, um salvamento atrasado do mapa desfaria a troca
+ * de música que o mestre acabou de fazer (e vice-versa).
+ */
+export function sceneAudioDoc(tableId: string) {
+  return doc(requireDb(), 'tables', tableId, 'scene', 'audio')
+}
+
+/** Muda só os campos passados; os outros ficam. `null` limpa a escolha. */
+export async function updateSceneAudio(tableId: string, patch: { [K in keyof SceneAudio]?: SceneAudio[K] | null }) {
+  const limpo: Record<string, unknown> = { updatedAt: Date.now() }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue
+    limpo[k] = v === null ? deleteField() : v
+  }
+  await setDoc(sceneAudioDoc(tableId), limpo, { merge: true })
+}
+
+export function listenSceneAudio(tableId: string, cb: (audio: SceneAudio | null) => void) {
+  return onSnapshot(
+    sceneAudioDoc(tableId),
+    (snap) => cb(snap.exists() ? (snap.data() as SceneAudio) : null),
+    defaultOnError('som da cena'),
+  )
 }
 
 export function listenLog(tableId: string, cb: (entries: LogEntry[]) => void, max = 150) {
