@@ -412,8 +412,14 @@ problema fica vermelho, com o motivo e um *tentar de novo*. Um canal quebrado
 não derruba os outros.
 
 **Quem controla o quê.** O som toca só na **tela de jogo** — nas fichas, não.
-Só o mestre escolhe faixas e volumes (na aba *Som* do painel ou na aba *Som*
-da própria tela de jogo), e os volumes valem para a mesa toda. Cada pessoa
+Só o mestre escolhe faixas e volumes, e os volumes valem para a mesa toda.
+Ele faz isso em três lugares: na aba *Som* do painel, na aba *Som* da tela de
+jogo e na **caixa de som do canto da tela de jogo** — a placa que mostra o que
+está tocando. Para o mestre, essa caixa é a mesa de som inteira: uma lista por
+categoria (escolher já põe no ar), o volume de cada uma e *+ adicionar faixa*
+(ambientação e clima cadastrados por ali já entram tocando). A placa aparece
+para o mestre mesmo antes de ele ligar o som na própria aba, para ele poder
+montar a trilha sem precisar ouvir. Cada pessoa
 pode baixar o volume ou silenciar **só para si**; essa preferência fica no
 navegador dela e sobrevive a recarregar a página.
 

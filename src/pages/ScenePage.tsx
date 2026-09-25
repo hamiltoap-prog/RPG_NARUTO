@@ -498,7 +498,7 @@ export function ScenePage() {
   return (
     <div className="flex h-screen flex-col">
       <DiceOverlay tableId={tableId} />
-      <SoundHost table={table} tracks={tracks} sceneAudio={sceneAudio} />
+      <SoundHost table={table} tracks={tracks} sceneAudio={sceneAudio} isGM={isGM} />
 
       {/* Barra de comando */}
       <div className="plaque z-20 flex flex-wrap items-center gap-2 rounded-none border-x-0 border-t-0 px-3 py-2">
