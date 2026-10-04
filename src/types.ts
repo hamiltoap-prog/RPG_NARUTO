@@ -289,6 +289,8 @@ export interface Character {
   /** Ficha conduzida pelo mestre, e não por um jogador. Some da lista do
    * grupo; aparece na mesa quando o mestre a torna visível. */
   isNPC?: boolean
+  /** Pasta na biblioteca de personagens do mestre (caminho: "Cena 01/Konoha"). */
+  folder?: string
   /** Só vale para ficha de NPC: se o grupo já a conhece. */
   visible?: boolean
 
@@ -325,6 +327,8 @@ export interface NpcAttack {
 export interface NPC {
   id: string
   tableId: string
+  /** Pasta na biblioteca de personagens do mestre (caminho: "Cena 01/Konoha"). */
+  folder?: string
   name: string
   armorClass: number
   hp: { current: number; max: number }
@@ -788,15 +792,15 @@ export interface Scene {
  */
 export interface SceneLibraryItem {
   id: string
-  kind: 'map' | 'token'
+  /** Cena inteira (`map`), peça pronta (`token`) ou história em slides (`story`). */
+  kind: 'map' | 'token' | 'story'
   label: string
   imageUrl?: string
   tokenKind?: SceneTokenKind
   /**
-   * Pasta em que o item está, por nome. Pasta aqui não é documento: é só um
-   * rótulo repetido nos itens. Renomear é reescrever o rótulo em todos, e uma
-   * pasta deixa de existir quando o último item sai dela — que é o que uma
-   * mesa espera de "pasta" sem precisar administrar nada.
+   * Pasta em que o item está, como caminho: "Cena 01/Konoha" põe o item
+   * dentro de Konoha, dentro de Cena 01. Pasta não é documento — ver
+   * `lib/pastas.ts`. Itens antigos, com um nome só, são um caminho de um nível.
    */
   folder?: string
   createdAt: number
@@ -806,6 +810,36 @@ export interface SceneLibraryItem {
   snapshot?: SceneSnapshot
   /** O som que tocava quando a cena foi guardada — abrir a cena traz ele de volta. */
   audio?: SceneAudio
+  /** Os slides, quando o item é uma história. */
+  slides?: StorySlide[]
+}
+
+/* ---------------------------------------------------------------------------
+ * Modo história
+ *
+ * Slides preparados pelo mestre (imagem, título e texto) que se sobrepõem à
+ * tela de todos enquanto ele conta a história. Só o mestre passa os slides e
+ * só ele fecha — e fechar fecha para todo mundo.
+ * ------------------------------------------------------------------------- */
+
+export interface StorySlide {
+  id: string
+  title?: string
+  text?: string
+  imageUrl?: string
+  /** A imagem inteira (`contain`, padrão) ou preenchendo a tela (`cover`). */
+  imageFit?: 'contain' | 'cover'
+}
+
+/** A história no ar, em `scene/story`. Os slides vão copiados (ver store). */
+export interface StoryShow {
+  open: boolean
+  title: string
+  slides: StorySlide[]
+  index: number
+  /** De qual item da biblioteca veio — para a edição chegar ao ar. */
+  libraryId?: string
+  updatedAt: number
 }
 
 /** O que é preciso para remontar um encontro: enquadramento, grade, luz,
@@ -919,6 +953,8 @@ export const SUMMON_RANKS = [
 export interface BestiaryEntry {
   id: string
   tableId: string
+  /** Pasta na biblioteca de personagens do mestre (caminho: "Cena 01/Konoha"). */
+  folder?: string
   kind: CreatureKind
   name: string
   imageUrl?: string

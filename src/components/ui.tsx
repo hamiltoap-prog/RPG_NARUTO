@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ButtonHTMLAttributes, InputHTMLAttributes, PropsWithChildren, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, ChangeEvent, FocusEvent, InputHTMLAttributes, PropsWithChildren, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { normalizeImageUrl } from '../lib/imageUrl'
 
 export function Card({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
@@ -72,7 +72,63 @@ function fieldClasses(className?: string): string {
 }
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+  if (props.type === 'number') return <CampoNumerico {...props} />
   return <input {...props} className={fieldClasses(props.className)} />
+}
+
+/** O texto de um campo numérico que ainda não é um número: vazio, só o sinal, ponto no fim. */
+const AINDA_DIGITANDO = /^(|-|\+|-?\d*[.,])$/
+
+/**
+ * Campo de número que deixa a pessoa apagar.
+ *
+ * O problema, que no celular era gritante: quase todo campo de número da mesa
+ * faz `Number(valor) || 1` (ou `|| 0`) e devolve o resultado para o próprio
+ * campo. Ao apagar o "1" para digitar "15", o campo fica vazio por um
+ * instante, vira 1 de novo na hora, e nunca deixa trocar o número — no
+ * computador dava para selecionar e digitar por cima, no toque não.
+ *
+ * Aqui o campo guarda o que está sendo digitado enquanto tem o foco, e só
+ * entrega para fora o que já é número. Vazio (ou "-") fica na tela até a
+ * pessoa sair do campo: aí sim o valor vazio é entregue — quem trata vazio
+ * como "sem valor" recebe vazio, quem força 1 força nessa hora — e o campo
+ * volta a mostrar o valor de verdade. Ao tocar, o número todo fica
+ * selecionado, para digitar por cima sem ter que apagar.
+ */
+function CampoNumerico({ onChange, onFocus, onBlur, value, className, ...resto }: InputHTMLAttributes<HTMLInputElement>) {
+  const [rascunho, setRascunho] = useState<string | null>(null)
+  const mostrado = rascunho ?? (value === undefined || value === null ? '' : String(value))
+  return (
+    <input
+      {...resto}
+      type="number"
+      value={mostrado}
+      className={fieldClasses(className)}
+      onFocus={(e: FocusEvent<HTMLInputElement>) => {
+        setRascunho(e.target.value)
+        try {
+          e.target.select()
+        } catch {
+          // Alguns navegadores não deixam selecionar campo de número; tudo bem.
+        }
+        onFocus?.(e)
+      }}
+      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+        const texto = e.target.value
+        setRascunho(texto)
+        if (AINDA_DIGITANDO.test(texto) || !Number.isFinite(Number(texto))) return
+        onChange?.(e)
+      }}
+      onBlur={(e: FocusEvent<HTMLInputElement>) => {
+        const texto = rascunho ?? e.target.value
+        setRascunho(null)
+        // Saiu com o campo vazio: agora sim entrega o vazio, e quem chama
+        // decide (volta para o mínimo, ou limpa o valor).
+        if (AINDA_DIGITANDO.test(texto)) onChange?.(e as unknown as ChangeEvent<HTMLInputElement>)
+        onBlur?.(e)
+      }}
+    />
+  )
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {

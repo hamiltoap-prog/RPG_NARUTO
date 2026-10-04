@@ -643,11 +643,11 @@ function AttributesCard({
           <div key={k} className="rounded-lg border border-orange-900/40 bg-black/20 p-2 text-center">
             <p className="text-[10px] uppercase text-orange-400/60">{ATTRIBUTE_LABELS[k]}</p>
             {editing ? (
-              <input
+              <Input
                 type="number"
                 value={draft[k]}
-                onChange={(e) => setDraft((d) => ({ ...d, [k]: Number(e.target.value) }))}
-                className="w-full rounded bg-black/40 text-center text-lg text-orange-100"
+                onChange={(e) => setDraft((d) => ({ ...d, [k]: Number(e.target.value) || 0 }))}
+                className="w-full px-1 text-center text-lg"
               />
             ) : (
               <p className="text-lg text-orange-100">{character.attributes[k]}</p>

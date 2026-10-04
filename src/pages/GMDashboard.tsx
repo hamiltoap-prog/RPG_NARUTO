@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { CombatTracker } from '../components/CombatTracker'
 import { LogFeed } from '../components/LogFeed'
 import { MissionBoard } from '../components/MissionBoard'
-import { NpcManager } from '../components/NpcManager'
+import { NovoNpcSimples, NpcManager, pastasDosNpcs } from '../components/NpcManager'
+import { CriacaoRapidaNPC } from '../components/CriacaoRapidaNPC'
 import { PendingRequestsPanel } from '../components/PendingRequestsPanel'
 import { CharacterCreate } from './CharacterCreate'
 import { BestiaryPanel } from '../components/BestiaryPanel'
@@ -55,8 +56,11 @@ export function GMDashboard({ table }: { table: GameTable }) {
   const [pendingCasts, setPendingCasts] = useState(0)
   const [tab, setTab] = useState<Tab>('personagens')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [criandoNPC, setCriandoNPC] = useState(false)
+  /** Como o mestre está criando NPC agora, na aba NPCs. */
+  const [criandoNPC, setCriandoNPC] = useState<'rapida' | 'simples' | 'assistente' | null>(null)
   const [npcNome, setNpcNome] = useState('')
+  /** A ficha completa de NPC aberta na aba NPCs. */
+  const [npcAbertoId, setNpcAbertoId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState(table.name)
   const [copied, setCopied] = useState(false)
 
@@ -86,7 +90,13 @@ export function GMDashboard({ table }: { table: GameTable }) {
   useEffect(() => listenPendingChakraGifts(table.id, (gifts) => setPendingGifts(gifts.length)), [table.id])
   useEffect(() => listenPendingJutsuCasts(table.id, (casts) => setPendingCasts(casts.length)), [table.id])
 
-  const selected = characters.find((c) => c.id === selectedId) ?? characters[0] ?? null
+  // A aba Personagens é dos jogadores da mesa. NPC de ficha completa mora na
+  // aba NPCs — com a ficha e tudo —, para a lista do grupo não se misturar
+  // com os adversários.
+  const jogadores = characters.filter((c) => !c.isNPC)
+  const fichasDeNPC = characters.filter((c) => c.isNPC)
+  const selected = jogadores.find((c) => c.id === selectedId) ?? jogadores[0] ?? null
+  const npcAberto = fichasDeNPC.find((c) => c.id === npcAbertoId) ?? null
 
   function copyCode() {
     navigator.clipboard?.writeText(table.code).then(() => {
@@ -125,9 +135,9 @@ export function GMDashboard({ table }: { table: GameTable }) {
       <div className="flex flex-wrap gap-1.5">
         {(
           [
-            ['personagens', `Personagens (${characters.length})`],
+            ['personagens', `Personagens (${jogadores.length})`],
             ['combate', 'Combate'],
-            ['npcs', `NPCs (${npcs.length})`],
+            ['npcs', `NPCs (${npcs.length + fichasDeNPC.length})`],
             ['bestiario', 'Bestiário'],
             ['clas', 'Clãs'],
             ['jutsus', `Jutsus da casa (${customJutsus.length})`],
@@ -148,43 +158,8 @@ export function GMDashboard({ table }: { table: GameTable }) {
 
       {tab === 'personagens' && (
         <div className="flex flex-col gap-3">
-          {/* Ficha completa de NPC: o mesmo assistente do jogador, sem as
-              travas de nível e posto. */}
-          {criandoNPC ? (
-            <Card className="flex flex-col gap-2 p-3">
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-1 flex-col gap-1 text-xs text-orange-400/60">
-                  nome do NPC
-                  <Input value={npcNome} onChange={(e) => setNpcNome(e.target.value)} placeholder="Zabuza Momochi" />
-                </label>
-                <Button variant="ghost" onClick={() => setCriandoNPC(false)}>
-                  cancelar
-                </Button>
-              </div>
-              {npcNome.trim() && (
-                <CharacterCreate
-                  key={npcNome.trim()}
-                  table={table}
-                  uid={table.gmUid}
-                  characterName={npcNome.trim()}
-                  asGM
-                  asNPC
-                  onCreated={(c) => {
-                    setCriandoNPC(false)
-                    setNpcNome('')
-                    setSelectedId(c.id)
-                  }}
-                />
-              )}
-            </Card>
-          ) : (
-            <Button variant="primary" className="self-start" onClick={() => setCriandoNPC(true)}>
-              + NPC com ficha completa
-            </Button>
-          )}
-
           <div className="flex flex-wrap gap-2">
-            {characters.map((c) => (
+            {jogadores.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedId(c.id)}
@@ -195,7 +170,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
                 <Avatar url={c.imageUrl} name={c.name} size={28} />
                 <div>
                   <p className="text-orange-100">
-                    {c.name} {c.isNPC && <Badge>NPC</Badge>}
+                    {c.name}
                   </p>
                   <p className="text-xs text-orange-300/50">
                     PV {c.hp.current}/{c.hp.max} · Chakra {c.chakra.current}/{c.chakra.max}
@@ -209,7 +184,7 @@ export function GMDashboard({ table }: { table: GameTable }) {
                 </div>
               </button>
             ))}
-            {characters.length === 0 && <p className="text-sm text-orange-300/50">Nenhum jogador entrou ainda. Compartilhe o código da mesa!</p>}
+            {jogadores.length === 0 && <p className="text-sm text-orange-300/50">Nenhum jogador entrou ainda. Compartilhe o código da mesa!</p>}
           </div>
           {selected && (
             <div className="rounded-sm border border-[color:var(--line)]">
@@ -273,13 +248,83 @@ export function GMDashboard({ table }: { table: GameTable }) {
             </div>
           )}
 
+          {/* A ficha completa aberta, no topo: é onde o mestre age com ela. */}
+          {npcAberto && (
+            <div className="rounded-sm border border-[color:var(--orange)]/60" data-ficha-npc-aberta>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
+                <p className="text-xs uppercase tracking-wide text-orange-400/60">
+                  Ficha de NPC — {npcAberto.name}. As ações abaixo aplicam direto, sem fila.
+                </p>
+                <button className="text-xs text-orange-400 hover:text-white" onClick={() => setNpcAbertoId(null)}>
+                  fechar ficha
+                </button>
+              </div>
+              <PlayerView table={table} characterId={npcAberto.id} asGM />
+            </div>
+          )}
+
+          <div className="plaque flex flex-col gap-3 rounded-lg p-4" data-criar-npc>
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionTitle>Novo NPC</SectionTitle>
+              {(
+                [
+                  ['rapida', '⚡ Criação rápida (ficha completa)'],
+                  ['simples', 'Ficha simples'],
+                  ['assistente', 'Assistente passo a passo'],
+                ] as const
+              ).map(([k, r]) => (
+                <TabChip key={k} active={criandoNPC === k} className="px-2.5 py-1 text-xs" onClick={() => setCriandoNPC(criandoNPC === k ? null : k)}>
+                  {r}
+                </TabChip>
+              ))}
+            </div>
+            {criandoNPC === 'rapida' && (
+              <CriacaoRapidaNPC
+                table={table}
+                clans={allClans(customClans)}
+                pastas={pastasDosNpcs(npcs, fichasDeNPC)}
+                onCriados={(criados) => {
+                  setCriandoNPC(null)
+                  if (criados.length === 1) setNpcAbertoId(criados[0].id)
+                }}
+              />
+            )}
+            {criandoNPC === 'simples' && <NovoNpcSimples tableId={table.id} pastas={pastasDosNpcs(npcs, fichasDeNPC)} />}
+            {/* Ficha completa à mão: o mesmo assistente do jogador, sem as
+                travas de nível e posto. */}
+            {criandoNPC === 'assistente' && (
+              <div className="flex flex-col gap-2">
+                <label className="flex flex-col gap-1 text-xs text-orange-400/60">
+                  nome do NPC
+                  <Input value={npcNome} onChange={(e) => setNpcNome(e.target.value)} placeholder="Zabuza Momochi" />
+                </label>
+                {npcNome.trim() && (
+                  <CharacterCreate
+                    key={npcNome.trim()}
+                    table={table}
+                    uid={table.gmUid}
+                    characterName={npcNome.trim()}
+                    asGM
+                    asNPC
+                    onCreated={(c) => {
+                      setCriandoNPC(null)
+                      setNpcNome('')
+                      setNpcAbertoId(c.id)
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
           <NpcManager
             tableId={table.id}
             npcs={npcs}
-            npcCharacters={characters.filter((c) => c.isNPC)}
+            npcCharacters={fichasDeNPC}
+            abertaId={npcAbertoId}
             onOpenCharacter={(id) => {
-              setSelectedId(id)
-              setTab('personagens')
+              setNpcAbertoId(id)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
             }}
           />
         </div>

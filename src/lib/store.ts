@@ -17,6 +17,7 @@ import {
 import { db } from '../firebase'
 import { jutsuDocId } from './jutsuCatalog'
 import { lerFaixa } from './audioLinks'
+import { caminhoDepoisDeMover, paraGravar } from './pastas'
 import type {
   ActiveCondition,
   AudioTrack,
@@ -40,6 +41,7 @@ import type {
   Scene,
   SceneToken,
   SceneLibraryItem,
+  StoryShow,
   ScenePing,
   SheetChangeRequest,
   Weapon,
@@ -693,30 +695,67 @@ export async function updateSceneLibraryItem(tableId: string, itemId: string, pa
   await updateDoc(doc(sceneLibraryCol(tableId), itemId), stripUndefined({ ...patch, updatedAt: Date.now() }))
 }
 
+/** As coleções que têm pasta. */
+export type ColecaoComPasta = 'sceneLibrary' | 'npcs' | 'characters' | 'bestiary'
+
+/** Põe um item numa pasta (caminho vazio = solto). */
+export async function moverParaPasta(tableId: string, colecao: ColecaoComPasta, id: string, caminho: string | undefined) {
+  const pasta = paraGravar(caminho)
+  await updateDoc(doc(requireDb(), 'tables', tableId, colecao, id), { folder: pasta ?? deleteField() })
+}
+
 /**
- * Renomear pasta é reescrever o rótulo em todos os itens dela.
- *
- * Pasta não é documento nesta mesa — é um nome repetido nos itens. Sai mais
- * barato (nada para criar, nada para limpar quando esvazia) ao custo desta
- * varredura, que acontece só quando alguém renomeia.
+ * Renomeia ou move uma pasta: troca o começo do caminho em todos os itens
+ * dela, subpastas incluídas, numa escrita só.
  */
-export async function renameSceneLibraryFolder(
+export async function moverPasta(
   tableId: string,
-  itens: readonly SceneLibraryItem[],
-  de: string | undefined,
-  para: string | undefined,
+  colecao: ColecaoComPasta,
+  itens: readonly { id: string; folder?: string }[],
+  de: string,
+  para: string,
 ) {
-  const alvos = itens.filter((i) => (i.folder ?? '') === (de ?? ''))
-  if (alvos.length === 0) return
   const batch = writeBatch(requireDb())
-  for (const i of alvos) {
-    batch.update(doc(sceneLibraryCol(tableId), i.id), stripUndefined({ folder: para || undefined }))
+  let n = 0
+  for (const i of itens) {
+    const novo = caminhoDepoisDeMover(i.folder, de, para)
+    if (novo === null) continue
+    batch.update(doc(requireDb(), 'tables', tableId, colecao, i.id), { folder: novo || deleteField() })
+    n++
   }
-  await batch.commit()
+  if (n > 0) await batch.commit()
 }
 
 export async function deleteSceneLibraryItem(tableId: string, itemId: string) {
   await deleteDoc(doc(sceneLibraryCol(tableId), itemId))
+}
+
+// ---------- Modo história ----------
+
+/**
+ * A história no ar mora ao lado da cena, num documento que todos leem — e não
+ * na biblioteca, que é bastidor do mestre. Por isso os slides são COPIADOS
+ * para cá ao apresentar: o jogador vê o que está sendo contado, nunca o resto
+ * da biblioteca.
+ */
+export function storyShowDoc(tableId: string) {
+  return doc(requireDb(), 'tables', tableId, 'scene', 'story')
+}
+
+export async function setStoryShow(tableId: string, show: StoryShow) {
+  await setDoc(storyShowDoc(tableId), stripUndefined({ ...show, updatedAt: Date.now() }))
+}
+
+export async function updateStoryShow(tableId: string, patch: Partial<StoryShow>) {
+  await setDoc(storyShowDoc(tableId), stripUndefined({ ...patch, updatedAt: Date.now() }), { merge: true })
+}
+
+export function listenStoryShow(tableId: string, cb: (show: StoryShow | null) => void) {
+  return onSnapshot(
+    storyShowDoc(tableId),
+    (snap) => cb(snap.exists() ? (snap.data() as StoryShow) : null),
+    defaultOnError('modo história'),
+  )
 }
 
 export function listenSceneLibrary(tableId: string, cb: (items: SceneLibraryItem[]) => void) {

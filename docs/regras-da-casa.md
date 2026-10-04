@@ -263,17 +263,20 @@ a apontar para ela, para o ajuste seguinte já poder gravar por cima.
 O vínculo cai quando a imagem de fundo muda — trocar o mapa é começar outra
 cena, e sem isso *Atualizar* gravaria um mapa por cima de outro.
 
-**Pastas.** Pasta aqui **não é documento**: é um nome repetido nos itens.
+**Pastas e subpastas.** Pasta aqui **não é documento**: é um *caminho*
+repetido nos itens — `folder: "Cena 01/Konoha"` põe o item dentro de Konoha,
+dentro de Cena 01 (`lib/pastas.ts`). Na tela aparece como "Cena 01 › Konoha".
 
+- para criar uma subpasta, mova um item para "+ nova pasta" e escreva
+  `Cena 01 > Konoha` (também vale `/` ou `›`);
 - some sozinha quando o último item sai dela;
-- renomear é reescrever o nome em todos os itens de uma vez;
-- item sem pasta aparece agrupado em *Sem pasta*, que é rótulo de tela e não
-  um valor gravado;
-- nome com espaços em volta é o mesmo nome (`"Konoha"` e `" Konoha "` são uma
-  pasta só).
+- renomear ou mover uma pasta ("mover pasta" → para dentro de outra) é trocar
+  o começo do caminho em todos os itens dela, subpastas incluídas, numa
+  escrita só; uma pasta não pode ir para dentro dela mesma;
+- itens antigos, com um nome só, são um caminho de um nível — nada a migrar.
 
-É menos maquinário do que pasta de verdade — nada para criar, nada para
-limpar quando esvazia — e dá à mesa o que ela espera de pasta.
+A mesma árvore vale para a biblioteca de cenas (cenas, peças e histórias
+juntas), para os NPCs e para o bestiário.
 
 ---
 
@@ -431,3 +434,66 @@ foi guardada sem ambientação. Cenas guardadas antes disto não mexem no som.
 com categoria ambiente/clima/combate) são lidas e convertidas na hora, sem
 migração no banco. O "tocando agora" antigo não é aproveitado: o mestre
 escolhe de novo o que toca.
+
+---
+
+## Campos de número no celular
+
+Quase todo campo de número fazia `Number(valor) || 1` e devolvia o resultado
+para o próprio campo: ao apagar o "1" para digitar "15", o campo virava 1 de
+novo na hora. O `Input` com `type="number"` agora guarda o que está sendo
+digitado enquanto tem o foco e só entrega para fora o que já é número; vazio
+fica na tela até a pessoa sair do campo (aí o mínimo de cada campo vale). Ao
+tocar, o número todo fica selecionado — digitar substitui.
+
+---
+
+## NPCs: aba própria, pastas e criação rápida
+
+**A aba Personagens é só dos jogadores.** NPC de ficha completa mora na aba
+NPCs, junto com os de ficha simples, e a ficha completa abre ali mesmo, no
+topo da aba. Na tela de jogo, eles aparecem com os NPCs na hora de criar
+peça.
+
+**Biblioteca de NPCs** com pastas e subpastas, as duas fontes na mesma árvore
+(o guarda de ficha simples e o jonin de ficha completa da mesma cena ficam
+juntos), busca por nome e "mover para" em cada um. O bestiário tem a mesma
+árvore, e uma criatura posta na mesa leva a pasta junto.
+
+**Criação rápida (ficha completa).** O mestre escolhe nome, nível, clã (ou
+sorteia), opcionalmente a classe, quantos e a pasta. O resto é sorteado com
+critério (`lib/npcRapido.ts`):
+
+- **classe**: pesa os bônus do clã nos atributos principais da classe e se o
+  manual sugere aquele clã para ela;
+- **atributos**: o arranjo padrão (15, 14, 13, 12, 10, 8) na ordem que o
+  "Atributo Principal" da classe pede, mais o bônus do clã e os Aumentos de
+  Atributo que o nível já deu (+2 no principal, teto 20);
+- **afinidade**: a do clã; sem nenhuma, uma sorteada;
+- **jutsus**: só os que a ficha pode aprender (rank do nível, clã, afinidade),
+  até o limite da classe; um terço do clã, o resto puxando para o estilo da
+  classe (genjutsu para o especialista em genjutsu, bukijutsu para o de armas,
+  cura para o médico) e para os ranks mais altos permitidos;
+- **equipamento**: uma alternativa sorteada em cada linha do equipamento
+  inicial da classe, com "1 arma simples" preenchida pelo catálogo;
+- PV, chakra, CA, PR, posto e ryo pelas mesmas contas do assistente.
+
+O mestre vê a prévia antes de criar e pode sortear de novo. Vários de uma vez
+saem com sorteio próprio e um número no nome. A ficha nasce oculta.
+
+---
+
+## Modo história
+
+Slides (imagem, título e texto) preparados na biblioteca da tela de jogo
+("+ nova história"), guardados em pastas como as cenas. *Apresentar* cobre a
+tela de todos — no mapa e nas telas de ficha — com o slide da mesa.
+
+- só o mestre passa os slides (botões ou setas do teclado) e só ele fecha;
+  fechar fecha para todo mundo;
+- o mestre pode *minimizar* na tela dele (para olhar o mapa) sem tirar a
+  história da tela dos jogadores;
+- quem entra no meio cai no slide em que a mesa está;
+- o que está no ar mora em `scene/story`, que todos leem, com os slides
+  **copiados** da biblioteca — a biblioteca continua sendo bastidor do mestre;
+- editar uma história que está no ar atualiza a tela de todos.

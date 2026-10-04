@@ -4,7 +4,9 @@ import { SUMMON_BESTIARY } from '../data/summons'
 import { newId } from '../lib/id'
 import { ehLinkDoDrive, normalizeImageUrl } from '../lib/imageUrl'
 import { AvisoDoDrive } from './AvisoDoDrive'
-import { createNPC, deleteBestiaryEntry, listenBestiary, saveBestiaryEntry } from '../lib/store'
+import { createNPC, deleteBestiaryEntry, listenBestiary, moverParaPasta, moverPasta, saveBestiaryEntry } from '../lib/store'
+import { ArvoreDePastas, SelectDePasta } from './Pastas'
+import { todasAsPastas } from '../lib/pastas'
 import { summonSize } from '../lib/summon'
 import { EscolherJutsu } from './EscolherJutsu'
 import { ELEMENTS } from '../lib/jutsuAccess'
@@ -48,6 +50,7 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
   const [aviso, setAviso] = useState('')
 
   useEffect(() => listenBestiary(table.id, setEntries), [table.id])
+  const pastas = useMemo(() => todasAsPastas(entries.map((e) => e.folder)), [entries])
 
   function nova(base?: Partial<BestiaryEntry>): BestiaryEntry {
     return {
@@ -164,6 +167,8 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
       level: e.level,
       tokenUrl: e.tokenUrl,
       tokenMode: e.tokenMode,
+      // Vai para a mesma pasta em que a criatura está no bestiário.
+      folder: e.folder,
     })
     const levou = [
       `${golpes.length || 1} golpe(s)`,
@@ -212,9 +217,17 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
               }}
             />
           )}
-          <div className="grid gap-2 sm:grid-cols-2">
-            {entries.map((e) => (
-              <Card key={e.id} className="flex flex-col gap-2 p-3">
+          <ArvoreDePastas
+            itens={entries}
+            pastas={pastas}
+            pastaDe={(e) => e.folder}
+            rotulo={(e) => e.name}
+            chave={(e) => e.id}
+            lembrarAbertasEm={`mesa-ninja:pastas-bestiario:${table.id}`}
+            onMoverPasta={(de, para) => moverPasta(table.id, 'bestiary', entries, de, para)}
+            classeDosItens="grid gap-2 sm:grid-cols-2"
+            renderItem={(e) => (
+              <Card className="flex flex-col gap-2 p-3">
                 <div className="flex items-start gap-2">
                   <Avatar url={e.imageUrl} name={e.name} size={44} />
                   <div className="min-w-0 flex-1">
@@ -228,28 +241,31 @@ export function BestiaryPanel({ table }: { table: GameTable }) {
                   </div>
                 </div>
                 {e.description && <p className="line-clamp-3 text-xs text-orange-300/60">{e.description}</p>}
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <Button variant="good" className="px-2 py-0.5 text-[11px]" onClick={() => porNaMesa(e)}>
                     pôr na mesa
                   </Button>
                   <Button variant="secondary" className="px-2 py-0.5 text-[11px]" onClick={() => setEditando(e)}>
                     editar
                   </Button>
+                  <SelectDePasta valor={e.folder} pastas={pastas} onMudar={(p) => void moverParaPasta(table.id, 'bestiary', e.id, p)} />
                   <button
                     className="text-[11px] text-red-400 hover:text-red-200"
-                    onClick={() => deleteBestiaryEntry(table.id, e.id)}
+                    onClick={() => {
+                      if (window.confirm(`Remover ${e.name} do bestiário?`)) void deleteBestiaryEntry(table.id, e.id)
+                    }}
                   >
                     remover
                   </button>
                 </div>
               </Card>
-            ))}
-            {entries.length === 0 && !editando && (
-              <p className="text-sm text-orange-300/50">
-                Nenhuma criatura sua ainda. Crie uma do zero ou puxe uma tribo do manual na outra aba.
-              </p>
             )}
-          </div>
+          />
+          {entries.length === 0 && !editando && (
+            <p className="text-sm text-orange-300/50">
+              Nenhuma criatura sua ainda. Crie uma do zero ou puxe uma tribo do manual na outra aba.
+            </p>
+          )}
         </>
       )}
 

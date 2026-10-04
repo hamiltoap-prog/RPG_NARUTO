@@ -14,7 +14,8 @@ import { AvisoDoDrive } from '../components/AvisoDoDrive'
 import { SceneLibraryPanel } from '../components/SceneLibraryPanel'
 import { SoundBoard, SoundHost, useMesaDeSom } from '../components/TableSound'
 import { somDaCena } from '../lib/audioPlan'
-import { SEM_PASTA, pastasDa } from '../lib/sceneLibrary'
+import { mostrarCaminho, paraGravar, todasAsPastas } from '../lib/pastas'
+import { HistoriaNaTela, useHistoriaNoAr } from '../components/ModoHistoria'
 import type { Ficha } from '../lib/conditions'
 import {
   EMPTY_MAP,
@@ -64,6 +65,7 @@ import type {
   SceneFog,
   SceneLibraryItem,
   SceneAudio,
+  StoryShow,
   SceneMap,
   ScenePing,
   SceneToken,
@@ -162,6 +164,7 @@ export function ScenePage() {
   const isGM = Boolean(uid && table && table.gmUid === uid)
   // O som toca aqui, e só aqui — nas fichas não.
   const { tracks, sceneAudio } = useMesaDeSom(tableId)
+  const historiaNoAr = useHistoriaNoAr(tableId)
 
   useEffect(() => {
     if (!isGM) return
@@ -498,6 +501,7 @@ export function ScenePage() {
   return (
     <div className="flex h-screen flex-col">
       <DiceOverlay tableId={tableId} />
+      <HistoriaNaTela tableId={tableId} isGM={isGM} />
       <SoundHost table={table} tracks={tracks} sceneAudio={sceneAudio} isGM={isGM} />
 
       {/* Barra de comando */}
@@ -591,6 +595,7 @@ export function ScenePage() {
         <GMPanel
           panel={panel}
           sceneAudio={sceneAudio}
+          historiaNoAr={historiaNoAr}
           scene={scene}
           persist={persist}
           characters={characters}
@@ -808,6 +813,7 @@ export function ScenePage() {
 function GMPanel({
   panel,
   sceneAudio,
+  historiaNoAr,
   scene,
   persist,
   characters,
@@ -826,6 +832,7 @@ function GMPanel({
 }: {
   panel: 'mapa' | 'pecas' | 'biblioteca'
   sceneAudio: SceneAudio | null
+  historiaNoAr: StoryShow | null
   scene: Scene
   persist: (s: Scene) => void
   characters: Character[]
@@ -1011,7 +1018,7 @@ function GMPanel({
                       kind: 'map',
                       label: libLabel.trim() || 'Cena sem nome',
                       imageUrl: scene.backgroundUrl,
-                      folder: libFolder.trim() || undefined,
+                      folder: paraGravar(libFolder),
                       createdAt: Date.now(),
                       snapshot: retratoDaCena(),
                       audio: somDaCena(sceneAudio),
@@ -1020,7 +1027,7 @@ function GMPanel({
                     // próximo ajuste já poder gravar por cima.
                     persist({ ...scene, fromLibraryId: item.id })
                     setLibLabel('')
-                    avisar(`"${item.label}" guardada${item.folder ? ` em ${item.folder}` : ''}.`)
+                    avisar(`"${item.label}" guardada${item.folder ? ` em ${mostrarCaminho(item.folder)}` : ''}.`)
                   }}
                 >
                   {cenaAberta ? 'Guardar como nova' : 'Guardar cena na biblioteca'}
@@ -1034,18 +1041,16 @@ function GMPanel({
               className="w-44"
             />
             <Input
-              placeholder="pasta (opcional)"
+              placeholder="pasta (ex.: Cena 01 > Konoha)"
               value={libFolder}
               list="pastas-da-biblioteca"
               onChange={(e) => setLibFolder(e.target.value)}
               className="w-36"
             />
             <datalist id="pastas-da-biblioteca">
-              {pastasDa(library)
-                .filter((p) => p !== SEM_PASTA)
-                .map((p) => (
-                  <option key={p} value={p} />
-                ))}
+              {todasAsPastas(library.map((i) => i.folder)).map((p) => (
+                <option key={p} value={mostrarCaminho(p).replace(/ › /g, ' > ')} />
+              ))}
             </datalist>
             {avisoBiblioteca && <span className="text-[11px] text-emerald-300">{avisoBiblioteca}</span>}
           </div>
@@ -1189,7 +1194,7 @@ function GMPanel({
           <SectionTitle>Peças</SectionTitle>
 
           <div className="flex flex-wrap gap-2">
-            {characters.map((c) => {
+            {characters.filter((c) => !c.isNPC).map((c) => {
               const lit = Boolean(c.lightUntil && c.lightUntil > now)
               return (
                 <div key={c.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
@@ -1207,6 +1212,20 @@ function GMPanel({
                 </div>
               )
             })}
+            {/* NPC de ficha completa vira peça de adversário, ligada à ficha. */}
+            {characters.filter((c) => c.isNPC).map((c) => (
+              <div key={c.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
+                <span className="text-orange-100">{c.name}</span>
+                <span className="text-[10px] uppercase text-orange-400/50">NPC</span>
+                <Button
+                  variant="secondary"
+                  className="px-2 py-0.5 text-[11px]"
+                  onClick={() => addToken({ label: c.name, kind: 'npc', imageUrl: c.imageUrl, refType: 'character', refId: c.id })}
+                >
+                  + peça
+                </Button>
+              </div>
+            ))}
             {npcs.map((n) => (
               <div key={n.id} className="well flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
                 <span className="text-orange-100">{n.name}</span>
@@ -1324,7 +1343,7 @@ function GMPanel({
       )}
 
       {panel === 'biblioteca' && (
-        <SceneLibraryPanel tableId={tableId} library={library} scene={scene} persist={persist} addToken={addToken} />
+        <SceneLibraryPanel tableId={tableId} library={library} scene={scene} persist={persist} addToken={addToken} show={historiaNoAr} />
       )}
     </Card>
   )
