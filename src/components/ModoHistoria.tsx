@@ -39,8 +39,8 @@ export function useHistoriaNoAr(tableId: string) {
 }
 
 /**
- * A sobreposição. Vai na tela de jogo e nas telas de ficha: a história é para
- * todos, esteja cada um onde estiver na mesa.
+ * A sobreposição. Vive só na tela de jogo — é ali que a mesa acompanha a
+ * cena; nas fichas a história não aparece.
  */
 export function HistoriaNaTela({ tableId, isGM }: { tableId: string; isGM: boolean }) {
   const show = useHistoriaNoAr(tableId)

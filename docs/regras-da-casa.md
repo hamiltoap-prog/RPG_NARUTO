@@ -487,7 +487,8 @@ saem com sorteio próprio e um número no nome. A ficha nasce oculta.
 
 Slides (imagem, título e texto) preparados na biblioteca da tela de jogo
 ("+ nova história"), guardados em pastas como as cenas. *Apresentar* cobre a
-tela de todos — no mapa e nas telas de ficha — com o slide da mesa.
+**tela de jogo** de todos com o slide da mesa (nas fichas não aparece; quem
+abrir a tela de jogo no meio cai no slide em que a mesa está).
 
 - só o mestre passa os slides (botões ou setas do teclado) e só ele fecha;
   fechar fecha para todo mundo;

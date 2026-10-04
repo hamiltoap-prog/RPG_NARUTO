@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { Button, Card, Input } from '../components/ui'
 import { DiceOverlay } from '../components/DiceOverlay'
-import { HistoriaNaTela } from '../components/ModoHistoria'
 import { useAuthUid } from '../hooks/useAuth'
 import { firebaseConfigured } from '../firebase'
 import { getStoredName, rememberTable, setStoredName } from '../lib/localMemory'
@@ -87,14 +86,8 @@ export function TableRoute() {
   // rolagem de qualquer um, seja o mestre ou um jogador.
   // O som NÃO fica aqui: ele toca só na tela de jogo (ver ScenePage), para
   // não tocar em segundo plano numa aba de ficha.
-  // A história do modo história também: ela cobre a tela de todos, esteja
-  // cada um no mapa ou na própria ficha.
-  const diceOverlay = (
-    <>
-      <DiceOverlay tableId={table.id} />
-      <HistoriaNaTela tableId={table.id} isGM={isGM} />
-    </>
-  )
+  // O modo história também não: ele aparece só na tela de jogo.
+  const diceOverlay = <DiceOverlay tableId={table.id} />
 
   /** Os dados valem para quem estiver na mesa, em qualquer tela dela
    * — inclusive na entrada e na criação de personagem, que também fazem parte
