@@ -485,16 +485,50 @@ saem com sorteio próprio e um número no nome. A ficha nasce oculta.
 
 ## Modo história
 
-Slides (imagem, título e texto) preparados na biblioteca da tela de jogo
-("+ nova história"), guardados em pastas como as cenas. *Apresentar* cobre a
-**tela de jogo** de todos com o slide da mesa (nas fichas não aparece; quem
-abrir a tela de jogo no meio cai no slide em que a mesa está).
+Uma apresentação de slides montada num editor no jeito de um editor de slides,
+e apresentada por cima da **tela de jogo** de todos.
 
-- só o mestre passa os slides (botões ou setas do teclado) e só ele fecha;
-  fechar fecha para todo mundo;
-- o mestre pode *minimizar* na tela dele (para olhar o mapa) sem tirar a
-  história da tela dos jogadores;
-- quem entra no meio cai no slide em que a mesa está;
-- o que está no ar mora em `scene/story`, que todos leem, com os slides
-  **copiados** da biblioteca — a biblioteca continua sendo bastidor do mestre;
-- editar uma história que está no ar atualiza a tela de todos.
+**O slide** é um palco 16:9 com elementos em camadas — imagens, textos e formas
+(retângulo, círculo, faixa escura em degradê) — sobre um fundo (cor e/ou
+imagem, com "zoom lento" opcional). Posições e tamanhos são frações do palco e
+o tamanho do texto é % da altura dele (unidades `cq*` do CSS): o slide sai
+igual no monitor do mestre e no celular do jogador.
+
+**O editor** (biblioteca da tela de jogo → "+ nova história" ou "editar"):
+
+- miniaturas à esquerda (subir, descer, duplicar, apagar, "+ slide");
+- no palco: arrastar move, as alças redimensionam (imagem mantém a proporção;
+  Shift solta), o ímã encosta no centro e nas bordas (Alt solta), setas
+  ajustam, Delete apaga, Ctrl+D duplica, Ctrl+Z/Ctrl+Y desfazem e refazem;
+- à direita, as propriedades do selecionado — texto (fonte, tamanho, cor,
+  alinhamentos, negrito, itálico, contorno, fundo), imagem (encaixe,
+  proporção original, cantos, sombra para PNG, espelhar), forma (cor, degradê,
+  cantos, borda), posição, giro, opacidade e camada (trazer para a frente,
+  enviar para trás, subir/descer um nível) — ou, sem nada selecionado, as do
+  slide: fundo, transição e notas;
+- a lista de camadas, de cima para baixo;
+- **"testar daqui"** toca a apresentação só na tela do mestre.
+
+**Animação:**
+
+- cada slide tem a sua **transição** de entrada (dissolver, escurecer,
+  deslizar, empurrar para cima, zoom, cortina, corte seco) e duração;
+- cada elemento tem uma **entrada** (aparecer, subir, descer, vir de um lado,
+  zoom, desfocar), com atraso e duração;
+- e pode aparecer **no clique**: "no 1º clique do mestre", "no 2º"… O
+  "próximo" revela os cliques do slide antes de passar para o seguinte; o
+  "anterior" desfaz um clique, e voltar de slide cai no anterior já completo.
+
+**Na sessão:** "▶ apresentar" cobre a tela de jogo de todos. Só o mestre
+passa (botões, setas do teclado ou clique no slide), pula para qualquer slide
+e fecha — fechar fecha para todos; "minimizar" esconde só na tela dele. Quem
+entra no meio cai no slide e no clique em que a mesa está.
+
+**Notas do mestre** por slide: aparecem só na barra dele durante a
+apresentação. O que está no ar mora em `scene/story` com os slides
+**copiados sem as notas** — elas nunca chegam ao navegador dos jogadores; o
+mestre as lê da própria biblioteca.
+
+Histórias do formato antigo (imagem + título + texto) abrem convertidas em
+camadas (fundo, faixa escura, título e texto), tanto na apresentação quanto
+no editor. Nada a migrar no banco.

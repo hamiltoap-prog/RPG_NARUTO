@@ -501,7 +501,7 @@ export function ScenePage() {
   return (
     <div className="flex h-screen flex-col">
       <DiceOverlay tableId={tableId} />
-      <HistoriaNaTela tableId={tableId} isGM={isGM} />
+      <HistoriaNaTela tableId={tableId} isGM={isGM} library={library} />
       <SoundHost table={table} tracks={tracks} sceneAudio={sceneAudio} isGM={isGM} />
 
       {/* Barra de comando */}

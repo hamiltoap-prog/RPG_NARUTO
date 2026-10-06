@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ButtonHTMLAttributes, ChangeEvent, FocusEvent, InputHTMLAttributes, PropsWithChildren, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, ChangeEvent, FocusEvent, InputHTMLAttributes, Ref, PropsWithChildren, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 import { normalizeImageUrl } from '../lib/imageUrl'
 
 export function Card({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
@@ -131,7 +131,7 @@ function CampoNumerico({ onChange, onFocus, onBlur, value, className, ...resto }
   )
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
   return <textarea {...props} className={fieldClasses(props.className)} />
 }
 

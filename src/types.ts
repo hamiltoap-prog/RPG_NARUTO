@@ -817,27 +817,125 @@ export interface SceneLibraryItem {
 /* ---------------------------------------------------------------------------
  * Modo história
  *
- * Slides preparados pelo mestre (imagem, título e texto) que se sobrepõem à
- * tela de todos enquanto ele conta a história. Só o mestre passa os slides e
- * só ele fecha — e fechar fecha para todo mundo.
+ * Uma apresentação de slides, como num editor de slides: cada slide é um
+ * palco 16:9 com elementos em camadas — imagens, textos e formas — que o
+ * mestre posiciona, empilha e anima. Na sessão, a apresentação cobre a tela
+ * de jogo de todos; só o mestre passa e só ele fecha (fecha para todos).
+ *
+ * Posições e tamanhos são frações do palco (0..1) e o tamanho do texto é uma
+ * fração da altura dele: o slide sai igual no monitor do mestre e no celular
+ * do jogador, só maior ou menor.
  * ------------------------------------------------------------------------- */
+
+/** Como um elemento entra na tela. */
+export type SlideEntrada = 'nenhuma' | 'aparecer' | 'subir' | 'descer' | 'esquerda' | 'direita' | 'zoom' | 'desfocar'
+
+/** Como um slide substitui o anterior. */
+export type SlideTransicao = 'nenhuma' | 'fade' | 'deslizar' | 'empurrar-cima' | 'zoom' | 'cortina' | 'escurecer'
+
+interface SlideElementoBase {
+  id: string
+  /** Canto superior esquerdo e tamanho, em frações do palco (0..1). */
+  x: number
+  y: number
+  w: number
+  h: number
+  /** Giro em graus. */
+  rotation?: number
+  /** 0..1. */
+  opacity?: number
+  /** Animação de entrada. */
+  entrada?: SlideEntrada
+  /** Atraso da entrada, em ms, contado de quando o elemento passa a aparecer. */
+  atraso?: number
+  /** Duração da entrada, em ms. */
+  duracao?: number
+  /**
+   * Em qual clique o elemento aparece: 0 (ou ausente) = junto com o slide;
+   * 1 = no primeiro "próximo" do mestre; 2 = no segundo... Só depois de
+   * revelar tudo o "próximo" passa de slide.
+   */
+  passo?: number
+  /** Nome da camada no painel do editor. */
+  nome?: string
+}
+
+export interface SlideImagem extends SlideElementoBase {
+  tipo: 'imagem'
+  url: string
+  /** `cover` recorta para preencher a caixa; `contain` mostra inteira. */
+  fit?: 'cover' | 'contain'
+  /** Cantos arredondados, em % do menor lado. */
+  raio?: number
+  /** Sombra que segue o recorte (boa para PNG sem fundo). */
+  sombra?: boolean
+  espelhar?: boolean
+}
+
+export interface SlideTexto extends SlideElementoBase {
+  tipo: 'texto'
+  texto: string
+  /** Tamanho da letra em % da altura do palco. */
+  tamanho: number
+  cor: string
+  fonte?: 'titulo' | 'texto' | 'serifa'
+  alinhamento?: 'left' | 'center' | 'right'
+  vertical?: 'top' | 'middle' | 'bottom'
+  negrito?: boolean
+  italico?: boolean
+  /** Contorno escuro na letra, para ler em cima de imagem clara. */
+  sombra?: boolean
+  /** Fundo da caixa de texto (cor) e quanto dela aparece (0..1). */
+  fundo?: string
+  fundoOpacidade?: number
+}
+
+export interface SlideForma extends SlideElementoBase {
+  tipo: 'forma'
+  forma: 'retangulo' | 'elipse'
+  cor: string
+  /** Degradê da cor até transparente, nesta direção. */
+  degrade?: 'nenhum' | 'baixo' | 'cima' | 'esquerda' | 'direita'
+  raio?: number
+  borda?: string
+}
+
+export type SlideElemento = SlideImagem | SlideTexto | SlideForma
 
 export interface StorySlide {
   id: string
+  /** Fundo do slide: cor e/ou imagem. */
+  fundoCor?: string
+  fundoUrl?: string
+  fundoFit?: 'cover' | 'contain'
+  /** Zoom lento na imagem de fundo enquanto o slide está no ar. */
+  kenBurns?: boolean
+  /** Elementos em camadas: o primeiro fica embaixo, o último em cima. */
+  elementos?: SlideElemento[]
+  transicao?: SlideTransicao
+  /** Duração da transição, em ms. */
+  transicaoMs?: number
+  /** Anotações só do mestre — nunca vão para a tela dos jogadores. */
+  notas?: string
+
+  /* Formato antigo (slide de imagem + título + texto). Convertido na leitura
+   * por `normalizarSlide`; nada a migrar no banco. */
   title?: string
   text?: string
   imageUrl?: string
-  /** A imagem inteira (`contain`, padrão) ou preenchendo a tela (`cover`). */
   imageFit?: 'contain' | 'cover'
 }
 
-/** A história no ar, em `scene/story`. Os slides vão copiados (ver store). */
+/** A história no ar, em `scene/story`. Os slides vão copiados, sem as notas. */
 export interface StoryShow {
   open: boolean
   title: string
   slides: StorySlide[]
   index: number
-  /** De qual item da biblioteca veio — para a edição chegar ao ar. */
+  /** Quantos cliques do slide atual já foram revelados. */
+  step?: number
+  /** De qual item da biblioteca veio — para a edição chegar ao ar e para o
+   * mestre ler as notas, que não são copiadas. */
   libraryId?: string
   updatedAt: number
 }
